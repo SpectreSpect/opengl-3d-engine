@@ -1,0 +1,40 @@
+# Build directories
+/build/
+/bin/
+/CMakeFiles/
+/CMakeCache.txt
+/Makefile
+/*.cmake
+
+# Compiled object files and libraries
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.exe
+*.out
+
+# Visual Studio / VSCode / CLion / JetBrains IDEs
+.vscode/
+.idea/
+*.sln
+*.vcxproj*
+*.iml
+*.user
+*.userosscache
+*.suo
+*.DS_Store
+
+# Backup / temporary files
+*~
+*.swp
+*.tmp
+*.log
+
+# Shader cache or compiled shader files (optional)
+*.spv
+
+# Misc
+*.pyc
+
