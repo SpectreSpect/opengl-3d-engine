@@ -27,7 +27,7 @@ void Mesh::draw(RenderState state) {
 
     Program* prog = state.program;
     prog->use();
-    prog->set_mat4("uModel", model);
+    prog->set_mat4("uModel", world);
     prog->set_mat4("uMVP", mvp);
 
     if (state.camera) {

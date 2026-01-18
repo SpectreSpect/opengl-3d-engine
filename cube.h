@@ -3,7 +3,7 @@
 
 class Cube : public Drawable, public Transformable {
 public:
-    Mesh* mesh;
+    static Mesh* mesh;
 
     Cube();
     void draw(RenderState state) override;

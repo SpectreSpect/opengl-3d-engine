@@ -1,8 +1,8 @@
 #include "engine3d.h"
-
+#include "window.h"
 
 Engine3D::Engine3D(){
-
+    init();
 }
 
 Engine3D::~Engine3D(){
@@ -31,17 +31,24 @@ int Engine3D::init_glew() {
         return -1;
     }
     glGetError();
+
+
+    default_vertex_shader = new VertexShader(default_vertex_shader_path);
+    default_fragment_shader = new FragmentShader(default_fragment_shader_path);
+    default_program = new Program(default_vertex_shader, default_fragment_shader);
     return 1;
 }
 
 
-void Engine3D::make_context_current(Window* window) {
+void Engine3D::set_window(Window* window) {
     glfwMakeContextCurrent(window->window);
+    init_glew();
+    enable_depth_test();
 }
 
-void Engine3D::set_camera(Camera* camera) {
-    this->camera = camera;
-}
+// void Engine3D::set_camera(Camera* camera) {
+//     this->camera = camera;
+// }
 
 void Engine3D::enable_depth_test() {
     glEnable(GL_DEPTH_TEST);

@@ -10,20 +10,33 @@
 #include <string>
 #include <chrono>
 
-#include "window.h"
+// #include "window.h"
 #include "camera.h"
+#include "vertex_shader.h"
+#include "fragment_shader.h"
+#include "program.h"
+
+class Window;
+
 
 class Engine3D{
 public:
     Engine3D();
     ~Engine3D();
 
-    Camera* camera;
+    std::string default_vertex_shader_path = "../shaders/deafult_vertex.glsl";
+    std::string default_fragment_shader_path = "../shaders/deafult_fragment.glsl";
+
+    VertexShader* default_vertex_shader;
+    FragmentShader* default_fragment_shader;
+    Program* default_program;
+
+    // Camera* camera;
 
     int init();
     int init_glew();
-    void make_context_current(Window* window);
-    void set_camera(Camera* camera);
+    void set_window(Window* window);
+    // void set_camera(Camera* camera);
     static void enable_depth_test();
     static void poll_events();
 };

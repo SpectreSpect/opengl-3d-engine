@@ -1,6 +1,8 @@
 #include "window.h"
+#include "engine3d.h"
 
-Window::Window(int width, int height, std::string title) {
+Window::Window(Engine3D* engine, int width, int height, std::string title) {
+    this->engine = engine;
     this->window = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     this->width = width;
     this->height = height;
@@ -9,6 +11,11 @@ Window::Window(int width, int height, std::string title) {
         glfwTerminate();
         return;
     }
+    glfwSetWindowUserPointer(window, this);
+
+    glfwSetCursorPosCallback(window, Window::mouse_callback);
+    glfwSetMouseButtonCallback(window, Window::mouse_button_callback);
+    glfwSetFramebufferSizeCallback(window, Window::framebuffer_size_callback);
 }
 
 Window::~Window() {
@@ -38,6 +45,83 @@ float Window::get_fbuffer_aspect_ratio() {
     return (float)fbWidth / float(fbHeight);
 }
 
+void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+}
+
+void Window::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+    Window* win = (Window*)glfwGetWindowUserPointer(window);
+
+    win->mouse_state.x = xpos;
+    win->mouse_state.y = ypos;
+    win->mouse_state.initialized = true;
+    
+    // win->mouse_dx = (float)xpos - win->last_mouse_x;
+    // win->mouse_dy = win->last_mouse_y - (float)ypos;
+
+    // win->last_mouse_x = (float)xpos;
+    // win->last_mouse_y = (float)ypos;
+
+    // Camera* camera = win->camera;
+
+    // if (!camera)
+    //     return;
+
+    // if (camera->firstMouse) {
+    //     win->last_mouse_x = (float)xpos;
+    //     win->last_mouse_y = (float)ypos;
+    //     camera->firstMouse = false;
+    // }
+
+    // float xoffset = (float)xpos - win->last_mouse_x;
+    // float yoffset = win->last_mouse_y - (float)ypos; // reversed
+    // win->last_mouse_x = (float)xpos;
+    // win->last_mouse_y = (float)ypos;
+
+    // camera->processMouseMovement(xoffset, yoffset);
+}
+
+void Window::mouse_button_callback(GLFWwindow* win, int button, int action, int mods) {
+    Window* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+    if (!self) return;
+
+    
+
+    // Update button state inside mouse_state
+    switch (button) {
+        case GLFW_MOUSE_BUTTON_LEFT:
+            self->mouse_state.left_pressed = (action == GLFW_PRESS);
+            break;
+        case GLFW_MOUSE_BUTTON_RIGHT:
+            self->mouse_state.right_pressed = (action == GLFW_PRESS);
+            break;
+        case GLFW_MOUSE_BUTTON_MIDDLE:
+            self->mouse_state.middle_pressed = (action == GLFW_PRESS);
+            break;
+        default:
+            break;
+    }
+}
+
+void Window::set_camera(Camera* camera) {
+    this->camera = camera;
+}
+
+void Window::disable_cursor() {
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    mouse_state.mode = MouseMode::DISABLED;
+}
+
+void Window::hide_cursor() {
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    mouse_state.mode = MouseMode::HIDDEN;
+}
+
+void Window::show_cursor() {
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    mouse_state.mode = MouseMode::NORMAL;
+}
+
 void Window::clear_color(const glm::vec4& color) {
     glClearColor(color.r, color.g, color.b, color.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -49,7 +133,7 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     RenderState states;
     states.vp = camera->get_projection_matrix(aspect) * camera->get_view_matrix();
     states.transform = glm::mat4(1.0f);
-    states.program = program;
+    states.program = program ? program : engine->default_program;
     states.camera = camera;
 
     drawable->draw(states);

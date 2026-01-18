@@ -1,7 +1,10 @@
 #include "cube.h"
 
+Mesh* Cube::mesh = nullptr;
 
 Cube::Cube() {
+    if (Cube::mesh)
+        return;
 
     std::vector<float> vertices_vec = {
         // positions            // normals
@@ -65,9 +68,7 @@ Cube::Cube() {
         3 * sizeof(float)
     });
 
-    // vertex_layout->add({1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 3*sizeof(float)});
-
-    mesh = new Mesh(vertices_vec, indices_vec, vertex_layout);
+    Cube::mesh = new Mesh(vertices_vec, indices_vec, vertex_layout);
 }
 
 void Cube::draw(RenderState state) {
