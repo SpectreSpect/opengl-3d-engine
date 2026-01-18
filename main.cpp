@@ -39,8 +39,8 @@ public:
             cubes[x] = new Cube*[height];
             for (int y = 0; y < height; y++) {
                 cubes[x][y] = new Cube();
-                cubes[x][y]->position.x = x;
-                cubes[x][y]->position.z = y;
+                cubes[x][y]->position.x = x * 2;
+                cubes[x][y]->position.z = y * 2;
             }
         }
     }
@@ -71,17 +71,24 @@ int main() {
 
     // Cube* cube = new Cube();
 
-    Grid* grid = new Grid(100, 100);
-
+    Grid* grid = new Grid(10, 10);
+    float timer = 0;
     float lastFrame = 0;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
+        timer += delta_time;
         lastFrame = currentFrame;
 
         camera_controller->update(window, delta_time);
 
         window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
+
+        for (int x = 0; x < grid->width; x++){
+            for (int y = 0; y < grid->height; y++) {
+                grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
+            }
+        }
 
         // window->draw(cube, camera);
         window->draw(grid, camera);

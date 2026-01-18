@@ -3,6 +3,13 @@
 
 Engine3D::Engine3D(){
     init();
+
+    // mesh_manager = new MeshManager();
+    // material_manager = new MaterialManager();
+
+
+    // mesh_manager->load_cube();
+    // material_manager->load_blinn_phong();
 }
 
 Engine3D::~Engine3D(){
