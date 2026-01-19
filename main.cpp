@@ -21,6 +21,8 @@
 #include "cube.h"
 #include "window.h"
 #include "fps_camera_controller.h"
+// #include "scene.h"
+// #include "cube_prefab.h"
 
 
 class Grid : public Drawable, public Transformable {
@@ -68,6 +70,11 @@ int main() {
     window->set_camera(camera);
 
     FPSCameraController* camera_controller = new FPSCameraController(camera);
+
+    // Scene* scene = new Scene(engine);
+    // CubePrefab* cube_prefab = new CubePrefab();
+    // SceneObject* cube = cube_prefab->instantiate(scene);
+    
 
     // Cube* cube = new Cube();
 

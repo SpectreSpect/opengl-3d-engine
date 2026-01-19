@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include "material_template.h"
+#include <algorithm>
 // #include "texture.h"
 
 using MaterialValue = std::variant<

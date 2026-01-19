@@ -3,6 +3,6 @@
 
 class Prefab {
 public:
-    virtual SceneObject* instantiate(Scene& scene) = 0;
+    virtual SceneObject* instantiate(Scene* scene) = 0;
     virtual ~Prefab() = default;
 };
