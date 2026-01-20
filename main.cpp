@@ -21,6 +21,7 @@
 #include "cube.h"
 #include "window.h"
 #include "fps_camera_controller.h"
+#include "voxel_engine/chunk.h"
 // #include "scene.h"
 // #include "cube_prefab.h"
 
@@ -78,6 +79,9 @@ int main() {
 
     // Cube* cube = new Cube();
 
+    Chunk* chunk = new Chunk({64, 64, 64}, {1, 1, 1});
+    chunk->scale = {0.1, 0.1, 0.1};
+
     Grid* grid = new Grid(10, 10);
     float timer = 0;
     float lastFrame = 0;
@@ -91,14 +95,15 @@ int main() {
 
         window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
 
-        for (int x = 0; x < grid->width; x++){
-            for (int y = 0; y < grid->height; y++) {
-                grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
-            }
-        }
+        // for (int x = 0; x < grid->width; x++){
+        //     for (int y = 0; y < grid->height; y++) {
+        //         grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
+        //     }
+        // }
 
         // window->draw(cube, camera);
-        window->draw(grid, camera);
+        // window->draw(grid, camera);
+        window->draw(chunk, camera);
 
 
         // cube->position.x += 1.0 * delta_time;
