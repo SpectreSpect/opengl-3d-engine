@@ -11,7 +11,7 @@ class VBO{
 public:
     int size_bytes;
     GLuint id;
-    VBO(const void* data, size_t size_bytes);
+    VBO(const void* data, size_t size_bytes, GLenum usage = GL_STATIC_DRAW);
     ~VBO();
     void bind() const;
     static void unbind();

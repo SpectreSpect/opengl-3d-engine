@@ -38,3 +38,40 @@ void Mesh::draw(RenderState state) {
     glDrawElements(GL_TRIANGLES, ebo->num_indices, GL_UNSIGNED_INT, 0);
     vao->unbind();
 }
+
+void Mesh::set_instance_transforms(const std::vector<glm::mat4>& transforms) {
+    instance_transforms = transforms;
+
+    if (!instance_vbo)
+        instance_vbo = new VBO(transforms.data(), transforms.size() * sizeof(glm::mat4), GL_DYNAMIC_DRAW);
+    else {
+        instance_vbo->bind();
+        glBufferData(GL_ARRAY_BUFFER, transforms.size() * sizeof(glm::mat4), transforms.data(), GL_DYNAMIC_DRAW);
+    }
+
+    vao->bind();
+
+    // Each mat4 = 4 vec4s
+    for (int i = 0; i < 4; i++) {
+        GLuint attrib_index = 2 + i; // 2,3,4,5 are for instance matrix
+        glEnableVertexAttribArray(attrib_index);
+        glVertexAttribPointer(attrib_index, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(i * sizeof(glm::vec4)));
+        glVertexAttribDivisor(attrib_index, 1); // advance per instance
+    }
+
+    vao->unbind();
+}
+
+
+void Mesh::draw_instanced(RenderState state, Program* program) {
+    if (!vao || instance_transforms.empty())
+        return;
+    
+    program->use();
+    if (state.camera)
+        program->set_vec3("uViewPos", state.camera->position);
+
+    vao->bind();
+    glDrawElementsInstanced(GL_TRIANGLES, ebo->num_indices, GL_UNSIGNED_INT, 0, instance_transforms.size());
+    vao->unbind();
+}

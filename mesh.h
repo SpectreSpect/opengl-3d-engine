@@ -14,9 +14,15 @@ public:
     VBO* vbo;
     EBO* ebo;
     VertexLayout* vertex_layout;
+
+    VBO* instance_vbo;
+    std::vector<glm::mat4> instance_transforms;
     
     
     Mesh(std::vector<float> vertices, std::vector<unsigned int> indices, VertexLayout* vertex_layout);
     // Mesh(float* vertices, unsigned int* indices, int vertices_size, int indices_size, Program* shader, VertexLayout* vertex_layout);
     void draw(RenderState state) override;
+
+    void set_instance_transforms(const std::vector<glm::mat4>& transforms);
+    void draw_instanced(RenderState state, Program* program);
 };

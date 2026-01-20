@@ -148,3 +148,10 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
 
     // mesh->draw();
 }
+
+void Window::draw_scene(Scene* scene, Camera* camera) {
+    // std::unordered_map<std::pair<MaterialTemplate, Mesh>, std::vector<RenderObject*>> buckets;
+
+
+    // scene->objects
+}

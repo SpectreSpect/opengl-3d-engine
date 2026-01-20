@@ -22,3 +22,11 @@ void VertexLayout::apply() const {
         }
     }
 }
+
+int VertexLayout::get_next_attrib_index() const {
+    int max_index = -1;
+    for (const auto &a : attributes) {
+        if (a.index > max_index) max_index = a.index;
+    }
+    return max_index + 1;
+}

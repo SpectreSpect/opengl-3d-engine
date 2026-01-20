@@ -3,8 +3,7 @@
 void RenderObject::draw(RenderState state) {
     if (!mesh || !material) return;
 
-    glm::mat4 model = get_model_matrix();
-    glm::mat4 world = state.transform * model;
+    glm::mat4 world = get_world_transform();
     glm::mat4 mvp = state.vp * world;
 
     material->bind();
@@ -19,3 +18,6 @@ void RenderObject::draw(RenderState state) {
     glDrawElements(GL_TRIANGLES, mesh->ebo->num_indices, GL_UNSIGNED_INT, 0);
     mesh->vao->unbind();
 }
+
+
+// void RenderObject::draw_instanced

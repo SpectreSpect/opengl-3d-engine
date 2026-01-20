@@ -13,6 +13,7 @@
 #include "drawable.h"
 #include "camera.h"
 #include "mouse_state.h"
+#include "scene.h"
 // #include "engine3d.h"
 
 class Engine3D;
@@ -53,4 +54,5 @@ public:
     void show_cursor();
     void clear_color(const glm::vec4& color);
     void draw(Drawable* drawable, Camera* camera, Program* program = nullptr);
+    void draw_scene(Scene* scene, Camera* camera);
 };

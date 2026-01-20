@@ -21,40 +21,93 @@
 #include "cube.h"
 #include "window.h"
 #include "fps_camera_controller.h"
+#include "render_object_cube.h"
 // #include "scene.h"
 // #include "cube_prefab.h"
 
 
+// class Grid : public Drawable, public Transformable {
+// public:
+//     Cube*** cubes;
+//     int width;
+//     int height;
+    
+//     Grid(int width, int height) {
+//         this->width = width;
+//         this->height = height;
+
+//         cubes = new Cube**[width];
+
+//         for (int x = 0; x < width; x++) {
+//             cubes[x] = new Cube*[height];
+//             for (int y = 0; y < height; y++) {
+//                 cubes[x][y] = new Cube();
+//                 cubes[x][y]->position.x = x * 2;
+//                 cubes[x][y]->position.z = y * 2;
+//             }
+//         }
+//     }
+
+//     void draw(RenderState state) override {
+//         state.transform *= get_model_matrix();
+
+//         for (int x = 0; x < width; x++) {
+//             for (int y = 0; y < height; y++) {
+//                 cubes[x][y]->draw(state);
+//             }
+//         }
+//     }
+// };
+
+
+
 class Grid : public Drawable, public Transformable {
 public:
-    Cube*** cubes;
+    RenderObjectCube*** cubes;
     int width;
     int height;
+    std::vector<glm::mat4> instance_transforms;
+    Mesh* cube_mesh;
+    MaterialTemplate* cube_material_template;
     
-    Grid(int width, int height) {
+    
+    Grid(Engine3D* engine, int width, int height) {
         this->width = width;
         this->height = height;
 
-        cubes = new Cube**[width];
+        cubes = new RenderObjectCube**[width];
+        
 
         for (int x = 0; x < width; x++) {
-            cubes[x] = new Cube*[height];
+            cubes[x] = new RenderObjectCube*[height];
             for (int y = 0; y < height; y++) {
-                cubes[x][y] = new Cube();
+                cubes[x][y] = new RenderObjectCube(engine);
                 cubes[x][y]->position.x = x * 2;
                 cubes[x][y]->position.z = y * 2;
+
+                instance_transforms.push_back(cubes[x][y]->get_model_matrix());
             }
         }
+        cube_mesh = cubes[0][0]->mesh;
+        cube_material_template = cubes[0][0]->material->templ;
     }
 
-    void draw(RenderState state) override {
+    void draw(RenderState state) {
         state.transform *= get_model_matrix();
 
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
-                cubes[x][y]->draw(state);
+                int id = x * width + y;
+                instance_transforms[id] = state.transform * cubes[x][y]->get_model_matrix();
             }
         }
+
+        cube_mesh->set_instance_transforms(instance_transforms);
+        cube_mesh->draw_instanced(state, cube_material_template->program);
+    }
+
+    void draw_cubes_instanced() {
+
     }
 };
 
@@ -78,7 +131,7 @@ int main() {
 
     // Cube* cube = new Cube();
 
-    Grid* grid = new Grid(10, 10);
+    Grid* grid = new Grid(engine, 10, 10);
     float timer = 0;
     float lastFrame = 0;
     while(window->is_open()) {
@@ -91,11 +144,11 @@ int main() {
 
         window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
 
-        for (int x = 0; x < grid->width; x++){
-            for (int y = 0; y < grid->height; y++) {
-                grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
-            }
-        }
+        // for (int x = 0; x < grid->width; x++){
+        //     for (int y = 0; y < grid->height; y++) {
+        //         grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
+        //     }
+        // }
 
         // window->draw(cube, camera);
         window->draw(grid, camera);

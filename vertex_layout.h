@@ -13,8 +13,9 @@
 class VertexLayout {
 public:
     void add(const VertexAttribute& attr);
-
     void apply() const;
+
+    int get_next_attrib_index() const;
 
 private:
     std::vector<VertexAttribute> attributes;

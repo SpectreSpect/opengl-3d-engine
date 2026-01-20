@@ -1,7 +1,7 @@
 #include "vbo.h"
 
 
-VBO::VBO(const void* data, size_t size_bytes) {
+VBO::VBO(const void* data, size_t size_bytes, GLenum usage) {
     if (data == nullptr || size_bytes == 0) {
         throw std::invalid_argument("VBO: empty data");
     }
@@ -9,7 +9,7 @@ VBO::VBO(const void* data, size_t size_bytes) {
     if (id == 0)
         throw std::runtime_error("VBO: glGenBuffers failed (no GL context?)");
     this->bind();
-    glBufferData(GL_ARRAY_BUFFER, size_bytes, data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, size_bytes, data, usage);
     this->unbind();
 
     this->size_bytes = size_bytes;
