@@ -79,7 +79,7 @@ int main() {
 
     // Cube* cube = new Cube();
 
-    Chunk* chunk = new Chunk({100, 100, 100}, {1, 1, 1});
+    Chunk* chunk = new Chunk({64, 64, 64}, {1, 1, 1});
     chunk->scale = {0.1, 0.1, 0.1};
 
     Grid* grid = new Grid(10, 10);
@@ -103,6 +103,7 @@ int main() {
 
         // window->draw(cube, camera);
         // window->draw(grid, camera);
+        // chunk->update_mesh();
         window->draw(chunk, camera);
 
 

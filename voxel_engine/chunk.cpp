@@ -1,18 +1,22 @@
 #include "chunk.h"
 
-Chunk::Chunk(glm::vec3 size, glm::vec3 voxel_size) {
+Chunk::Chunk(glm::ivec3 size, glm::vec3 voxel_size) {
     this->size = size;
     this->voxel_size = voxel_size;
-    Voxel* ceat[(int)size.x][(int)size.y][(int)size.z];
+
+    voxels.resize(size.x * size.y * size.z);
+
+    // size_i = glm::ivec()
+    // Voxel* ceat[(int)size.x][(int)size.y][(int)size.z];
     // (*cat)[0][0][0] = new Voxel;
 
-    voxels = new Voxel***[(int)size.x];
+    // voxels = new Voxel***[(int)size.x];
     for (int x = 0; x < size.x; x++) {
-        voxels[x] = new Voxel**[(int)size.y];
+        // voxels[x] = new Voxel**[(int)size.y];
         for (int y = 0; y < size.y; y++) {
-            voxels[x][y] = new Voxel*[(int)size.z];
+            // voxels[x][y] = new Voxel*[(int)size.z];
             for (int z = 0; z < size.z; z++) {
-                voxels[x][y][z] = new Voxel();
+                // voxels[x][y][z] = new Voxel();
                 float pi = 3.14;
                 float norm_x = (float)x / (float)size.x;
                 float norm_z = (float)z / (float)size.z;
@@ -33,27 +37,24 @@ Chunk::Chunk(glm::vec3 size, glm::vec3 voxel_size) {
 
                 float norm_y = (float)y / (float)size.y;
 
+                size_t id = idx(x, y, z);
+
                 if (norm_y <= 0.2f)
-                    voxels[x][y][z]->color = water_color;
+                    voxels[id].color = water_color;
                 else if (norm_y > 0.2f && norm_y <= 0.3f)
-                    voxels[x][y][z]->color = sand_color;
+                    voxels[id].color = sand_color;
                 else if (norm_y > 0.3f && norm_y <= 0.5f)
-                    voxels[x][y][z]->color = grass_color;
+                    voxels[id].color = grass_color;
                 else if (norm_y > 0.5f && norm_y < 0.8f)
-                    voxels[x][y][z]->color = rock_color;
+                    voxels[id].color = rock_color;
                 else if (norm_y > 0.8f)
-                    voxels[x][y][z]->color = snow_color;
+                    voxels[id].color = snow_color;
 
                 if (value > threshold)
-                    voxels[x][y][z]->visible = false;
+                    voxels[id].visible = false;
             }
         }
     }
-
-    
-        
-    std::vector<float> vertices;
-    std::vector<unsigned int> indices;
 
     VertexLayout* vertex_layout = new VertexLayout();
     vertex_layout->add({
@@ -71,6 +72,43 @@ Chunk::Chunk(glm::vec3 size, glm::vec3 voxel_size) {
         9 * sizeof(float),
         6 * sizeof(float)
     });
+
+    vertices.reserve(size.x * size.y * size.z * 4 * 6 * 9);
+    indices.reserve(size.x * size.y * size.z * 6 * 6);
+    update_mesh(vertex_layout);
+}
+
+void Chunk::set_voxel(glm::ivec3 pos, Voxel voxel) {
+    if(!in_bounds(pos))
+        return;
+    
+    voxels[idx(pos.x, pos.y, pos.z)] = voxel;
+
+    voxels_to_update.push_back(pos);
+    
+    if (in_bounds({pos.x-1, pos.y, pos.z}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+    if (in_bounds({pos.x, pos.y, pos.z-1}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+    if (in_bounds({pos.x+1, pos.y, pos.z}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+    if (in_bounds({pos.x, pos.y, pos.z+1}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+    if (in_bounds({pos.x, pos.y+1, pos.z}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+    if (in_bounds({pos.x, pos.y-1, pos.z}))
+        voxels_to_update.push_back({pos.x, pos.y, pos.z});
+}
+
+void Chunk::update_necessary_mesh() {
+    for (int i = 0; i < voxels_to_update.size(); i++) {
+
+    }
+}
+
+void Chunk::update_mesh(VertexLayout* vertex_layout) {
+    vertices.clear();
+    indices.clear();
     float num_vertex_components = 9;
 
     for (int x = 0; x < size.x; x++) {
@@ -78,175 +116,42 @@ Chunk::Chunk(glm::vec3 size, glm::vec3 voxel_size) {
             for (int z = 0; z < size.z; z++) {
                 if (is_free({x, y, z}))
                     continue;
+                size_t id = idx(x, y, z);
+                glm::vec3 voxel_color = voxels[id].color;
                 
-                // glm::vec3 voxel_color = voxels[x][y][z]->color;
-                glm::vec3 voxel_color = voxels[x][y][z]->color;
-                
-                if (is_free({x-1, y, z})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {-1, 0, 0};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {0, 0, 0});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {0, 1, 0});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {0, 1, 1});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {0, 0, 1});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
-
-                if (is_free({x, y, z-1})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {0, 0, -1};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {0, 0, 0});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {0, 1, 0});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {1, 1, 0});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {1, 0, 0});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
-
-                if (is_free({x, y+1, z})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {0, 1, 0};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {0, 1, 1});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {0, 1, 0});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {1, 1, 0});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {1, 1, 1});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
-                if (is_free({x+1, y, z})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {1, 0, 0};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {1, 0, 1});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {1, 1, 1});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {1, 1, 0});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {1, 0, 0});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
-                if (is_free({x, y, z+1})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {0, 0, 1};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {0, 0, 1});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {0, 1, 1});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {1, 1, 1});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {1, 0, 1});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
-                if (is_free({x, y-1, z})) {
-                    // 1 2
-                    // 0 3
-                    glm::vec3 normal = {0, -1, 0};
-                    
-                    int first_idx = (int)vertices.size() / num_vertex_components;
-                    glm::vec3 v0 = get_vertex_pos({x, y, z}, {0, 0, 0});
-                    glm::vec3 v1 = get_vertex_pos({x, y, z}, {0, 0, 1});
-                    glm::vec3 v2 = get_vertex_pos({x, y, z}, {1, 0, 1});
-                    glm::vec3 v3 = get_vertex_pos({x, y, z}, {1, 0, 0});
-
-                    add_vertex(vertices, v0, normal, voxel_color);
-                    add_vertex(vertices, v1, normal, voxel_color);
-                    add_vertex(vertices, v2, normal, voxel_color);
-                    add_vertex(vertices, v3, normal, voxel_color);
-
-                    indices.push_back(first_idx);
-                    indices.push_back(first_idx+1);
-                    indices.push_back(first_idx+2);
-
-                    indices.push_back(first_idx+2);
-                    indices.push_back(first_idx+3);
-                    indices.push_back(first_idx);
-                }
+                if (is_free({x-1, y, z}))
+                    add_left_voxel_face({x, y, z}, voxel_color);
+                if (is_free({x, y, z-1})) 
+                    add_back_voxel_face({x, y, z}, voxel_color);
+                if (is_free({x, y+1, z}))
+                    add_top_voxel_face({x, y, z}, voxel_color);
+                if (is_free({x+1, y, z}))
+                    add_right_voxel_face({x, y, z}, voxel_color);
+                if (is_free({x, y, z+1}))
+                    add_front_voxel_face({x, y, z}, voxel_color);
+                if (is_free({x, y-1, z}))
+                    add_bottom_voxel_face({x, y, z}, voxel_color);
             }
         }
-        std::cout << x << std::endl;
     }
-
-
-
-    this->mesh = new Mesh(vertices, indices, vertex_layout);
+    if (!mesh || vertex_layout)
+        this->mesh = new Mesh(vertices, indices, vertex_layout);
+    else {
+        this->mesh->update(vertices, indices);
+    }
+        
 }
 
-bool Chunk::is_free(glm::vec3 pos) {
+
+bool Chunk::is_free(glm::ivec3 pos) {
     if (!in_bounds(pos))
         return true;
-    if (!get_voxel(pos)->visible)
+    if (!get_voxel(pos).visible)
         return true;
     return false;
 }
 
-bool Chunk::in_bounds(glm::vec3 pos) {
+bool Chunk::in_bounds(glm::ivec3 pos) {
     if (pos.x < 0 || pos.x >= size.x)
         return false;
     if (pos.y < 0 || pos.y >= size.y)
@@ -256,8 +161,8 @@ bool Chunk::in_bounds(glm::vec3 pos) {
     return true;
 }
 
-Voxel* Chunk::get_voxel(glm::vec3 pos) {
-    return voxels[(int)pos.x][(int)pos.y][(int)pos.z];
+Voxel Chunk::get_voxel(glm::ivec3 pos) {
+    return voxels[idx(pos.x, pos.y, pos.z)];
 }
 
 glm::vec3 Chunk::get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos) {
@@ -268,7 +173,7 @@ glm::vec3 Chunk::get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos) {
     return vertex_pos;
 }
 
-void Chunk::add_vertex(std::vector<float>& vertices, glm::vec3 pos, glm::vec3 normal, glm::vec3 color) {
+void Chunk::add_vertex(glm::vec3 pos, glm::vec3 normal, glm::vec3 color) {
     vertices.push_back(pos.x);
     vertices.push_back(pos.y);
     vertices.push_back(pos.z);
@@ -278,6 +183,69 @@ void Chunk::add_vertex(std::vector<float>& vertices, glm::vec3 pos, glm::vec3 no
     vertices.push_back(color.x);
     vertices.push_back(color.y);
     vertices.push_back(color.z);
+}
+
+void Chunk::add_voxel_face(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, size_t first_idx, glm::vec3 normal, glm::vec3 color) {
+    add_vertex(v0, normal, color);
+    add_vertex(v1, normal, color);
+    add_vertex(v2, normal, color);
+    add_vertex(v3, normal, color);
+
+    indices.push_back(first_idx);
+    indices.push_back(first_idx+1);
+    indices.push_back(first_idx+2);
+
+    indices.push_back(first_idx+2);
+    indices.push_back(first_idx+3);
+    indices.push_back(first_idx);
+}
+
+void Chunk::add_voxel_face(glm::ivec3 pos, glm::ivec3 corner0, glm::ivec3 corner1, glm::ivec3 corner2, glm::ivec3 corner3, glm::vec3 normal, glm::vec3 color) {
+    int first_idx = (int)vertices.size() / num_vertex_components;
+    float x = pos.x;
+    float y = pos.y;
+    float z = pos.z;
+    glm::vec3 v0 = get_vertex_pos({x, y, z}, corner0);
+    glm::vec3 v1 = get_vertex_pos({x, y, z}, corner1);
+    glm::vec3 v2 = get_vertex_pos({x, y, z}, corner2);
+    glm::vec3 v3 = get_vertex_pos({x, y, z}, corner3);
+
+    add_voxel_face(v0, v1, v2, v3, first_idx, normal, color);
+}
+
+void Chunk::add_left_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {-1, 0, 0};
+    add_voxel_face(pos, {0, 0, 0}, {0, 1, 0}, {0, 1, 1}, {0, 0, 1}, normal, color);
+}
+
+void Chunk::add_back_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 0, -1};
+    add_voxel_face(pos, {0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}, normal, color);
+}
+
+void Chunk::add_right_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {1, 0, 0};
+    add_voxel_face(pos, {1, 0, 1}, {1, 1, 1}, {1, 1, 0}, {1, 0, 0}, normal, color);
+}
+
+void Chunk::add_front_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 0, 1};
+    add_voxel_face(pos, {0, 0, 1}, {0, 1, 1}, {1, 1, 1}, {1, 0, 1}, normal, color);
+}
+
+void Chunk::add_top_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 1, 0};
+    add_voxel_face(pos,{0, 1, 1}, {0, 1, 0}, {1, 1, 0}, {1, 1, 1}, normal, color);
+}
+
+void Chunk::add_bottom_voxel_face(glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, -1, 0}; 
+    add_voxel_face(pos,{0, 0, 0}, {0, 0, 1}, {1, 0, 1}, {1, 0, 0}, normal, color);
+}
+
+
+size_t Chunk::idx(int x,int y,int z) const {
+    return (size_t)x + (size_t)size.x * ((size_t)y + (size_t)size.y * (size_t)z);
 }
 
 void Chunk::draw(RenderState state) {
