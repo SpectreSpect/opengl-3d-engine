@@ -24,6 +24,6 @@ public:
     bool in_bounds(glm::vec3 pos);
     Voxel* get_voxel(glm::vec3 pos);
     glm::vec3 get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos);
-    void add_vertex(std::vector<float>& vertices, glm::vec3 pos, glm::vec3 normal);
+    void add_vertex(std::vector<float>& vertices, glm::vec3 pos, glm::vec3 normal, glm::vec3 color);
     void draw(RenderState state) override;
 };
