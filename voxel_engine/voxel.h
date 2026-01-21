@@ -5,7 +5,7 @@
 class Voxel{
 public:
     glm::vec3 color;
-    bool visible = true;
+    bool visible = false;
 
-    Voxel(glm::vec3 color = glm::vec3({1.0f, 1.0f, 1.0f}), bool visible = true);
+    Voxel(glm::vec3 color = glm::vec3({1.0f, 1.0f, 1.0f}), bool visible = false);
 };

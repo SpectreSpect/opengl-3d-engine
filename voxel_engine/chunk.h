@@ -16,24 +16,29 @@
 //     float color_b;
 // };
 
+class VoxelGrid;
+
 class Chunk : public Drawable, public Transformable {
 public:
     glm::ivec3 size;
     glm::vec3 voxel_size;
-    VertexLayout* vertex_layout;
+    VertexLayout* vertex_layout = nullptr;
     // Voxel**** voxels;
     std::vector<Voxel> voxels;
     std::vector<float> vertices;
     std::vector<unsigned int> indices;
     std::vector<glm::ivec3> voxels_to_update;
     const int num_vertex_components = 9;
-    bool TEMP = false;
     // size_t num_vertices = 0;
     // size_t num_indices = 0;
-    Mesh* mesh;
+    Mesh* mesh = nullptr;
+    // Mesh* mesh;
     Chunk(glm::ivec3 size, glm::vec3 voxel_size);
-    void update_mesh(VertexLayout* vertex_layout = nullptr);
+    ~Chunk();
+    void update_mesh();
+    void update_mesh(VoxelGrid* voxel_grid, glm::ivec3 chunk_pos);
     void update_necessary_mesh();
+    void clear();
     void set_voxel(glm::ivec3 pos, Voxel voxel);
     bool is_free(glm::ivec3 pos);
     bool in_bounds(glm::ivec3 pos);

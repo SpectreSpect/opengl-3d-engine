@@ -11,8 +11,6 @@ VAO::~VAO() {
     glDeleteVertexArrays(1, &id);
 }
 
-
-
 void VAO::setup(VBO* vbo, EBO* ebo, VertexLayout* vertex_layout) {
     this->bind();
 
