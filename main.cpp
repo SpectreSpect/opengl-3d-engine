@@ -145,7 +145,7 @@ int main() {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
-        lastFrame = currentFrame;
+        lastFrame = currentFrame;   
 
         camera_controller->update(window, delta_time);
 
@@ -182,7 +182,7 @@ int main() {
         // }
         // chunk_test->update_mesh();
 
-        
+        voxel_grid->update(camera);
         window->draw(voxel_grid, camera);
         // window->draw(chunk_test, camera);
 
