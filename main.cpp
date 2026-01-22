@@ -58,11 +58,21 @@ public:
     }
 };
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 int main() {
     Engine3D* engine = new Engine3D();
     Window* window = new Window(engine, 1280, 720, "3D visualization");
     engine->set_window(window);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window->window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
     
     window->disable_cursor();
 
@@ -89,6 +99,15 @@ int main() {
 
         voxel_grid->update(camera);
         window->draw(voxel_grid, camera);
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow(); // проверка
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         window->swap_buffers();
         engine->poll_events();
