@@ -10,8 +10,8 @@ MaterialTemplate* MaterialManager::load_blinn_phong() {
         return it->second.get();
     
     material_templates["blinn_phong"] = std::make_unique<MaterialTemplate>(
-                                                        "../shaders/blinn_phong_vs.glsl",
-                                                        "../shaders/blinn_phong_fs.glsl"
+                                                        (executable_dir() / "shaders" / "blinn_phong_vs.glsl").string(),
+                                                        (executable_dir() / "shaders" / "blinn_phong_fs.glsl").string()
                                                     );
 
     auto* material_template = material_templates["blinn_phong"].get();

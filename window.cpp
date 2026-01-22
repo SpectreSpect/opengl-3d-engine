@@ -8,7 +8,6 @@ Window::Window(Engine3D* engine, int width, int height, std::string title) {
     this->height = height;
     if (!this->window) {
         std::cerr << "glfwCreateWindow failed\n";
-        glfwTerminate();
         return;
     }
     glfwSetWindowUserPointer(window, this);

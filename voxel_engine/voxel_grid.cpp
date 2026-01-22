@@ -116,7 +116,7 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
 void VoxelGrid::update(Camera* camera) {
     glm::vec3 cam_pos = camera->position;
     glm::ivec3 center_voxel_pos = (glm::ivec3)cam_pos;
-    glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
+    glm::ivec3 center_chunk_pos = glm::ivec3(cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z);
 
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
     bool to_update_mesh = false;
@@ -124,7 +124,7 @@ void VoxelGrid::update(Camera* camera) {
     for (int x = 0; x < chunk_render_size.x; x++)
         for (int y = 0; y < chunk_render_size.y; y++)
             for (int z = 0; z < chunk_render_size.z; z++) {
-                glm::ivec3 cpos = front_left_bottom_chunk_pos + (glm::ivec3){x, y, z};
+                glm::ivec3 cpos = front_left_bottom_chunk_pos + glm::ivec3(x, y, z);
                 Chunk* chunk_to_draw = nullptr;
 
                 uint64_t key = pack_key(cpos.x, cpos.y, cpos.z);
@@ -133,8 +133,7 @@ void VoxelGrid::update(Camera* camera) {
                     to_update_mesh = true;
                     Chunk* new_chunk = new Chunk(chunk_size, {1, 1, 1});
                     
-                    new_chunk->position = (glm::vec3){cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z};
-
+                    new_chunk->position = glm::vec3(cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z);
                     float r = (rand() % 255) / 255.0f;
                     float g = (rand() % 255) / 255.0f;
                     float b = (rand() % 255) / 255.0f;
@@ -222,13 +221,13 @@ void VoxelGrid::draw(RenderState state) {
     state.transform *= get_model_matrix();
 
     glm::vec3 cam_pos = state.camera->position;
-    glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
+    glm::ivec3 center_chunk_pos = glm::ivec3(cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z);
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
     // int num_chunks_drawn = 0;
     for (int x = 0; x < chunk_render_size.x; x++)
         for (int y = 0; y < chunk_render_size.y; y++)
             for (int z = 0; z < chunk_render_size.z; z++) {
-                glm::ivec3 cpos = front_left_bottom_chunk_pos + (glm::ivec3){x, y, z};
+                glm::ivec3 cpos = front_left_bottom_chunk_pos + glm::ivec3(x, y, z);
 
                 glm::vec3 bmin = glm::vec3(cpos) * glm::vec3(chunk_size);
                 glm::vec3 bmax = bmin + glm::vec3(chunk_size);
