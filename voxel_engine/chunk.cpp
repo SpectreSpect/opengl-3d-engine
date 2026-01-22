@@ -186,58 +186,48 @@ MeshData Chunk::build_mesh_cpu_detahed(VoxelGrid* voxel_grid, glm::ivec3 chunk_p
     out.vertices.reserve(size.x * size.y * size.z * 4 * 6 * 9);
     out.indices.reserve(size.x * size.y * size.z * 6 * 6);
 
-    // for (int lx = 0; lx < size.x; lx++) {
-    //     for (int ly = 0; ly < size.y; ly++) {
-    //         for (int lz = 0; lz < size.z; lz++) {
-    //             int x = lx + chunk_pos.x * voxel_grid->chunk_size.x;
-    //             int y = ly + chunk_pos.y * voxel_grid->chunk_size.y;
-    //             int z = lz + chunk_pos.z * voxel_grid->chunk_size.z;
+    for (int lx = 0; lx < size.x; lx++) {
+        for (int ly = 0; ly < size.y; ly++) {
+            for (int lz = 0; lz < size.z; lz++) {
+                // if (is_free({x, y, z}))
+                //     continue;
+                int x = lx + chunk_pos.x * voxel_grid->chunk_size.x;
+                int y = ly + chunk_pos.y * voxel_grid->chunk_size.y;
+                int z = lz + chunk_pos.z * voxel_grid->chunk_size.z;
 
-    //             if (voxel_grid->is_voxel_free({x, y, z}))
-    //                 continue;
-                    
-    //             size_t id = idx(lx, ly, lz);
-    //             glm::vec3 voxel_color = voxels[id].color;
-                
-    //             if (voxel_grid->is_voxel_free({x-1, y, z}))
-    //                 add_left_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             if (voxel_grid->is_voxel_free({x, y, z-1})) 
-    //                 add_back_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             if (voxel_grid->is_voxel_free({x, y+1, z}))
-    //                 add_top_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             if (voxel_grid->is_voxel_free({x+1, y, z}))
-    //                 add_right_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             if (voxel_grid->is_voxel_free({x, y, z+1}))
-    //                 add_front_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             if (voxel_grid->is_voxel_free({x, y-1, z}))
-    //                 add_bottom_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
-    //             }
-    //         }
-    //     }
-
-    for (int x = 0; x < size.x; x++) {
-        for (int y = 0; y < size.y; y++) {
-            for (int z = 0; z < size.z; z++) {
-                if (is_free({x, y, z}))
+                if (voxel_grid->is_voxel_free({x, y, z}))
                     continue;
-                size_t id = idx(x, y, z);
+                size_t id = idx(lx, ly, lz);
                 glm::vec3 voxel_color = voxels[id].color;
                 
-                if (is_free({x-1, y, z}))
-                    add_left_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
-                if (is_free({x, y, z-1})) 
-                    add_back_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
-                if (is_free({x, y+1, z}))
-                    add_top_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
-                if (is_free({x+1, y, z}))
-                    add_right_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
-                if (is_free({x, y, z+1}))
-                    add_front_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
-                if (is_free({x, y-1, z}))
-                    add_bottom_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x-1, y, z}))
+                //     add_left_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x, y, z-1}))
+                //     add_back_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x, y+1, z}))
+                //     add_top_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x+1, y, z}))
+                //     add_right_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x, y, z+1}))
+                //     add_front_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+                // if (is_free({x, y-1, z}))
+                //     add_bottom_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+
+                if (voxel_grid->is_voxel_free({x-1, y, z}))
+                    add_left_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                if (voxel_grid->is_voxel_free({x, y, z-1})) 
+                    add_back_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                if (voxel_grid->is_voxel_free({x, y+1, z}))
+                    add_top_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                if (voxel_grid->is_voxel_free({x+1, y, z}))
+                    add_right_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                if (voxel_grid->is_voxel_free({x, y, z+1}))
+                    add_front_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                if (voxel_grid->is_voxel_free({x, y-1, z}))
+                    add_bottom_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                }
             }
         }
-    }
     return out;
 }
 
@@ -286,11 +276,6 @@ Voxel Chunk::get_voxel(glm::ivec3 pos) const {
 }
 
 glm::vec3 Chunk::get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos) const{
-    // float relative_voxel_size = 1.0f / std::max(size.x, size.y, size.z);
-    // float relative_voxel_size = 1.0f;
-    
-    // glm::vec3 vertex_pos = voxel_pos * relative_voxel_size + corner_pos * relative_voxel_size;
-    // glm::vec3 vertex_pos = voxel_pos + corner_pos;
     return voxel_pos + corner_pos;
 }
 

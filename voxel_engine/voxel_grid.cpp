@@ -94,12 +94,8 @@ void VoxelGrid::update_chunk_meshes() {
 bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     int cx = pos.x / chunk_size.x + (pos.x % chunk_size.x < 0 ? -1 : 0);
     int cy = pos.y / chunk_size.y + (pos.y % chunk_size.y < 0 ? -1 : 0);
-    int cz = pos.z / chunk_size.z + (pos.z % chunk_size.z < 0 ? -1 : 0); // -1 -2 -3 -4 -5 -6 -7 -8 -9 -10
-
-    // int lx = (pos.x % chunk_size.x + chunk_size.x) % chunk_size.x;
-    // int ly = (pos.y % chunk_size.y + chunk_size.y) % chunk_size.y;
-    // int lz = (pos.z % chunk_size.z + chunk_size.z) % chunk_size.z;
-    
+    int cz = pos.z / chunk_size.z + (pos.z % chunk_size.z < 0 ? -1 : 0);
+ 
     int lx = pos.x - cx * chunk_size.x;
     int ly = pos.y - cy * chunk_size.y;
     int lz = pos.z - cz * chunk_size.z;
@@ -113,20 +109,7 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     
     Chunk* chunk = it->second;
 
-    // int lx = (pos.x % chunk_size.x + chunk_size.x) % chunk_size.x;
-    // int ly = (pos.y % chunk_size.y + chunk_size.y) % chunk_size.y;
-    // int lz = (pos.z % chunk_size.z + chunk_size.z) % chunk_size.z;
-
-    // glm::ivec3 pos_in_chunk = pos - chunk_pos * chunk_size;
-    
     bool res = chunk->is_free({lx, ly, lz});
-    // if (!res) {
-    //     std::cout << 
-    //     "g_voxel: (" << pos.x << ", " << pos.y << ", " << pos.z << ")  " <<
-    //     "c_pos: (" << cx << ", " << cy << ", " << cz << ")  " << 
-    //     "l_voxel: (" << lx << ", " << ly << ", " << lz << ")" << std::endl;
-    // }
-
     return res;
 }
 
@@ -135,7 +118,6 @@ void VoxelGrid::update(Camera* camera) {
     glm::ivec3 center_voxel_pos = (glm::ivec3)cam_pos;
     glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
 
-    // glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_distance / 2;
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
     bool to_update_mesh = false;
 
@@ -171,9 +153,6 @@ void VoxelGrid::update(Camera* camera) {
                                     new_chunk->voxels[new_chunk->idx(vx, vy, vz)].visible = true;
                                     new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
                                 }
-                                
-                                // if (gy < 2)
-                                //     new_chunk->voxels[new_chunk->idx(vx, vy, vz)].visible = true;
                             }
 
                     chunks[pack_key(cpos.x, cpos.y, cpos.z)] = new_chunk;
@@ -200,25 +179,7 @@ void VoxelGrid::update(Camera* camera) {
         it_upd = chunks_to_update.erase(it_upd);
     }
 
-    // then apply finished meshes (GPU upload) this frame:
     drain_mesh_results();
-
-    
-    // for (auto it_upd = chunks_to_update.begin(); it_upd != chunks_to_update.end();) {
-    //     uint64_t key = *it_upd;
-
-    //     auto it_chunk = chunks.find(key);
-    //     glm::ivec3 cpos = unpack_key(key);
-
-    //     if (it_chunk == chunks.end()) {
-    //         it_upd = chunks_to_update.erase(it_upd);           
-    //         continue;
-    //     }
-
-    //     it_chunk->second->update_mesh(this, cpos);
-
-    //     it_upd = chunks_to_update.erase(it_upd);
-    // }
 }
 
 void VoxelGrid::draw(RenderState state) {
@@ -227,7 +188,7 @@ void VoxelGrid::draw(RenderState state) {
     glm::vec3 cam_pos = state.camera->position;
     glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
-    int num_chunks_drawn = 0;
+    // int num_chunks_drawn = 0;
     for (int x = 0; x < chunk_render_size.x; x++)
         for (int y = 0; y < chunk_render_size.y; y++)
             for (int z = 0; z < chunk_render_size.z; z++) {
@@ -244,9 +205,9 @@ void VoxelGrid::draw(RenderState state) {
                 if (it != chunks.end()) {
                     Chunk* chunk_to_draw = it->second;            
                     chunk_to_draw->draw(state);
-                    num_chunks_drawn += 1;
+                    // num_chunks_drawn += 1;
                 }
             }
     
-    std::cout << num_chunks_drawn << std::endl;
+    // std::cout << num_chunks_drawn << std::endl;
 }
