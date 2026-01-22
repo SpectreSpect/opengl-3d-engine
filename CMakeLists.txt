@@ -11,4 +11,12 @@ find_package(glm REQUIRED)
 
 add_executable(app main.cpp engine3d.cpp window.cpp vao.cpp vbo.cpp ebo.cpp vertex_shader.cpp fragment_shader.cpp program.cpp shader.cpp vertex_layout.cpp camera.cpp mesh.cpp transformable.cpp cube.cpp fps_camera_controller.cpp material_template.cpp material_manager.cpp voxel_engine/voxel.cpp voxel_engine/chunk.cpp voxel_engine/voxel_grid.cpp)
 
+add_custom_command(TARGET app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/shaders"
+          "$<TARGET_FILE_DIR:app>/shaders"
+)
+
 target_link_libraries(app OpenGL::GL GLEW::GLEW glfw)
+
+set_target_properties(app PROPERTIES WIN32_EXECUTABLE OFF)

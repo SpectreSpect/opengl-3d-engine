@@ -2,7 +2,6 @@
 #include "chunk.h"
 #include <unordered_map>
 #include <iostream>
-#include <unistd.h>
 #include <thread>
 #include <set>
 #include <mutex>
@@ -91,7 +90,7 @@ public:
         int32_t cy = (int)( (int)uy - OFFSET );
         int32_t cz = (int)( (int)uz - OFFSET );
 
-        return (glm::ivec3){cx, cy, cz};
+        return glm::ivec3(cx, cy, cz);
     }
 
     bool is_voxel_free(glm::ivec3 pos);

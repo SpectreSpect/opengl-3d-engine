@@ -13,7 +13,7 @@ Engine3D::~Engine3D(){
 }
 
 int Engine3D::init() {
-        if (!glfwInit()) {
+    if (!glfwInit()) {
         std::cerr << "glfwInit failed\n";
         return -1;
     }
@@ -47,8 +47,18 @@ int Engine3D::init_glew() {
 
 
 void Engine3D::set_window(Window* window) {
+    if (!window || !window->window) {
+        std::cerr << "set_window: GLFWwindow is null (create failed)\n";
+        return;
+    }
+
     glfwMakeContextCurrent(window->window);
-    init_glew();
+
+    if (init_glew() != 1) {
+        std::cerr << "OpenGL init failed\n";
+        return;
+    }
+
     enable_depth_test();
 }
 

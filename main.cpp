@@ -24,6 +24,7 @@
 #include "voxel_engine/chunk.h"
 #include "voxel_engine/voxel_grid.h"
 
+
 class Grid : public Drawable, public Transformable {
 public:
     Cube*** cubes;
