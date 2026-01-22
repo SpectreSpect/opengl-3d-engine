@@ -135,6 +135,11 @@ void VoxelGrid::update(Camera* camera) {
                     
                     new_chunk->position = (glm::vec3){cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z};
 
+                    float r = (rand() % 255) / 255.0f;
+                    float g = (rand() % 255) / 255.0f;
+                    float b = (rand() % 255) / 255.0f;
+                    glm::vec3 color = {r, g, b};
+
                     for (int vx = 0; vx < new_chunk->size.x; vx++)
                         for (int vy = 0; vy < new_chunk->size.y; vy++)
                             for (int vz = 0; vz < new_chunk->size.z; vz++) {
@@ -148,17 +153,48 @@ void VoxelGrid::update(Camera* camera) {
                                 float final_wave = (wave_1 + wave_2)/2.0;
 
                                 int y_threshold = (int)(final_wave * chunk_size.y);
+
+                                // glm::vec3 color_1 = {0.8, 0.1, 0.1};
+                                // glm::vec3 color_2 = {0.1, 0.1, 0.8};
+
+                                // glm::vec3 color = {0.0, 0.0, 0.0};
+                                // if (cpos.z % 2 == 0)
+                                //     if (cpos.x % 2 == 0)
+                                //         color = color_2;
+                                //     else
+                                //         color = color_1;
+                                // else
+                                //     if (cpos.x % 2 != 0)
+                                //         color = color_2;
+                                //     else
+                                //         color = color_1;
+
+
                                 
                                 if (gy <= y_threshold) {
                                     new_chunk->voxels[new_chunk->idx(vx, vy, vz)].visible = true;
-                                    new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
+                                    // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
+                                    new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = color;
                                 }
                             }
 
                     chunks[pack_key(cpos.x, cpos.y, cpos.z)] = new_chunk;
 
                     chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z)); // center
-                    chunks_to_update.insert(pack_key(cpos.x-1, cpos.y, cpos.z)); // left
+                    
+                    // for (int x = -1; x <= 1; x++)
+                    //     for (int y = -1; y <= 1; y++)
+                    //         for (int z = -1; z <= 1; z++) {
+                    //         uint64_t key = pack_key(cpos.x + x, cpos.y + y, cpos.z + z);
+
+                    //         if (chunks_to_update.find(key) != chunks_to_update.end())
+                    //             chunks_to_update.insert(key);
+                            
+                    //         }
+
+                    
+                    
+
                     chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z-1)); // back
                     chunks_to_update.insert(pack_key(cpos.x+1, cpos.y, cpos.z)); // right 
                     chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z+1)); // front 
@@ -205,9 +241,6 @@ void VoxelGrid::draw(RenderState state) {
                 if (it != chunks.end()) {
                     Chunk* chunk_to_draw = it->second;            
                     chunk_to_draw->draw(state);
-                    // num_chunks_drawn += 1;
                 }
             }
-    
-    // std::cout << num_chunks_drawn << std::endl;
 }
