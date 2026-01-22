@@ -226,16 +226,26 @@ void VoxelGrid::draw(RenderState state) {
     glm::vec3 cam_pos = state.camera->position;
     glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_distance / 2;
-    
+    int num_chunks_drawn = 0;
     for (int x = 0; x < chunk_render_distance; x++)
         for (int y = 0; y < chunk_render_distance; y++)
             for (int z = 0; z < chunk_render_distance; z++) {
                 glm::ivec3 cpos = front_left_bottom_chunk_pos + (glm::ivec3){x, y, z};
+
+                glm::vec3 bmin = glm::vec3(cpos) * glm::vec3(chunk_size);
+                glm::vec3 bmax = bmin + glm::vec3(chunk_size);
+
+                if (!state.camera->visible_AABB(bmin, bmax)) // frustum culling
+                    continue;
+
                 uint64_t key = pack_key(cpos.x, cpos.y, cpos.z);
                 auto it = chunks.find(key);
                 if (it != chunks.end()) {
-                    Chunk* chunk_to_draw = it->second;
+                    Chunk* chunk_to_draw = it->second;            
                     chunk_to_draw->draw(state);
+                    num_chunks_drawn += 1;
                 }
             }
+    
+    std::cout << num_chunks_drawn << std::endl;
 }

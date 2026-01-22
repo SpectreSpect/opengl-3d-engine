@@ -135,6 +135,7 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     states.transform = glm::mat4(1.0f);
     states.program = program ? program : engine->default_program;
     states.camera = camera;
+    states.camera->update_frustum_planes(states.vp);
 
     drawable->draw(states);
 
