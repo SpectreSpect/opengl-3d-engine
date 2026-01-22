@@ -24,15 +24,17 @@ void VoxelGrid::enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk) {
     if (in_flight.find(key) != in_flight.end())
         return;
     
+    auto v = std::atomic_load(&chunk->voxels);
+    uint32_t rev = chunk->revision.load(std::memory_order_relaxed);
+    
     in_flight.insert(key);
-    jobs.push_back(MeshJob{key, cpos, chunk});
+    jobs.push_back(MeshJob{key, cpos, v, chunk->size, rev});
     jobs_cv.notify_one();
 }
 
 void VoxelGrid::mesh_worker_loop() {
     while (mesh_thread_running) {
         MeshJob job;
-
         {
             std::unique_lock<std::mutex> lk(jobs_mx);
             jobs_cv.wait(lk, [&]{ return !mesh_thread_running || !jobs.empty(); });
@@ -44,11 +46,11 @@ void VoxelGrid::mesh_worker_loop() {
             jobs.pop_front();
         }
 
-        MeshData mesh = job.chunk->build_mesh_cpu_detahed(this, job.cpos);
-
+        // MeshData mesh = job.chunk->build_mesh_cpu_detahed(this, job.cpos);
+        MeshData mesh_data = Chunk::build_mesh_from_snapshot(*job.voxels, job.cpos, job.chunk_size);
         {
-            std::unique_lock<std::mutex> lk(jobs_mx);
-            results.push_back(MeshResult{job.key, job.chunk, std::move(mesh)});
+            std::unique_lock<std::mutex> lk(results_mx);
+            results.push_back(MeshResult{job.key, std::move(mesh_data), job.revision});
         }
 
         {
@@ -66,8 +68,9 @@ void VoxelGrid::drain_mesh_results() {
     }
 
     for (auto& r: local) {
-        if (r.chunk)
-            r.chunk->upload_mesh_gpu(std::move(r.mesh_data));
+        auto it = chunks.find(r.key);
+        if (it != chunks.end())
+            it->second->upload_mesh_gpu(std::move(r.mesh_data));
     }
 }
 
@@ -140,43 +143,84 @@ void VoxelGrid::update(Camera* camera) {
                     float b = (rand() % 255) / 255.0f;
                     glm::vec3 color = {r, g, b};
 
-                    for (int vx = 0; vx < new_chunk->size.x; vx++)
-                        for (int vy = 0; vy < new_chunk->size.y; vy++)
-                            for (int vz = 0; vz < new_chunk->size.z; vz++) {
-                                int gx = (float)vx + (float)cpos.x * chunk_size.x;
-                                int gy = (float)vy + (float)cpos.y * chunk_size.y;
-                                int gz = (float)vz + (float)cpos.z * chunk_size.z;
-                                
-                                float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
-                                float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
+                    new_chunk->edit_voxels([&](std::vector<Voxel>& voxels){
 
-                                float final_wave = (wave_1 + wave_2)/2.0;
+                        for (int vx = 0; vx < new_chunk->size.x; vx++)
+                            for (int vy = 0; vy < new_chunk->size.y; vy++)
+                                for (int vz = 0; vz < new_chunk->size.z; vz++) {
+                                    int gx = (float)vx + (float)cpos.x * chunk_size.x;
+                                    int gy = (float)vy + (float)cpos.y * chunk_size.y;
+                                    int gz = (float)vz + (float)cpos.z * chunk_size.z;
+                                    
+                                    float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
+                                    float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
 
-                                int y_threshold = (int)(final_wave * chunk_size.y);
+                                    float final_wave = (wave_1 + wave_2)/2.0;
 
-                                // glm::vec3 color_1 = {0.8, 0.1, 0.1};
-                                // glm::vec3 color_2 = {0.1, 0.1, 0.8};
+                                    int y_threshold = (int)(final_wave * chunk_size.y);
 
-                                // glm::vec3 color = {0.0, 0.0, 0.0};
-                                // if (cpos.z % 2 == 0)
-                                //     if (cpos.x % 2 == 0)
-                                //         color = color_2;
-                                //     else
-                                //         color = color_1;
-                                // else
-                                //     if (cpos.x % 2 != 0)
-                                //         color = color_2;
-                                //     else
-                                //         color = color_1;
+                                    // glm::vec3 color_1 = {0.8, 0.1, 0.1};
+                                    // glm::vec3 color_2 = {0.1, 0.1, 0.8};
+
+                                    // glm::vec3 color = {0.0, 0.0, 0.0};
+                                    // if (cpos.z % 2 == 0)
+                                    //     if (cpos.x % 2 == 0)
+                                    //         color = color_2;
+                                    //     else
+                                    //         color = color_1;
+                                    // else
+                                    //     if (cpos.x % 2 != 0)
+                                    //         color = color_2;
+                                    //     else
+                                    //         color = color_1;
 
 
-                                
-                                if (gy <= y_threshold) {
-                                    new_chunk->voxels[new_chunk->idx(vx, vy, vz)].visible = true;
-                                    // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
-                                    new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = color;
+                                    
+                                    if (gy <= y_threshold) {
+                                        voxels[new_chunk->idx(vx, vy, vz)].visible = true;
+                                        // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
+                                        voxels[new_chunk->idx(vx, vy, vz)].color = color;
+                                    }
                                 }
-                            }
+                    });
+
+                    // for (int vx = 0; vx < new_chunk->size.x; vx++)
+                    //     for (int vy = 0; vy < new_chunk->size.y; vy++)
+                    //         for (int vz = 0; vz < new_chunk->size.z; vz++) {
+                    //             int gx = (float)vx + (float)cpos.x * chunk_size.x;
+                    //             int gy = (float)vy + (float)cpos.y * chunk_size.y;
+                    //             int gz = (float)vz + (float)cpos.z * chunk_size.z;
+                                
+                    //             float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
+                    //             float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
+
+                    //             float final_wave = (wave_1 + wave_2)/2.0;
+
+                    //             int y_threshold = (int)(final_wave * chunk_size.y);
+
+                    //             // glm::vec3 color_1 = {0.8, 0.1, 0.1};
+                    //             // glm::vec3 color_2 = {0.1, 0.1, 0.8};
+
+                    //             // glm::vec3 color = {0.0, 0.0, 0.0};
+                    //             // if (cpos.z % 2 == 0)
+                    //             //     if (cpos.x % 2 == 0)
+                    //             //         color = color_2;
+                    //             //     else
+                    //             //         color = color_1;
+                    //             // else
+                    //             //     if (cpos.x % 2 != 0)
+                    //             //         color = color_2;
+                    //             //     else
+                    //             //         color = color_1;
+
+
+                                
+                    //             if (gy <= y_threshold) {
+                    //                 new_chunk->voxels[new_chunk->idx(vx, vy, vz)].visible = true;
+                    //                 // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
+                    //                 new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = color;
+                    //             }
+                    //         }
 
                     chunks[pack_key(cpos.x, cpos.y, cpos.z)] = new_chunk;
 

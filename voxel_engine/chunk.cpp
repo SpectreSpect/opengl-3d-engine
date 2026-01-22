@@ -5,57 +5,9 @@ Chunk::Chunk(glm::ivec3 size, glm::vec3 voxel_size) {
     this->size = size;
     this->voxel_size = voxel_size;
 
-    voxels.resize(size.x * size.y * size.z);
-
-    // size_i = glm::ivec()
-    // Voxel* ceat[(int)size.x][(int)size.y][(int)size.z];
-    // (*cat)[0][0][0] = new Voxel;
-
-    // voxels = new Voxel***[(int)size.x];
-    // for (int x = 0; x < size.x; x++) {
-    //     // voxels[x] = new Voxel**[(int)size.y];
-    //     for (int y = 0; y < size.y; y++) {
-    //         // voxels[x][y] = new Voxel*[(int)size.z];
-    //         for (int z = 0; z < size.z; z++) {
-    //             // voxels[x][y][z] = new Voxel();
-    //             float pi = 3.14;
-    //             float norm_x = (float)x / (float)size.x;
-    //             float norm_z = (float)z / (float)size.z;
-                
-    //             float value = (float)y / size.y;
-    //             float wave_1 = (sin(norm_x * 2 * pi + 1) + cos(norm_z * 2 * pi * 2 + 1)) / 2.0 + 1.0;
-    //             float wave_2 = (sin(norm_x * 5 * pi + 2.5) + cos(norm_z * 5 * pi * 2 + 4.2345)) / 2.0 + 1.0;
-    //             float wave_3 = (sin(norm_x / 2.0) + cos(norm_z / 2.0)) / 2.0 + 1.0;
-    //             // float wave_3 = (sin(norm_x * 2 * pi * 6 + 1.111) + cos(norm_z * 8 * pi + 2.645)) / 2.0 + 1.0;
-    //             float threshold = (wave_1 + wave_2/3.0 + wave_3/3.0) / 3.0;
-    //             // float threshold = (wave_1/2.0 + wave_2/2.0) / 3.0;
-
-    //             glm::vec3 sand_color = {0.921568627, 0.811764706, 0.662745098};
-    //             glm::vec3 water_color = {0.282352941, 0.541176471, 1.0};
-    //             glm::vec3 grass_color = {0.023529412, 0.658823529, 0.443137255};
-    //             glm::vec3 rock_color = {0.650980392, 0.650980392, 0.650980392};
-    //             glm::vec3 snow_color = {1.0, 1.0, 1.0};
-
-    //             float norm_y = (float)y / (float)size.y;
-
-    //             size_t id = idx(x, y, z);
-
-    //             if (norm_y <= 0.2f)
-    //                 voxels[id].color = water_color;
-    //             else if (norm_y > 0.2f && norm_y <= 0.3f)
-    //                 voxels[id].color = sand_color;
-    //             else if (norm_y > 0.3f && norm_y <= 0.5f)
-    //                 voxels[id].color = grass_color;
-    //             else if (norm_y > 0.5f && norm_y < 0.8f)
-    //                 voxels[id].color = rock_color;
-    //             else if (norm_y > 0.8f)
-    //                 voxels[id].color = snow_color;
-
-    //             if (value < threshold)
-    //                 voxels[id].visible = true;
-    //         }
-    //     }
-    // }
+    auto v = std::make_shared<std::vector<Voxel>>();
+    v->resize(size.x * size.y * size.z);
+    voxels = v;
 
     this->vertex_layout = new VertexLayout();
     vertex_layout->add({
@@ -84,11 +36,11 @@ Chunk::~Chunk() {
     delete vertex_layout;
 }
 
-void Chunk::set_voxel(glm::ivec3 pos, Voxel voxel) {
-    if(!in_bounds(pos))
-        return;
-    voxels[idx(pos.x, pos.y, pos.z)] = voxel;
-}
+// void Chunk::set_voxel(glm::ivec3 pos, Voxel voxel) {
+//     if(!in_bounds(pos))
+//         return;
+//     voxels[idx(pos.x, pos.y, pos.z)] = voxel;
+// }
 
 void Chunk::update_necessary_mesh() {
     for (int i = 0; i < voxels_to_update.size(); i++) {
@@ -96,16 +48,19 @@ void Chunk::update_necessary_mesh() {
     }
 }
 
-void Chunk::clear() {
-    for (int x = 0; x < size.x; x++)
-        for (int y = 0; y < size.y; y++)
-            for (int z = 0; z < size.z; z++)
-                voxels[idx(x, y, z)].visible = false;
-}
+
+// void Chunk::clear() {
+//     for (int x = 0; x < size.x; x++)
+//         for (int y = 0; y < size.y; y++)
+//             for (int z = 0; z < size.z; z++)
+//                 voxels[idx(x, y, z)].visible = false;
+// }
 
 void Chunk::update_mesh() {
     vertices.clear();
     indices.clear();
+
+    auto v = std::atomic_load(&voxels);
 
     for (int x = 0; x < size.x; x++) {
         for (int y = 0; y < size.y; y++) {
@@ -113,7 +68,7 @@ void Chunk::update_mesh() {
                 if (is_free({x, y, z}))
                     continue;
                 size_t id = idx(x, y, z);
-                glm::vec3 voxel_color = voxels[id].color;
+                glm::vec3 voxel_color = (*v)[id].color;
                 
                 if (is_free({x-1, y, z}))
                     add_left_voxel_face({x, y, z}, voxel_color);
@@ -149,6 +104,8 @@ void Chunk::update_mesh(VoxelGrid* voxel_grid, glm::ivec3 chunk_pos) {
 }
 
 void Chunk::build_mesh_cpu(VoxelGrid* voxel_grid, glm::ivec3 chunk_pos) {
+    auto v = std::atomic_load(&voxels);
+
     vertices.clear();
     indices.clear();
     for (int lx = 0; lx < size.x; lx++) {
@@ -162,7 +119,7 @@ void Chunk::build_mesh_cpu(VoxelGrid* voxel_grid, glm::ivec3 chunk_pos) {
                     continue;
                     
                 size_t id = idx(lx, ly, lz);
-                glm::vec3 voxel_color = voxels[id].color;
+                glm::vec3 voxel_color = (*v)[id].color;
                 
                 if (voxel_grid->is_voxel_free({x-1, y, z}))
                     add_left_voxel_face({lx, ly, lz}, voxel_color);
@@ -186,6 +143,8 @@ MeshData Chunk::build_mesh_cpu_detahed(VoxelGrid* voxel_grid, glm::ivec3 chunk_p
     out.vertices.reserve(size.x * size.y * size.z * 4 * 6 * 9);
     out.indices.reserve(size.x * size.y * size.z * 6 * 6);
 
+    auto v = std::atomic_load(&voxels);
+
     for (int lx = 0; lx < size.x; lx++) {
         for (int ly = 0; ly < size.y; ly++) {
             for (int lz = 0; lz < size.z; lz++) {
@@ -198,7 +157,7 @@ MeshData Chunk::build_mesh_cpu_detahed(VoxelGrid* voxel_grid, glm::ivec3 chunk_p
                 if (voxel_grid->is_voxel_free({x, y, z}))
                     continue;
                 size_t id = idx(lx, ly, lz);
-                glm::vec3 voxel_color = voxels[id].color;
+                glm::vec3 voxel_color = (*v)[id].color;
                 
                 // if (is_free({x-1, y, z}))
                 //     add_left_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
@@ -231,6 +190,120 @@ MeshData Chunk::build_mesh_cpu_detahed(VoxelGrid* voxel_grid, glm::ivec3 chunk_p
     return out;
 }
 
+
+
+// MeshData Chunk::build_mesh_cpu_detahed(std::shared_ptr<std::vector<Voxel>> voxels, glm::ivec3 chunk_pos, glm::ivec3 chunk_size) const{
+//     MeshData out;
+//     out.vertices.reserve(size.x * size.y * size.z * 4 * 6 * 9);
+//     out.indices.reserve(size.x * size.y * size.z * 6 * 6);
+
+//     auto v = std::atomic_load(&voxels);
+
+//     for (int lx = 0; lx < size.x; lx++) {
+//         for (int ly = 0; ly < size.y; ly++) {
+//             for (int lz = 0; lz < size.z; lz++) {
+//                 // if (is_free({x, y, z}))
+//                 //     continue;
+//                 int x = lx + chunk_pos.x * chunk_size.x;
+//                 int y = ly + chunk_pos.y * chunk_size.y;
+//                 int z = lz + chunk_pos.z * chunk_size.z;
+
+//                 if (voxel_grid->is_voxel_free({x, y, z}))
+//                     continue;
+//                 size_t id = idx(lx, ly, lz);
+//                 glm::vec3 voxel_color = (*v)[id].color;
+                
+//                 // if (is_free({x-1, y, z}))
+//                 //     add_left_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+//                 // if (is_free({x, y, z-1}))
+//                 //     add_back_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+//                 // if (is_free({x, y+1, z}))
+//                 //     add_top_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+//                 // if (is_free({x+1, y, z}))
+//                 //     add_right_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+//                 // if (is_free({x, y, z+1}))
+//                 //     add_front_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+//                 // if (is_free({x, y-1, z}))
+//                 //     add_bottom_voxel_face(out.vertices, out.indices, {x, y, z}, voxel_color);
+
+//                 if (voxel_grid->is_voxel_free({x-1, y, z}))
+//                     add_left_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 if (voxel_grid->is_voxel_free({x, y, z-1})) 
+//                     add_back_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 if (voxel_grid->is_voxel_free({x, y+1, z}))
+//                     add_top_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 if (voxel_grid->is_voxel_free({x+1, y, z}))
+//                     add_right_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 if (voxel_grid->is_voxel_free({x, y, z+1}))
+//                     add_front_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 if (voxel_grid->is_voxel_free({x, y-1, z}))
+//                     add_bottom_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+//                 }
+//             }
+//         }
+//     return out;
+// }
+
+
+MeshData Chunk::build_mesh_from_snapshot(const std::vector<Voxel> &voxels, glm::ivec3 chunk_pos, glm::ivec3 chunk_size) {
+    const int num_vertex_components = 9;
+    
+    MeshData out;
+    out.vertices.reserve(chunk_size.x * chunk_size.y * chunk_size.z * 4 * 6 * num_vertex_components);
+    out.indices.reserve(chunk_size.x * chunk_size.y * chunk_size.z * 6 * 6);
+    
+    for (int lx = 0; lx < chunk_size.x; lx++) {
+        for (int ly = 0; ly < chunk_size.y; ly++) {
+            for (int lz = 0; lz < chunk_size.z; lz++) {
+                // if (is_free({x, y, z}))
+                //     continue;
+                // int x = lx + chunk_pos.x * chunk_size.x;
+                // int y = ly + chunk_pos.y * chunk_size.y;
+                // int z = lz + chunk_pos.z * chunk_size.z;
+
+                int x = lx;
+                int y = ly;
+                int z = lz;
+
+
+                if (Chunk::is_free(voxels, {x, y, z}, chunk_size))
+                    continue;
+                size_t id = Chunk::idx(lx, ly, lz, chunk_size);
+                glm::vec3 voxel_color = voxels[id].color;
+                
+                if (Chunk::is_free(voxels, {x-1, y, z}, chunk_size))
+                    Chunk::add_left_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+                if (Chunk::is_free(voxels, {x, y, z-1}, chunk_size))
+                    Chunk::add_back_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+                if (Chunk::is_free(voxels, {x, y+1, z}, chunk_size))
+                    Chunk::add_top_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+                if (Chunk::is_free(voxels, {x+1, y, z}, chunk_size))
+                    Chunk::add_right_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+                if (Chunk::is_free(voxels, {x, y, z+1}, chunk_size))
+                    Chunk::add_front_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+                if (Chunk::is_free(voxels, {x, y-1, z}, chunk_size))
+                    Chunk::add_bottom_voxel_face(voxels, out.vertices, out.indices, {x, y, z}, voxel_color);
+
+                // if (voxel_grid->is_voxel_free({x-1, y, z}))
+                //     add_left_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // if (voxel_grid->is_voxel_free({x, y, z-1})) 
+                //     add_back_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // if (voxel_grid->is_voxel_free({x, y+1, z}))
+                //     add_top_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // if (voxel_grid->is_voxel_free({x+1, y, z}))
+                //     add_right_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // if (voxel_grid->is_voxel_free({x, y, z+1}))
+                //     add_front_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // if (voxel_grid->is_voxel_free({x, y-1, z}))
+                //     add_bottom_voxel_face(out.vertices, out.indices, {lx, ly, lz}, voxel_color);
+                // }
+            }
+        }
+    }
+
+    return out;    
+}
+
 void Chunk::upload_mesh_gpu() {
     if (vertices.empty() || indices.empty())
         return;
@@ -261,6 +334,22 @@ bool Chunk::is_free(glm::ivec3 pos) const {
     return false;
 }
 
+bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3 chunk_size) {
+    if (!in_bounds(voxels, pos, chunk_size))
+        return true;
+    if (!get_voxel(voxels, pos, chunk_size).visible)
+        return true;
+    return false;
+}
+
+// bool Chunk::is_free(std::shared_ptr<std::vector<Voxel>> voxels, glm::ivec3 pos) const {
+//     if (!in_bounds(pos))
+//         return true;
+//     if (!get_voxel(pos).visible)
+//         return true;
+//     return false;
+// }
+
 bool Chunk::in_bounds(glm::ivec3 pos) const {
     if (pos.x < 0 || pos.x >= size.x)
         return false;
@@ -271,11 +360,26 @@ bool Chunk::in_bounds(glm::ivec3 pos) const {
     return true;
 }
 
-Voxel Chunk::get_voxel(glm::ivec3 pos) const {
-    return voxels[idx(pos.x, pos.y, pos.z)];
+bool Chunk::in_bounds(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3 chunk_size) {
+    if (pos.x < 0 || pos.x >= chunk_size.x)
+        return false;
+    if (pos.y < 0 || pos.y >= chunk_size.y)
+        return false;
+    if (pos.z < 0 || pos.z >= chunk_size.z)
+        return false;
+    return true;
 }
 
-glm::vec3 Chunk::get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos) const{
+Voxel Chunk::get_voxel(glm::ivec3 pos) const {
+    auto v = std::atomic_load(&voxels);
+    return (*v)[idx(pos.x, pos.y, pos.z)];
+}
+
+Voxel Chunk::get_voxel(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3 chunk_size) {
+    return voxels[idx(pos.x, pos.y, pos.z, chunk_size)];
+}
+
+glm::vec3 Chunk::get_vertex_pos(glm::vec3 voxel_pos, glm::vec3 corner_pos){
     return voxel_pos + corner_pos;
 }
 
@@ -291,7 +395,7 @@ void Chunk::add_vertex(glm::vec3 pos, glm::vec3 normal, glm::vec3 color) {
     vertices.push_back(color.z);
 }
 
-void Chunk::add_vertex(std::vector<float> &vertices, glm::vec3 pos, glm::vec3 normal, glm::vec3 color) const{
+void Chunk::add_vertex(std::vector<float> &vertices, glm::vec3 pos, glm::vec3 normal, glm::vec3 color){
     vertices.push_back(pos.x);
     vertices.push_back(pos.y);
     vertices.push_back(pos.z);
@@ -318,7 +422,7 @@ void Chunk::add_voxel_face(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v
     indices.push_back(first_idx);
 }
 
-void Chunk::add_voxel_face(std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, size_t first_idx, glm::vec3 normal, glm::vec3 color) const{
+void Chunk::add_voxel_face(std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, size_t first_idx, glm::vec3 normal, glm::vec3 color) {
     add_vertex(vertices, v0, normal, color);
     add_vertex(vertices, v1, normal, color);
     add_vertex(vertices, v2, normal, color);
@@ -346,7 +450,9 @@ void Chunk::add_voxel_face(glm::ivec3 pos, glm::ivec3 corner0, glm::ivec3 corner
     add_voxel_face(v0, v1, v2, v3, first_idx, normal, color);
 }
 
-void Chunk::add_voxel_face(std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::ivec3 corner0, glm::ivec3 corner1, glm::ivec3 corner2, glm::ivec3 corner3, glm::vec3 normal, glm::vec3 color) const {
+void Chunk::add_voxel_face(std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::ivec3 corner0, glm::ivec3 corner1, glm::ivec3 corner2, glm::ivec3 corner3, glm::vec3 normal, glm::vec3 color) {
+    const int num_vertex_components = 9;
+
     int first_idx = (int)vertices.size() / num_vertex_components;
     float x = pos.x;
     float y = pos.y;
@@ -422,8 +528,44 @@ void Chunk::add_bottom_voxel_face(std::vector<float> &vertices, std::vector<unsi
 }
 
 
+
+void Chunk::add_left_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {-1, 0, 0};
+    add_voxel_face(vertices, indices, pos, {0, 0, 0}, {0, 1, 0}, {0, 1, 1}, {0, 0, 1}, normal, color);
+}
+
+void Chunk::add_back_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 0, -1};
+    add_voxel_face(vertices, indices, pos, {0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}, normal, color);
+}
+
+void Chunk::add_right_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {1, 0, 0};
+    add_voxel_face(vertices, indices, pos, {1, 0, 1}, {1, 1, 1}, {1, 1, 0}, {1, 0, 0}, normal, color);
+}
+
+void Chunk::add_front_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 0, 1};
+    add_voxel_face(vertices, indices, pos, {0, 0, 1}, {0, 1, 1}, {1, 1, 1}, {1, 0, 1}, normal, color);
+}
+
+void Chunk::add_top_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, 1, 0};
+    add_voxel_face(vertices, indices, pos,{0, 1, 1}, {0, 1, 0}, {1, 1, 0}, {1, 1, 1}, normal, color);
+}
+
+void Chunk::add_bottom_voxel_face(const std::vector<Voxel> &voxels, std::vector<float> &vertices, std::vector<unsigned int> &indices, glm::ivec3 pos, glm::vec3 color) {
+    glm::vec3 normal = {0, -1, 0}; 
+    add_voxel_face(vertices, indices, pos,{0, 0, 0}, {0, 0, 1}, {1, 0, 1}, {1, 0, 0}, normal, color);
+}
+
+
 size_t Chunk::idx(int x,int y,int z) const {
     return (size_t)x + (size_t)size.x * ((size_t)y + (size_t)size.y * (size_t)z);
+}
+
+size_t Chunk::idx(int x,int y,int z, glm::ivec3 chunk_size) {
+    return (size_t)x + (size_t)chunk_size.x * ((size_t)y + (size_t)chunk_size.y * (size_t)z);
 }
 
 void Chunk::draw(RenderState state) {
