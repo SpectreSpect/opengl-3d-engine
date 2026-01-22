@@ -1,6 +1,6 @@
 #include "mesh.h"
 
-Mesh::Mesh(std::vector<float> vertices, std::vector<unsigned int> indices, VertexLayout* vertex_layout) {
+Mesh::Mesh(std::vector<float>& vertices, std::vector<unsigned int>& indices, VertexLayout* vertex_layout) {
     vao = new VAO();
     vbo = new VBO(vertices.data(), vertices.size() * sizeof(float));
     ebo = new EBO(indices.data(), indices.size() * sizeof(unsigned int));
@@ -15,7 +15,7 @@ Mesh::~Mesh() {
     delete ebo;
 }
 
-void Mesh::update(const std::vector<float> vertices, const std::vector<unsigned int>& indices, GLenum usage) {
+void Mesh::update(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, GLenum usage) {
     if (vbo)
         vbo->update_mapped(vertices.data(), vertices.size() * sizeof(float), usage);
     

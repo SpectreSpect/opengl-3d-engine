@@ -69,7 +69,7 @@ public:
         return (ux << (BITS * 2)) | (uy << BITS) | uz;
     }
 
-    void update_chunk_meshes();
+    // void update_chunk_meshes();
 
 
     // void unpack_key(uint64_t key, int32_t &cx, int32_t &cy, int32_t &cz) {
