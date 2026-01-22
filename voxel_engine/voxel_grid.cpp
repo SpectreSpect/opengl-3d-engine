@@ -23,11 +23,38 @@ void VoxelGrid::enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk) {
     if (in_flight.find(key) != in_flight.end())
         return;
     
-    auto v = std::atomic_load(&chunk->voxels);
     uint32_t rev = chunk->revision.load(std::memory_order_relaxed);
+
+    auto snap_at = [&](glm::ivec3 ncpos) -> std::shared_ptr<const std::vector<Voxel>> {
+        uint64_t k = pack_key(ncpos.x, ncpos.y, ncpos.z);
+        auto it = chunks.find(k);
+        if (it == chunks.end()) return {};
+        return std::atomic_load(&it->second->voxels);
+    };
+
+    MeshJob job = MeshJob();
+    job.key = key;
+    job.cpos = cpos;
+    job.chunk_size = chunk->size;
+    job.revision = rev;
+
+    job.self = std::atomic_load(&chunk->voxels);
+    
+    job.nb[(int)Face::Left]   = snap_at(cpos + glm::ivec3{-1,0,0});
+    job.nb[(int)Face::Right]  = snap_at(cpos + glm::ivec3{ 1,0,0});
+    job.nb[(int)Face::Back]   = snap_at(cpos + glm::ivec3{0,0,-1});
+    job.nb[(int)Face::Front]  = snap_at(cpos + glm::ivec3{0,0, 1});
+    job.nb[(int)Face::Top]    = snap_at(cpos + glm::ivec3{0, 1,0});
+    job.nb[(int)Face::Bottom] = snap_at(cpos + glm::ivec3{0,-1,0});
+
+    // std::shared_ptr<const std::vector<Voxel>> voxels;
+    // std::shared_ptr<const std::vector<Voxel>> self;
+    // std::array<std::shared_ptr<const std::vector<Voxel>>, 6> nb;
+
+
     
     in_flight.insert(key);
-    jobs.push_back(MeshJob{key, cpos, v, chunk->size, rev});
+    jobs.push_back(job);
     jobs_cv.notify_one();
 }
 
@@ -45,7 +72,8 @@ void VoxelGrid::mesh_worker_loop() {
             jobs.pop_front();
         }
 
-        MeshData mesh_data = Chunk::build(*job.voxels, job.chunk_size);
+        MeshData mesh_data = Chunk::build(*job.self, job.nb, job.chunk_size);
+        // MeshData mesh_data = Chunk::build(*job.self, job.chunk_size);
         
         {
             std::unique_lock<std::mutex> lk(results_mx);

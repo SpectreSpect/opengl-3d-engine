@@ -43,11 +43,18 @@ public:
 
     void upload_mesh_gpu(MeshData& mesh_data);
     static MeshData build(const std::vector<Voxel>& voxels, glm::ivec3 size);
+    static MeshData build(const std::vector<Voxel>& self, 
+                          const std::array<std::shared_ptr<const std::vector<Voxel>>,6>& nb, 
+                          glm::ivec3 csize);
     static void push_vertex(std::vector<float>& v, const glm::vec3& pos, const glm::vec3& normal, const glm::vec3& color);
     static void emit_face(MeshData& out, glm::ivec3 pos, Face f, glm::vec3 color);
     static bool in_bounds(glm::ivec3 pos, glm::ivec3 size);
     static size_t idx(glm::ivec3 pos, glm::ivec3 size);
     static bool is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3 size);
+
+    static bool solid_from(const std::vector<Voxel>& self, 
+                           const std::array<std::shared_ptr<const std::vector<Voxel>>,6>& nb, 
+                           glm::ivec3 pos, glm::ivec3 size);
 
     void draw(RenderState state) override;
 };

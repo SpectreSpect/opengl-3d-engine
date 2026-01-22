@@ -13,11 +13,13 @@
 
 struct MeshJob {
     uint64_t key;
-    glm::ivec3 cpos;
-    // Chunk* chunk;        // safe as long as you don’t delete chunks while jobs are running
-    std::shared_ptr<const std::vector<Voxel>> voxels;
+    glm::ivec3 cpos; // chunk coords
     glm::ivec3 chunk_size;
     uint32_t revision;
+
+    // std::shared_ptr<const std::vector<Voxel>> voxels;
+    std::shared_ptr<const std::vector<Voxel>> self;
+    std::array<std::shared_ptr<const std::vector<Voxel>>, 6> nb;
 };
 
 struct MeshResult {
