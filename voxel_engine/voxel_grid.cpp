@@ -1,7 +1,8 @@
 #include "voxel_grid.h"
 
-VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, int chunk_render_distance) {
-    this->chunk_render_distance = chunk_render_distance;
+VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size) {
+    // this->chunk_render_distance = chunk_render_distance;
+    this->chunk_render_size = chunk_render_size;
     this->chunk_size = chunk_size;
 
     mesh_thread_running = true;
@@ -134,13 +135,13 @@ void VoxelGrid::update(Camera* camera) {
     glm::ivec3 center_voxel_pos = (glm::ivec3)cam_pos;
     glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
 
-    glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_distance / 2;
-
+    // glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_distance / 2;
+    glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
     bool to_update_mesh = false;
 
-    for (int x = 0; x < chunk_render_distance; x++)
-        for (int y = 0; y < chunk_render_distance; y++)
-            for (int z = 0; z < chunk_render_distance; z++) {
+    for (int x = 0; x < chunk_render_size.x; x++)
+        for (int y = 0; y < chunk_render_size.y; y++)
+            for (int z = 0; z < chunk_render_size.z; z++) {
                 glm::ivec3 cpos = front_left_bottom_chunk_pos + (glm::ivec3){x, y, z};
                 Chunk* chunk_to_draw = nullptr;
 
@@ -225,11 +226,11 @@ void VoxelGrid::draw(RenderState state) {
 
     glm::vec3 cam_pos = state.camera->position;
     glm::ivec3 center_chunk_pos = (glm::ivec3){cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z};
-    glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_distance / 2;
+    glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
     int num_chunks_drawn = 0;
-    for (int x = 0; x < chunk_render_distance; x++)
-        for (int y = 0; y < chunk_render_distance; y++)
-            for (int z = 0; z < chunk_render_distance; z++) {
+    for (int x = 0; x < chunk_render_size.x; x++)
+        for (int y = 0; y < chunk_render_size.y; y++)
+            for (int z = 0; z < chunk_render_size.z; z++) {
                 glm::ivec3 cpos = front_left_bottom_chunk_pos + (glm::ivec3){x, y, z};
 
                 glm::vec3 bmin = glm::vec3(cpos) * glm::vec3(chunk_size);

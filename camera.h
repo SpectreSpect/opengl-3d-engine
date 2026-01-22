@@ -27,7 +27,7 @@ public:
     glm::vec3 front;
     glm::vec3 up;
     float near = 0.1f;
-    float far = 1000.0f;
+    float far = 5000.0f;
     float fov;
     // float movment_speed;
         

@@ -131,7 +131,7 @@ int main() {
     // chunks[packKey(-10, 25, -1555)] = big_chunk;
     // chunks[packKey(435, 2, 152)] = small_chunk;
 
-    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 12);
+    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
 
     Chunk* chunk_test = new Chunk({16, 16, 16}, {1, 1, 1});
 

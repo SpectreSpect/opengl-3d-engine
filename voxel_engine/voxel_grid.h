@@ -34,14 +34,15 @@ constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
 
 class VoxelGrid : public Drawable, public Transformable {
 public:
-    int chunk_render_distance = 8;
+    // int chunk_render_distance = 8;
+    glm::ivec3 chunk_render_size;
     glm::ivec3 chunk_size;
     std::unordered_map<uint64_t, Chunk*> chunks;
     std::set<uint64_t> chunks_to_update;
     Chunk* test_chunk;
     
 
-    VoxelGrid(glm::ivec3 chunk_size, int chunk_render_distance = 8);
+    VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size = {16, 6, 16});
     ~VoxelGrid();
 
     uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
