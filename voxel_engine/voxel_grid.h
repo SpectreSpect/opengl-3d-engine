@@ -10,12 +10,14 @@
 #include <atomic>
 #include <unordered_set>
 #include <utility>
+#include "../window.h"
 
 struct MeshJob {
     uint64_t key;
     glm::ivec3 cpos; // chunk coords
     glm::ivec3 chunk_size;
     uint32_t revision;
+    uint32_t ticket;
 
     // std::shared_ptr<const std::vector<Voxel>> voxels;
     std::shared_ptr<const std::vector<Voxel>> self;
@@ -26,10 +28,10 @@ struct MeshResult {
     uint64_t key;
     MeshData mesh_data;
     uint32_t revision;
+    uint32_t ticket;
     // std::vector<float> vertices;
     // std::vector<unsigned int> indices;
 };
-
 
 
 constexpr int BITS = 21;
@@ -43,9 +45,7 @@ public:
     glm::ivec3 chunk_size;
     std::unordered_map<uint64_t, Chunk*> chunks;
     std::set<uint64_t> chunks_to_update;
-    Chunk* test_chunk;
     
-
     VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size = {16, 6, 16});
     ~VoxelGrid();
 
@@ -97,7 +97,8 @@ public:
 
     bool is_voxel_free(glm::ivec3 pos);
 
-    std::thread mesh_updating_thread;
+    // std::thread mesh_updating_thread;
+    std::vector<std::thread> mesh_workers;
     std::atomic<bool> mesh_thread_running{false};
 
     std::mutex jobs_mx;
@@ -105,13 +106,13 @@ public:
     std::deque<MeshJob> jobs;
     std::unordered_set<uint64_t> in_flight;
 
-    void enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk);
+    bool enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk);
     void mesh_worker_loop();
     void drain_mesh_results();
 
     std::mutex results_mx;
     std::deque<MeshResult> results;
 
-    void update(Camera* camera);
+    void update(Window* window, Camera* camera);
     void draw(RenderState state) override;
 };

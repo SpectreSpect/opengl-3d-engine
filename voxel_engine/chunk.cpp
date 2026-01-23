@@ -182,8 +182,12 @@ bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3
 }
 
 void Chunk::upload_mesh_gpu(MeshData& mesh_data) {
-    if (mesh_data.vertices.empty() || mesh_data.indices.empty())
+    if (mesh_data.vertices.empty() || mesh_data.indices.empty()) {
+        empty_mesh = true;
         return;
+    }
+    empty_mesh = false;
+        
     if (!mesh)
         this->mesh = new Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);
     else
@@ -232,7 +236,7 @@ bool Chunk::solid_from(const std::vector<Voxel>& self,
 
 
 void Chunk::draw(RenderState state) {
-    if (!mesh)
+    if (!mesh || empty_mesh)
         return;
     
     state.transform *= get_model_matrix();

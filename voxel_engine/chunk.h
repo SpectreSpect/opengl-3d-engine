@@ -24,7 +24,9 @@ public:
     glm::vec3 voxel_size;
     VertexLayout* vertex_layout = nullptr;
     std::atomic<uint32_t> revision{0};
+    // std::atomic<uint32_t> mesh_ticket{0};
     std::shared_ptr<const std::vector<Voxel>> voxels;
+    bool empty_mesh = false;
 
     Mesh* mesh = nullptr;
     Chunk(glm::ivec3 size, glm::vec3 voxel_size);
