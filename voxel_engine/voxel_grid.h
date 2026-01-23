@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <utility>
 #include "../window.h"
+#include "voxel_editor.h"
 
 struct MeshJob {
     uint64_t key;
@@ -33,6 +34,10 @@ struct MeshResult {
     // std::vector<unsigned int> indices;
 };
 
+class VoxelGrid;
+
+
+
 
 constexpr int BITS = 21;
 constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
@@ -45,11 +50,12 @@ public:
     glm::ivec3 chunk_size;
     std::unordered_map<uint64_t, Chunk*> chunks;
     std::set<uint64_t> chunks_to_update;
+    // bool placed = false;
     
     VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size = {16, 6, 16});
     ~VoxelGrid();
 
-    uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
+    static uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
         static_assert(BITS > 0 && 3 * BITS <= 64);
 
         if (cx < -OFFSET || cx > OFFSET - 1 ||
@@ -84,7 +90,7 @@ public:
     //     return (glm::vec3){cx, cy, cz}
     // }
 
-    glm::vec3 unpack_key(uint64_t key) {
+    static glm::vec3 unpack_key(uint64_t key) {
         uint64_t ux = (key >> (BITS*2)) & MASK;
         uint64_t uy = (key >> BITS) & MASK;
         uint64_t uz = key & MASK;
@@ -105,6 +111,22 @@ public:
     std::condition_variable jobs_cv;
     std::deque<MeshJob> jobs;
     std::unordered_set<uint64_t> in_flight;
+
+    template<class F>
+    void edit_voxels(F&& apply_edits) {
+        VoxelEditor voxel_editor = VoxelEditor(this);
+        apply_edits(voxel_editor);
+
+        voxel_editor.update_and_schedule();
+    }
+
+    static glm::ivec3 get_chunk_pos(glm::vec3 pos, glm::ivec3 chunk_size) {
+        int cx = pos.x / chunk_size.x + ((int)pos.x % chunk_size.x < 0 ? -1 : 0);
+        int cy = pos.y / chunk_size.y + ((int)pos.y % chunk_size.y < 0 ? -1 : 0);
+        int cz = pos.z / chunk_size.z + ((int)pos.z % chunk_size.z < 0 ? -1 : 0);
+
+        return glm::ivec3(cx, cy, cz);
+    }
 
     bool enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk);
     void mesh_worker_loop();
