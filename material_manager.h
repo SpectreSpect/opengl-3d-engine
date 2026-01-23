@@ -2,6 +2,7 @@
 #include "unordered_map"
 #include "iostream"
 #include "material_template.h"
+#include "path_utils.h"
 #include "memory"
 
 

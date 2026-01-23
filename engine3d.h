@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -18,6 +19,7 @@
 
 #include "mesh_manager.h"
 #include "material_manager.h"
+#include "path_utils.h"
 
 class Window;
 
@@ -30,8 +32,8 @@ public:
     MeshManager* mesh_manager;
     MaterialManager* material_manager;
 
-    std::string default_vertex_shader_path = "../shaders/deafult_vertex.glsl";
-    std::string default_fragment_shader_path = "../shaders/deafult_fragment.glsl";
+    std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
+    std::string default_fragment_shader_path = (executable_dir() / "shaders" / "deafult_fragment.glsl").string();
 
     VertexShader* default_vertex_shader;
     FragmentShader* default_fragment_shader;

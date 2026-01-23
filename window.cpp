@@ -8,7 +8,6 @@ Window::Window(Engine3D* engine, int width, int height, std::string title) {
     this->height = height;
     if (!this->window) {
         std::cerr << "glfwCreateWindow failed\n";
-        glfwTerminate();
         return;
     }
     glfwSetWindowUserPointer(window, this);
@@ -135,6 +134,7 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     states.transform = glm::mat4(1.0f);
     states.program = program ? program : engine->default_program;
     states.camera = camera;
+    states.camera->update_frustum_planes(states.vp);
 
     drawable->draw(states);
 

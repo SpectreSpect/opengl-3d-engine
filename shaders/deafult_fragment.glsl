@@ -2,6 +2,7 @@
 
 in vec3 vNormal;
 in vec3 vFragPos;
+in vec3 vColor;
 
 out vec4 FragColor;
 
@@ -9,7 +10,8 @@ uniform vec3 uViewPos;
 
 void main() {
     vec3 light_dir = normalize(vec3(1, 1.5, 1.3));
-    vec3 albedo = vec3(0.7, 0.1, 0.1);
+    // vec3 albedo = vec3(0.7, 0.1, 0.1);
+    vec3 albedo = vColor;
     vec3 normal = normalize(vNormal);
 
     // Ambient

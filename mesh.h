@@ -16,7 +16,11 @@ public:
     VertexLayout* vertex_layout;
     
     
-    Mesh(std::vector<float> vertices, std::vector<unsigned int> indices, VertexLayout* vertex_layout);
+    Mesh(std::vector<float>& vertices, std::vector<unsigned int>& indices, VertexLayout* vertex_layout);
+    ~Mesh();
+    // Mesh(const void* vertex_data, size_t vertex_data_size, const void* index_data, size_t index_data_size, VertexLayout* vertex_layout);
+    void update(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, GLenum usage = GL_DYNAMIC_DRAW);
+    void update(const void* vertex_data, size_t vertex_data_size, const void* index_data, size_t index_data_size, GLenum usage = GL_DYNAMIC_DRAW);
     // Mesh(float* vertices, unsigned int* indices, int vertices_size, int indices_size, Program* shader, VertexLayout* vertex_layout);
     void draw(RenderState state) override;
 };

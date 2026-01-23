@@ -21,8 +21,8 @@
 #include "cube.h"
 #include "window.h"
 #include "fps_camera_controller.h"
-// #include "scene.h"
-// #include "cube_prefab.h"
+#include "voxel_engine/chunk.h"
+#include "voxel_engine/voxel_grid.h"
 
 
 class Grid : public Drawable, public Transformable {
@@ -70,38 +70,26 @@ int main() {
     window->set_camera(camera);
 
     FPSCameraController* camera_controller = new FPSCameraController(camera);
+    camera_controller->speed = 20;
 
-    // Scene* scene = new Scene(engine);
-    // CubePrefab* cube_prefab = new CubePrefab();
-    // SceneObject* cube = cube_prefab->instantiate(scene);
-    
-
-    // Cube* cube = new Cube();
-
-    Grid* grid = new Grid(10, 10);
     float timer = 0;
     float lastFrame = 0;
+
+    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
+    // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
+
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
-        lastFrame = currentFrame;
+        lastFrame = currentFrame;   
 
         camera_controller->update(window, delta_time);
 
         window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
 
-        for (int x = 0; x < grid->width; x++){
-            for (int y = 0; y < grid->height; y++) {
-                grid->cubes[x][y]->position.y = sin(((float)x / (float)grid->width) * 3.14 + timer * 4) + cos(((float)y / (float)grid->width) * 3.14 + timer * 4);
-            }
-        }
-
-        // window->draw(cube, camera);
-        window->draw(grid, camera);
-
-
-        // cube->position.x += 1.0 * delta_time;
+        voxel_grid->update(window, camera);
+        window->draw(voxel_grid, camera);
 
         window->swap_buffers();
         engine->poll_events();
