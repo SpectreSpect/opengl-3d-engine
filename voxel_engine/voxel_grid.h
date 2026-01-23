@@ -120,6 +120,43 @@ public:
         voxel_editor.update_and_schedule();
     }
 
+    // template<class F>
+    // void edit_chunk(glm::ivec3 chunk_pos, F&& apply_edits) {
+    //     uint64_t key = pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+        
+    //     Chunk* chunk = nullptr;
+
+    //     auto it = chunks.find(key);
+    //     if (it == chunks.end())
+    //         chunk = it->second;
+    //     else {
+    //         chunk = new Chunk(chunk_size, {1, 1, 1});
+    //         chunk->position = glm::vec3(chunk_pos.x * chunk_size.x, chunk_pos.y * chunk_size.y, chunk_pos.z * chunk_size.z);
+    //     }
+            
+    //     chunk->edit_voxels([&](std::vector<Voxel>& voxels){
+            
+    //     });
+    // }
+
+    template<class F>
+    void edit_chunk(glm::ivec3 chunk_pos, Chunk* chunk, F&& apply_edits) {
+        uint64_t key = pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);   
+
+        chunk->edit_voxels([&](std::vector<Voxel>& voxels){
+            apply_edits(voxels);
+        });
+
+        chunks[key] = chunk;
+        chunks_to_update.insert(key);
+        chunks_to_update.insert(pack_key(chunk_pos.x-1, chunk_pos.y, chunk_pos.z)); // left
+        chunks_to_update.insert(pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z-1)); // back
+        chunks_to_update.insert(pack_key(chunk_pos.x+1, chunk_pos.y, chunk_pos.z)); // right
+        chunks_to_update.insert(pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z+1)); // front
+        chunks_to_update.insert(pack_key(chunk_pos.x, chunk_pos.y+1, chunk_pos.z)); // top
+        chunks_to_update.insert(pack_key(chunk_pos.x, chunk_pos.y-1, chunk_pos.z)); // bottom
+    }
+
     static glm::ivec3 get_chunk_pos(glm::vec3 pos, glm::ivec3 chunk_size) {
         int cx = pos.x / chunk_size.x + ((int)pos.x % chunk_size.x < 0 ? -1 : 0);
         int cy = pos.y / chunk_size.y + ((int)pos.y % chunk_size.y < 0 ? -1 : 0);

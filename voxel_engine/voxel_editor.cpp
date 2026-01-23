@@ -17,17 +17,15 @@ void VoxelEditor::update_and_schedule() {
         Chunk* chunk_to_edit = this->voxel_grid->chunks[chunk_key];
 
         chunk_to_edit->edit_voxels([&](std::vector<Voxel>& voxels){
-            auto voxel_map = chunk_map_it->second;
+            auto& voxel_map = chunk_map_it->second;
 
             for (auto voxel_it = voxel_map.begin(); voxel_it != voxel_map.end(); ++voxel_it) {
-                uint64_t local_voxel_key = voxel_it->first;
-                glm::ivec3 local_voxel_pos = VoxelGrid::unpack_key(local_voxel_key);
+                uint32_t local_voxel_key = voxel_it->first; // the same as Chunk:idx
+                // glm::ivec3 local_voxel_pos = unpack_local_id(local_voxel_key, voxel_grid->chunk_size);
 
-                int id = Chunk::idx(local_voxel_pos, voxel_grid->chunk_size);
+                // int id = Chunk::idx(local_voxel_pos, voxel_grid->chunk_size);
 
-                Voxel voxel = voxel_it->second;
-
-                voxels[id] = voxel;
+                voxels[local_voxel_key] = voxel_it->second;
             }
         });
 
@@ -52,9 +50,15 @@ void VoxelEditor::set(glm::ivec3 pos, const Voxel& voxel) {
     int lz = pos.z - chunk_pos.z * voxel_grid->chunk_size.z;
 
     glm::ivec3 local_voxel_pos = glm::ivec3(lx, ly, lz);
-    uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
+    // uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
+    uint32_t local_voxel_key = pack_local_id(local_voxel_pos, voxel_grid->chunk_size);
 
-    edited_voxels[chunk_key][local_voxel_key] = voxel;
+    auto [it, inserted] = edited_voxels.try_emplace(chunk_key);
+    // if you have a guess, reserve once:
+    // if (inserted) it->second.reserve(256);
+    it->second[local_voxel_key] = voxel;
+
+    // edited_voxels[chunk_key][local_voxel_key] = voxel;
 }
 
 Voxel VoxelEditor::get(glm::ivec3 pos) const{
@@ -69,9 +73,10 @@ Voxel VoxelEditor::get(glm::ivec3 pos) const{
 
     auto chunk_map_it = edited_voxels.find(chunk_key);
     if (chunk_map_it != edited_voxels.end()) {
-        auto voxel_map = chunk_map_it->second;
+        auto& voxel_map = chunk_map_it->second;
 
-        uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
+        // uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
+        uint32_t local_voxel_key = pack_local_id(local_voxel_pos, voxel_grid->chunk_size);
         auto voxel_it = voxel_map.find(local_voxel_key);
         if (voxel_it != voxel_map.end())
             return voxel_it->second;
@@ -79,14 +84,20 @@ Voxel VoxelEditor::get(glm::ivec3 pos) const{
 
     auto chunk_it = voxel_grid->chunks.find(chunk_key);
 
-    if (chunk_it == voxel_grid->chunks.end())
-        return Voxel();
+    if (chunk_it == voxel_grid->chunks.end()) {
+        Voxel air{};
+        air.visible = false;
+        return air;
+    }
 
     size_t voxel_id = Chunk::idx(local_voxel_pos, voxel_grid->chunk_size);
 
     auto cur = std::atomic_load(&chunk_it->second->voxels);
-    if (!cur || voxel_id >= cur->size())
-        return Voxel();
+    if (!cur || voxel_id >= cur->size()) {
+        Voxel air{};
+        air.visible = false;
+        return air;
+    }
 
     return (*cur)[voxel_id];
 }

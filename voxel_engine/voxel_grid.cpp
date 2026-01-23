@@ -83,7 +83,6 @@ void VoxelGrid::mesh_worker_loop() {
             jobs.pop_front();
         }
 
-
         MeshData mesh_data = Chunk::build(*job.self, job.nb, job.chunk_size);
         
         {
@@ -183,7 +182,7 @@ void VoxelGrid::update(Window* window, Camera* camera) {
                     // float b = (rand() % 255) / 255.0f;
                     // glm::vec3 color = {r, g, b};
 
-                    new_chunk->edit_voxels([&](std::vector<Voxel>& voxels){
+                    edit_chunk(cpos, new_chunk, [&](std::vector<Voxel>& voxels){
                         for (int vx = 0; vx < new_chunk->size.x; vx++)
                             for (int vy = 0; vy < new_chunk->size.y; vy++)
                                 for (int vz = 0; vz < new_chunk->size.z; vz++) {
@@ -226,23 +225,6 @@ void VoxelGrid::update(Window* window, Camera* camera) {
                                     }
                                 }
                     });
-
-                    chunks[key] = new_chunk;
-
-                    chunks_to_update.insert(key);
-                    chunks_to_update.insert(pack_key(cpos.x-1, cpos.y, cpos.z)); // left
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z-1)); // back
-                    chunks_to_update.insert(pack_key(cpos.x+1, cpos.y, cpos.z)); // right
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z+1)); // front
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y+1, cpos.z)); // top
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y-1, cpos.z)); // bottom
-                    // chunks_to_update.push_back(key);
-                    // chunks_to_update.push_back(pack_key(cpos.x-1, cpos.y, cpos.z)); // left
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y, cpos.z-1)); // back
-                    // chunks_to_update.push_back(pack_key(cpos.x+1, cpos.y, cpos.z)); // right 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y, cpos.z+1)); // front 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y+1, cpos.z)); // top 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y-1, cpos.z)); // bottom 
                 }
             }
     
@@ -262,22 +244,6 @@ void VoxelGrid::update(Window* window, Camera* camera) {
         else
             ++it;
     }
-
-    // if (!placed)
-    //     if (glfwGetKey(window->window, GLFW_KEY_R) == GLFW_PRESS) {
-    //         placed = true;
-    //         edit_voxels([&](VoxelEditor& voxel_editor) {
-    //             for (int x = 0; x < chunk_size.x; x++)
-    //                 for (int y = 0; y < chunk_size.y; y++)
-    //                     for (int z = 0; z < chunk_size.z; z++) {
-    //                         Voxel voxel = Voxel();
-    //                         voxel.color = {0.0, 1.0, 0.0};
-    //                         voxel.visible = true;
-    //                         voxel_editor.set(glm::ivec3(x, y, z), voxel);
-    //                     }
-    //         });
-    //     }
-
     drain_mesh_results();
 }
 
