@@ -86,6 +86,7 @@ int main() {
     float lastFrame = 0;
 
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
+    // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -97,7 +98,7 @@ int main() {
 
         window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
 
-        voxel_grid->update(camera);
+        voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
 
         ImGui_ImplOpenGL3_NewFrame();

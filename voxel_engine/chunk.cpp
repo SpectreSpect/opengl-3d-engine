@@ -70,6 +70,44 @@ MeshData Chunk::build(const std::vector<Voxel>& voxels, glm::ivec3 size) {
     return out;
 }
 
+
+MeshData Chunk::build(const std::vector<Voxel>& self, 
+                     const std::array<std::shared_ptr<const std::vector<Voxel>>,6>& nb, 
+                     glm::ivec3 size){
+    static const glm::ivec3 adjacent_dir[] = {
+        {-1, 0, 0}, { 1, 0, 0},
+        { 0, 0,-1}, { 0, 0, 1},
+        { 0, 1, 0}, { 0,-1, 0}
+    };
+
+    MeshData out;
+
+    for (int x = 0; x < size.x; x++) {
+        for (int y = 0; y < size.y; y++) {
+            for (int z = 0; z < size.z; z++) {
+                glm::ivec3 pos = glm::ivec3(x, y, z);
+
+                if (!solid_from(self, nb, pos, size))
+                    continue;
+                
+                size_t id = idx(pos, size);
+                glm::vec3 color = self[id].color;
+
+                for (int i = 0; i < 6; i++) {
+                    glm::ivec3 adjacent_pos = pos + adjacent_dir[i];
+                    
+                    if (solid_from(self, nb, adjacent_pos, size))
+                        continue;
+                    
+                    emit_face(out, pos, (Face)i, color);
+                }
+            }
+        }
+    }
+
+    return out;
+}
+
 void Chunk::push_vertex(std::vector<float>& v, const glm::vec3& pos, const glm::vec3& normal, const glm::vec3& color) {
     v.push_back(pos.x);
     v.push_back(pos.y);
@@ -144,16 +182,61 @@ bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3
 }
 
 void Chunk::upload_mesh_gpu(MeshData& mesh_data) {
-    if (mesh_data.vertices.empty() || mesh_data.indices.empty())
+    if (mesh_data.vertices.empty() || mesh_data.indices.empty()) {
+        empty_mesh = true;
         return;
+    }
+    empty_mesh = false;
+        
     if (!mesh)
         this->mesh = new Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);
     else
         this->mesh->update(mesh_data.vertices, mesh_data.indices);
 }
 
+bool Chunk::solid_from(const std::vector<Voxel>& self,
+                       const std::array<std::shared_ptr<const std::vector<Voxel>>,6>& nb,
+                       glm::ivec3 pos, glm::ivec3 csize){
+    if (in_bounds(pos, csize))
+        return self[idx(pos, csize)].visible;
+
+    // Only allow "one step outside" cases. Everything else = air.
+    if (pos.x == -1) {
+        auto& n = nb[(int)Face::Left];
+        if (!n) return false;
+        return (*n)[idx({csize.x-1, pos.y, pos.z}, csize)].visible;
+    }
+    if (pos.x == csize.x) {
+        auto& n = nb[(int)Face::Right];
+        if (!n) return false;
+        return (*n)[idx({0, pos.y, pos.z}, csize)].visible;
+    }
+    if (pos.z == -1) {
+        auto& n = nb[(int)Face::Back];
+        if (!n) return false;
+        return (*n)[idx({pos.x, pos.y, csize.z-1}, csize)].visible;
+    }
+    if (pos.z == csize.z) {
+        auto& n = nb[(int)Face::Front];
+        if (!n) return false;
+        return (*n)[idx({pos.x, pos.y, 0}, csize)].visible;
+    }
+    if (pos.y == -1) {
+        auto& n = nb[(int)Face::Bottom];
+        if (!n) return false;
+        return (*n)[idx({pos.x, csize.y-1, pos.z}, csize)].visible;
+    }
+    if (pos.y == csize.y) {
+        auto& n = nb[(int)Face::Top];
+        if (!n) return false;
+        return (*n)[idx({pos.x, 0, pos.z}, csize)].visible;
+    }
+    return false;
+}
+
+
 void Chunk::draw(RenderState state) {
-    if (!mesh)
+    if (!mesh || empty_mesh)
         return;
     
     state.transform *= get_model_matrix();
