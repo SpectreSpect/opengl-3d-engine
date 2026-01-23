@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <cmath>
 
 #include "engine3d.h"
 
@@ -59,6 +60,55 @@ public:
     }
 };
 
+Mesh* create_triangle(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 color1, glm::vec3 color2, glm::vec3 color3) {
+    glm::vec3 e1 = v1 - v0;
+    glm::vec3 e2 = v2 - v0;
+    glm::vec3 normal  = glm::normalize(glm::cross(e1, e2));
+
+    glm::vec3 points[3] = {v0, v1, v2}; 
+    glm::vec3 colors[3] = {color1, color2, color3}; 
+    
+    std::vector<float> vertices;
+    vertices.reserve(3 * 9);
+
+    std::vector<unsigned int> indices = {0, 1, 2};
+
+    for (int i = 0; i < 3; i++) {
+        vertices.push_back(points[i].x);
+        vertices.push_back(points[i].y);
+        vertices.push_back(points[i].z);
+
+        vertices.push_back(normal.x);
+        vertices.push_back(normal.y);
+        vertices.push_back(normal.z);
+
+        vertices.push_back(colors[i].x);
+        vertices.push_back(colors[i].y);
+        vertices.push_back(colors[i].z);
+    }
+
+    VertexLayout* vertex_layout = new VertexLayout();
+    vertex_layout->add({
+        0, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        0
+    });
+    vertex_layout->add({
+        1, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        3 * sizeof(float)
+    });
+    vertex_layout->add({
+        2, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        6 * sizeof(float)
+    });
+
+    Mesh* triangle = new Mesh(std::move(vertices), std::move(indices), vertex_layout);
+
+    return triangle;
+}
+
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 
 int main() {
@@ -81,6 +131,40 @@ int main() {
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
     // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
+    float voxel_size = 1.0f;
+    glm::vec3 left_top_front = glm::vec3(
+        - (voxel_grid->chunk_size.x * voxel_size) / 2.0f,
+        - (voxel_grid->chunk_size.y * voxel_size) / 2.0f,
+        - (voxel_grid->chunk_size.z * voxel_size) / 2.0f
+    );
+
+    glm::vec3 right_top_front = glm::vec3(
+        (voxel_grid->chunk_size.x * voxel_size) / 2.0f,
+        - (voxel_grid->chunk_size.y * voxel_size) / 2.0f,
+        - (voxel_grid->chunk_size.z * voxel_size) / 2.0f
+    );
+
+    glm::vec3 bottom_center = glm::vec3(
+        0.0f,
+        (voxel_grid->chunk_size.y * voxel_size) / 2.0f,
+        0.0f
+    );
+
+    float y_offset = voxel_grid->chunk_size.y * voxel_size * 2;
+    glm::vec3 p0 = left_top_front;
+    glm::vec3 p1 = right_top_front;
+    glm::vec3 p2 = bottom_center;
+
+    glm::vec3 c0(1.0f, 0.0f, 0.0f);
+    glm::vec3 c1(0.0f, 1.0f, 0.0f);
+    glm::vec3 c2(0.0f, 0.0f, 1.0f);
+
+    glm::vec3 out_p0 = p0 + glm::vec3(0.0f, y_offset, 0.0f);
+    glm::vec3 out_p1 = p1 + glm::vec3(0.0f, y_offset, 0.0f);
+    glm::vec3 out_p2 = p2 + glm::vec3(0.0f, y_offset, 0.0f);
+
+    Mesh* triangle = create_triangle(out_p0, out_p1, out_p2, c0, c1, c2);
+
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -97,23 +181,147 @@ int main() {
 
         voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
+        window->draw(triangle, camera);
 
 
         glm::vec3 velocity = (camera_controller->camera->position - prev_cam_pos) / delta_time;
 
         ImGui::Begin("Debug");
-        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-        ImGui::Text("Camera velocity: %.1f", glm::length(velocity));
 
-        ImGui::SliderFloat("Camera speed", &camera_controller->speed, 0.1f, 100.0f);
-        ImGui::SliderFloat("Camera fov", &camera_controller->camera->fov, 30.0f, 120.0f);
-        ImGui::ColorEdit4("Clear color", clear_col);
+        auto stick_xz = [&](const char* id, glm::vec3& p, const ImVec4& col,
+                            float radius_px, float range_xz) -> bool
+        {
+            bool changed = false;
 
-        if (ImGui::Button("Reset camera")) {
-            camera_controller->camera->position = glm::vec3(0.0f, 0.0f, 5.0f);
+            const float knob_r = 6.0f;
+            const float r = radius_px;
+            const float r_move = (r > knob_r) ? (r - knob_r) : r; // чтобы ручка целиком внутри
 
-            camera_controller->camera->up = {0.0f, 1.0f, 0.0f};
-            camera_controller->camera->front = {0.0f, 0.0f, -1.0f};
+            ImVec2 start = ImGui::GetCursorScreenPos();
+            ImVec2 size  = ImVec2(r * 2.0f, r * 2.0f);
+
+            ImGui::InvisibleButton(id, size);
+            bool active  = ImGui::IsItemActive();
+            bool hovered = ImGui::IsItemHovered();
+
+            ImVec2 center = ImVec2(start.x + r, start.y + r);
+
+            // нормализованная позиция из p
+            float nx = (range_xz > 0.0f) ? (p.x / range_xz) : 0.0f;
+            float nz = (range_xz > 0.0f) ? (p.z / range_xz) : 0.0f;
+            nx = glm::clamp(nx, -1.0f, 1.0f);
+            nz = glm::clamp(nz, -1.0f, 1.0f);
+
+            ImVec2 knob = ImVec2(center.x + nx * r_move, center.y + nz * r_move);
+
+            if (active) {
+                ImVec2 m = ImGui::GetIO().MousePos;
+                ImVec2 d = ImVec2(m.x - center.x, m.y - center.y);
+
+                float len = std::sqrt(d.x*d.x + d.y*d.y);
+                if (len > r_move && len > 0.0f) {
+                    d.x = d.x / len * r_move;
+                    d.y = d.y / len * r_move;
+                }
+
+                float new_nx = (r_move > 0.0f) ? (d.x / r_move) : 0.0f;
+                float new_nz = (r_move > 0.0f) ? (d.y / r_move) : 0.0f;
+
+                float new_x = new_nx * range_xz;
+                float new_z = new_nz * range_xz;
+
+                if (new_x != p.x || new_z != p.z) {
+                    p.x = new_x;
+                    p.z = new_z;
+                    changed = true;
+                }
+
+                knob = ImVec2(center.x + d.x, center.y + d.y);
+            }
+
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImU32 col_border = ImGui::GetColorU32(ImVec4(col.x, col.y, col.z, 0.9f));
+            ImU32 col_bg     = ImGui::GetColorU32(ImVec4(0, 0, 0, hovered ? 0.25f : 0.15f));
+            ImU32 col_knob   = ImGui::GetColorU32(ImVec4(col.x, col.y, col.z, active ? 1.0f : 0.85f));
+
+            dl->AddRectFilled(start, ImVec2(start.x + size.x, start.y + size.y), col_bg, 10.0f);
+            dl->AddCircle(center, r, col_border, 0, 2.0f);
+            dl->AddLine(ImVec2(center.x - r, center.y), ImVec2(center.x + r, center.y), col_border, 1.0f);
+            dl->AddLine(ImVec2(center.x, center.y - r), ImVec2(center.x, center.y + r), col_border, 1.0f);
+
+            dl->AddCircleFilled(knob, knob_r, col_knob);
+
+            return changed;
+        };
+
+
+
+        auto draw_vertex_block = [&](const char* title, glm::vec3& p, const ImVec4& col,
+                                        float range_xz, float range_y) -> bool
+        {
+            bool changed = false;
+
+            // Чтобы “стартовые значения” не выглядели странно, когда p вне диапазона:
+            // (если не хочешь клампить — закомментируй)
+            p.x = glm::clamp(p.x, -range_xz, range_xz);
+            p.z = glm::clamp(p.z, -range_xz, range_xz);
+            p.y = glm::clamp(p.y, -range_y,  range_y);
+
+            const float r = 55.0f;
+            const float h =
+                ImGui::GetTextLineHeightWithSpacing() +          // заголовок
+                (r * 2.0f) +                                     // стик
+                ImGui::GetTextLineHeightWithSpacing() +          // строка X/Z
+                ImGui::GetFrameHeightWithSpacing() +             // слайдер Y
+                ImGui::GetStyle().WindowPadding.y * 2.0f +
+                ImGui::GetStyle().ItemSpacing.y * 3.0f;
+
+            ImGui::PushStyleColor(ImGuiCol_Border, col);
+            ImGui::BeginChild(title, ImVec2(0, h), true);
+            ImGui::PopStyleColor();
+
+            ImGui::PushStyleColor(ImGuiCol_Text, col);
+            ImGui::TextUnformatted(title);
+            ImGui::PopStyleColor();
+
+            ImGui::PushID(title);
+
+            // Стик XZ
+            changed |= stick_xz("stick", p, col, r, range_xz);
+
+            ImGui::Text("X: %.2f   Z: %.2f", p.x, p.z);
+
+            // Y слайдер (красим “граб”)
+            ImGui::PushStyleColor(ImGuiCol_SliderGrab, col);
+            ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, col);
+            changed |= ImGui::SliderFloat("Y", &p.y, -range_y, range_y, "%.3f");
+            ImGui::PopStyleColor(2);
+
+            ImGui::PopID();
+
+            ImGui::EndChild();
+            return changed;
+        };
+
+        float range_xz = glm::max(voxel_grid->chunk_size.x, voxel_grid->chunk_size.z) * voxel_size / 2.0f;
+        float range_y  = voxel_grid->chunk_size.y * voxel_size / 2.0f;
+
+
+        
+        bool tri_changed = false;
+        tri_changed |= draw_vertex_block("V0 (red)",   p0, ImVec4(1,0,0,1), range_xz, range_y);
+        ImGui::Spacing();
+        tri_changed |= draw_vertex_block("V1 (green)", p1, ImVec4(0,1,0,1), range_xz, range_y);
+        ImGui::Spacing();
+        tri_changed |= draw_vertex_block("V2 (blue)",  p2, ImVec4(0,0,1,1), range_xz, range_y);
+
+        out_p0 = p0 + glm::vec3(0.0f, y_offset, 0.0f);
+        out_p1 = p1 + glm::vec3(0.0f, y_offset, 0.0f);
+        out_p2 = p2 + glm::vec3(0.0f, y_offset, 0.0f);
+
+        if (tri_changed) {
+            delete triangle; 
+            triangle = create_triangle(out_p0, out_p1, out_p2, c0, c1, c2);
         }
 
         ImGui::End();

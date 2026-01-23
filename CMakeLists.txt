@@ -33,6 +33,7 @@ add_executable(app
   voxel_engine/chunk.cpp
   voxel_engine/voxel_grid.cpp
   imgui_layer.cpp
+  voxel_rastorizator.cpp
 )
 
 add_custom_command(TARGET app POST_BUILD
