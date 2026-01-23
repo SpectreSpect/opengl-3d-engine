@@ -79,6 +79,7 @@ int main() {
     float lastFrame = 0;
 
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
+    // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
@@ -94,7 +95,7 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        voxel_grid->update(camera);
+        voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
 
 
