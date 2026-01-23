@@ -1,5 +1,6 @@
 #include "imgui_layer.h"
 
+
 namespace ui {
   void init(GLFWwindow* window) {
     IMGUI_CHECKVERSION();
@@ -13,6 +14,14 @@ namespace ui {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+  }
+
+  void update_mouse_mode(Window* window) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (window->mouse_state.mode == MouseMode::NORMAL)
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+    else
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
   }
 
   void end_frame() {

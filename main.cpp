@@ -59,6 +59,8 @@ public:
     }
 };
 
+float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+
 int main() {
     Engine3D* engine = new Engine3D();
     Window* window = new Window(engine, 1280, 720, "3D visualization");
@@ -78,27 +80,49 @@ int main() {
 
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
 
+    glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
         lastFrame = currentFrame;   
 
+        ui::begin_frame();
+        ui::update_mouse_mode(window);
+
         camera_controller->update(window, delta_time);
 
-        window->clear_color({0.776470588f, 0.988235294f, 1.0f, 1.0f});
+        window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         voxel_grid->update(camera);
         window->draw(voxel_grid, camera);
 
-        ui::begin_frame();
 
-        ImGui::ShowDemoWindow(); // проверка
+        glm::vec3 velocity = (camera_controller->camera->position - prev_cam_pos) / delta_time;
+
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::Text("Camera velocity: %.1f", glm::length(velocity));
+
+        ImGui::SliderFloat("Camera speed", &camera_controller->speed, 0.1f, 100.0f);
+        ImGui::SliderFloat("Camera fov", &camera_controller->camera->fov, 30.0f, 120.0f);
+        ImGui::ColorEdit4("Clear color", clear_col);
+
+        if (ImGui::Button("Reset camera")) {
+            camera_controller->camera->position = glm::vec3(0.0f, 0.0f, 5.0f);
+
+            camera_controller->camera->up = {0.0f, 1.0f, 0.0f};
+            camera_controller->camera->front = {0.0f, 0.0f, -1.0f};
+        }
+
+        ImGui::End();
 
         ui::end_frame();
 
         window->swap_buffers();
         engine->poll_events();
+
+        prev_cam_pos = camera_controller->camera->position;
     }
     
     ui::shutdown();
