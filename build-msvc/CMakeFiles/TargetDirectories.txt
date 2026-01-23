@@ -1,3 +1,0 @@
-C:/Coding/ML/opengl-3d-engine/build-msvc/CMakeFiles/app.dir
-C:/Coding/ML/opengl-3d-engine/build-msvc/CMakeFiles/ALL_BUILD.dir
-C:/Coding/ML/opengl-3d-engine/build-msvc/CMakeFiles/ZERO_CHECK.dir

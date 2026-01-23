@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"C:/Coding/ML/opengl-3d-engine/build-msvc/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
