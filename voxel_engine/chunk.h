@@ -30,6 +30,7 @@ public:
 
     Mesh* mesh = nullptr;
     Chunk(glm::ivec3 size, glm::vec3 voxel_size);
+    // Chunk(glm::ivec3 size, glm::vec3 voxel_size, std::shared_ptr<const std::vector<Voxel>> voxels);
     ~Chunk();
 
     template<class F>
@@ -40,6 +41,11 @@ public:
         apply_edits(*next);
 
         std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(next));
+        revision.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void update_voxels(std::shared_ptr<const std::vector<Voxel>> new_voxels) {
+        std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(new_voxels));
         revision.fetch_add(1, std::memory_order_relaxed);
     }
 

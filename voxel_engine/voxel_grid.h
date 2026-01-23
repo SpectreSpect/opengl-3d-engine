@@ -34,6 +34,18 @@ struct MeshResult {
     // std::vector<unsigned int> indices;
 };
 
+struct GenJob {
+    uint64_t key;
+    glm::ivec3 cpos;
+    glm::ivec3 chunk_size;
+};
+
+struct GenResult {
+    uint64_t key;
+    glm::ivec3 cpos;
+    std::shared_ptr<const std::vector<Voxel>> voxels;
+};
+
 class VoxelGrid;
 
 
@@ -171,6 +183,23 @@ public:
 
     std::mutex results_mx;
     std::deque<MeshResult> results;
+
+    
+    std::vector<std::thread> gen_workers;
+    std::atomic<bool> gen_thread_running{false};
+    std::mutex gen_jobs_mx;
+    std::condition_variable gen_jobs_cv;
+    std::deque<GenJob> gen_jobs;
+    std::mutex gen_results_mx;
+    std::deque<GenResult> gen_results;
+
+    std::shared_ptr<std::vector<Voxel>> generate_chunk(glm::ivec3 chunk_pos, glm::ivec3 chunk_size);
+
+    void gen_worker_loop();
+    void enqueue_gen_job(uint64_t key, glm::ivec3 cpos, glm::ivec3 chunk_size);
+    void drain_gen_results();
+    
+
 
     void update(Window* window, Camera* camera);
     void draw(RenderState state) override;
