@@ -1,0 +1,10 @@
+^C:\CODING\ML\OPENGL-3D-ENGINE\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Coding/ML/opengl-3d-engine -BC:/Coding/ML/opengl-3d-engine/build-msvc --check-stamp-file C:/Coding/ML/opengl-3d-engine/build-msvc/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
