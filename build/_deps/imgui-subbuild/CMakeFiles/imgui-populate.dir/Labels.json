@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/CMakeFiles/imgui-populate"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/CMakeFiles/imgui-populate.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/CMakeFiles/imgui-populate-complete.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-build.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-configure.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-download.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-install.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-mkdir.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-patch.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-test.rule"
+		},
+		{
+			"file" : "/home/spectre/Projects/test_open_3d/build/_deps/imgui-subbuild/imgui-populate-prefix/src/imgui-populate-stamp/imgui-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"imgui-populate"
+		],
+		"name" : "imgui-populate"
+	}
+}

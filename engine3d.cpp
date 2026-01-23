@@ -45,7 +45,6 @@ int Engine3D::init_glew() {
     return 1;
 }
 
-
 void Engine3D::set_window(Window* window) {
     if (!window || !window->window) {
         std::cerr << "set_window: GLFWwindow is null (create failed)\n";
