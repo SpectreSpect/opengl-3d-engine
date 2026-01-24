@@ -180,7 +180,7 @@ bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3
     return !voxels[idx(pos, size)].visible; 
 }
 
-void Chunk::set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> positions) {
+void Chunk::set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) {
     edit_voxels([&](std::vector<Voxel>& current){
         for (int i = 0; i < voxels.size(); i++) {
             glm::ivec3 pos = positions[i];
@@ -191,20 +191,20 @@ void Chunk::set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> posit
     });
 }
 
-void Chunk::set_voxel(Voxel& voxel, glm::ivec3 position) {
+void Chunk::set_voxel(const Voxel& voxel, glm::ivec3 position) {
     edit_voxels([&](std::vector<Voxel>& current) {
         if (in_bounds(position, size))
             current[idx(position, size)] = voxel;
     });
 }
 
-const Voxel* Chunk::get_voxel(Voxel& voxel, glm::ivec3 position) {
+Voxel Chunk::get_voxel(glm::ivec3 position) const {
     auto cur = std::atomic_load(&voxels);
     if (!in_bounds(position, size)) {
-        return nullptr;
+        throw std::out_of_range("Chunk::get_voxel: position out of bounds");
     }
 
-    return &((*cur)[idx(position, size)]);
+    return (*cur)[idx(position, size)];
 }
 
 void Chunk::upload_mesh_gpu(MeshData& mesh_data) {

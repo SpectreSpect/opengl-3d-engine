@@ -5,10 +5,6 @@ VoxelRastorizator::VoxelRastorizator(Gridable* gridable) {
     this->gridable = gridable;
 }
 
-void VoxelRastorizator::rasterize(Mesh* mesh, int vertex_stride) {
-
-}
-
 float VoxelRastorizator::fmin3(float a, float b, float c) { return std::min(a, std::min(b,c)); }
 float VoxelRastorizator::fmax3(float a, float b, float c) { return std::max(a, std::max(b,c)); }
 

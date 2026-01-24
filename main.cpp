@@ -86,6 +86,7 @@ int main() {
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
     // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
+    int vertex_stride = 9;
     float voxel_size = 1.0f;
     float chunk_render_size = voxel_grid->chunk_size.x * voxel_size;
     TriangleController* triangle_controller = new TriangleController(chunk_render_size, chunk_render_size);
@@ -101,9 +102,14 @@ int main() {
     glm::ivec3 triangle_chunk_pos = glm::ivec3(0, 2, 0);
     glm::vec3 chunk_origin = glm::vec3(triangle_chunk_pos) * glm::vec3(voxel_grid->chunk_size) * voxel_size;
 
+    Cube* cube = new Cube();
+    cube->position = glm::vec3(0.0f, chunk_render_size * 5, 0.0f);
+    cube->scale = glm::vec3(10.0f);
+    cube->set_color(glm::vec3(1.0f, 1.0f, 1.0f));
+
     Triangle* triangle = new Triangle(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
 
-    VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(nullptr);
+    VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(voxel_grid);
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
@@ -122,51 +128,29 @@ int main() {
         voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
         window->draw(triangle, camera);
+        window->draw(cube, camera);
 
         ImGui::Begin("Debug");
 
-        auto on_change_triangle = [&](glm::vec3& p0, glm::vec3& p1, glm::vec3& p2) {
-            auto key = voxel_grid->pack_key(triangle_chunk_pos.x, triangle_chunk_pos.y, triangle_chunk_pos.z);
+        if (ImGui::Button("Rasterize the triangle")) {
+            MeshData mesh_data = cube->create_mesh_data(cube->get_color());
 
-            auto it = voxel_grid->chunks.find(key);
-            if (it == voxel_grid->chunks.end()) return 1;
-
-            Chunk* chunk = it->second;
-            voxel_rastorizator->gridable = chunk;
-
-            chunk->clear_voxels();
-
-            // triangle rasterization
-            auto voxel_generator = [&](glm::ivec3 point) {
-                glm::vec3 P = (glm::vec3(point) + 0.5f) * voxel_size;
-
-                glm::vec3 color = glm::vec3(1.0f);
-                glm::vec3 w = math_utils::bary_coords(p0, p1, p2, P);
-                if (w.x >= 0.0f) {
-                    w = glm::clamp(w, glm::vec3(0.0f), glm::vec3(1.0f));
-                    float s = w.x + w.y + w.z;
-                    if (s > 0.0f) w /= s;
-                    color = c0 * w.x + c1 * w.y + c2 * w.z;
-                }
-
-                Voxel v{};
-                v.visible = true;
-                v.color = color;
-                return v;
+            auto voxel_generator = [&](glm::vec3 point) -> Voxel {
+                Voxel voxel;
+                voxel.color = glm::vec3(1.0f, 0.0f, 0.0f);
+                voxel.visible = rand() % 10000 > 5000;
+                return voxel;
             };
 
-            voxel_rastorizator->rasterize_triangle(p0, p1, p2, voxel_size, voxel_generator);
-            triangle->update_vbo(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
-
-            // update chunk mesh
-            voxel_grid->chunks_to_update.insert(key);
-        };
-
-        triangle_controller->triangle_controller_element(p0, p1, p2, c0, c1, c2, on_change_triangle);
-
-        // if (ImGui::Button("Rasterize the triangle")) {
-
-        // }
+            voxel_rastorizator->rasterize_mesh(
+                mesh_data, 
+                cube->get_model_matrix(), 
+                voxel_generator, 
+                voxel_size, 
+                0, 
+                vertex_stride
+            );
+        }
 
 
         ImGui::End();
