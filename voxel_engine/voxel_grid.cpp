@@ -5,6 +5,7 @@ VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size) {
     this->chunk_size = chunk_size;
 
     mesh_thread_running = true;
+    gen_thread_running = true;
     // mesh_updating_thread = std::thread(&VoxelGrid::mesh_worker_loop, this);
 
     unsigned n = std::thread::hardware_concurrency();
@@ -14,13 +15,24 @@ VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size) {
     mesh_workers.reserve(n);
     for (int i = 0; i < n; ++i)
         mesh_workers.emplace_back(&VoxelGrid::mesh_worker_loop, this);
+    
+    gen_workers.reserve(n);
+    for (int i = 0; i < n; ++i)
+        gen_workers.emplace_back(&VoxelGrid::gen_worker_loop, this);
 }
 
 VoxelGrid::~VoxelGrid() {
     mesh_thread_running = false;
     jobs_cv.notify_all();
 
+    gen_thread_running = false;
+    gen_jobs_cv.notify_all();
+
     for (auto& t : mesh_workers)
+        if (t.joinable())
+            t.join();
+    
+    for (auto& t : gen_workers)
         if (t.joinable())
             t.join();
 
@@ -83,7 +95,6 @@ void VoxelGrid::mesh_worker_loop() {
             jobs.pop_front();
         }
 
-
         MeshData mesh_data = Chunk::build(*job.self, job.nb, job.chunk_size);
         
         {
@@ -128,6 +139,160 @@ void VoxelGrid::drain_mesh_results() {
     }
 }
 
+std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_pos, glm::ivec3 chunk_size) {
+    auto voxels = std::make_shared<std::vector<Voxel>>(
+        (size_t)chunk_size.x * (size_t)chunk_size.y * (size_t)chunk_size.z
+    );
+
+    for (int vx = 0; vx < chunk_size.x; ++vx)
+    for (int vy = 0; vy < chunk_size.y; ++vy)
+    for (int vz = 0; vz < chunk_size.z; ++vz) {
+        glm::ivec3 local_pos(vx, vy, vz);
+        int id = (int)Chunk::idx(local_pos, chunk_size);
+
+        int gx = vx + chunk_pos.x * chunk_size.x;
+        int gy = vy + chunk_pos.y * chunk_size.y;
+        int gz = vz + chunk_pos.z * chunk_size.z;
+
+        // --- terrain height at (gx,gz) ---
+        float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
+        float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
+        float final_wave = (wave_1 + wave_2) * 0.5f;
+        int y_threshold = (int)(final_wave * chunk_size.y);
+
+        int diff = gy - y_threshold;
+
+        // --- ground ---
+        if (diff <= 0) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.2f, 0.7f, 0.2f};
+            continue;
+        }
+
+        // --- trunk decision for THIS column (gx,gz) ---
+        uint32_t h0 = (uint32_t)rand2i(gx, gz);
+        float p0 = (h0 & 0xFFFFu) / 65535.0f;
+        bool has_tree_here = (p0 > 0.985f);     // ~1.5%
+        int trunk_h_here = 4 + (int)(h0 % 5);   // 4..8
+
+        // trunk only on its own column
+        if (has_tree_here && diff >= 1 && diff <= trunk_h_here) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.4f, 0.25f, 0.1f};
+            continue;
+        }
+
+        // --- leaves: check nearby columns for a tree, and if this voxel lies in its crown ---
+        bool leaf = false;
+
+        for (int dx = -2; dx <= 2 && !leaf; ++dx) {
+            for (int dz = -2; dz <= 2 && !leaf; ++dz) {
+                int tx = gx + dx;
+                int tz = gz + dz;
+
+                uint32_t ht = (uint32_t)rand2i(tx, tz);
+                float pt = (ht & 0xFFFFu) / 65535.0f;
+                if (pt <= 0.985f) continue; // no tree in that column
+
+                int trunk_h = 4 + (int)(ht % 5);
+
+                // IMPORTANT: recompute that column's terrain height (so crowns sit on top of its ground)
+                float w1t = (std::sin(tx / (float)chunk_size.x) + 1.0f) * 0.5f;
+                float w2t = (std::cos(tz / (float)chunk_size.x) + 1.0f) * 0.5f;
+                int y0t = (int)(((w1t + w2t) * 0.5f) * chunk_size.y);
+
+                int d = gy - y0t; // height above THAT column's ground
+
+                int crown_y0 = trunk_h - 1;
+                int crown_y1 = trunk_h + 2;
+                if (d < crown_y0 || d > crown_y1) continue;
+
+                // radius: smaller near the top
+                int r = (d >= trunk_h + 1) ? 1 : 2;
+
+                if (std::abs(dx) <= r && std::abs(dz) <= r) {
+                    leaf = true;
+                }
+            }
+        }
+
+        if (leaf) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.05f, 0.6f, 0.1f};
+            continue;
+        }
+
+        // else: air (default Voxel)
+    }
+
+    return voxels;
+}
+
+
+void VoxelGrid::gen_worker_loop() {
+    while(gen_thread_running) {
+        GenJob gen_job;
+        {
+            std::unique_lock<std::mutex> lk(gen_jobs_mx);
+            gen_jobs_cv.wait(lk, [&]{ return !gen_thread_running || !gen_jobs.empty(); });
+
+            if (!gen_thread_running) 
+                break;
+            
+            gen_job = gen_jobs.front();
+            gen_jobs.pop_front();
+        }
+
+        GenResult gen_result;
+
+        gen_result.cpos = gen_job.cpos;
+        gen_result.key = gen_job.key;
+        gen_result.voxels = generate_chunk(gen_job.cpos, gen_job.chunk_size);
+
+        {
+            std::unique_lock<std::mutex> lk(gen_results_mx);
+            gen_results.push_back(std::move(gen_result));
+        }
+    }
+}
+
+void VoxelGrid::enqueue_gen_job(uint64_t key, glm::ivec3 cpos, glm::ivec3 chunk_size) {
+    std::unique_lock<std::mutex> lk(gen_jobs_mx);
+
+    GenJob gen_job;
+    gen_job.key = key;
+    gen_job.cpos = cpos;
+    gen_job.chunk_size = chunk_size;
+
+    gen_jobs.push_back(gen_job);
+    gen_jobs_cv.notify_one();
+}
+
+void VoxelGrid::drain_gen_results() {
+    std::deque<GenResult> local;
+    {
+        std::unique_lock<std::mutex> lk(gen_results_mx);
+        local.swap(gen_results);
+    }
+
+    for (auto& r: local) {
+        auto it = chunks.find(r.key);
+        if (it == chunks.end())
+            continue;
+        
+        Chunk* chunk = it->second;
+
+        chunk->update_voxels(r.voxels);
+        chunks_to_update.insert(r.key);
+        chunks_to_update.insert(pack_key(r.cpos.x-1, r.cpos.y, r.cpos.z)); // left
+        chunks_to_update.insert(pack_key(r.cpos.x, r.cpos.y, r.cpos.z-1)); // back
+        chunks_to_update.insert(pack_key(r.cpos.x+1, r.cpos.y, r.cpos.z)); // right
+        chunks_to_update.insert(pack_key(r.cpos.x, r.cpos.y, r.cpos.z+1)); // front
+        chunks_to_update.insert(pack_key(r.cpos.x, r.cpos.y+1, r.cpos.z)); // top
+        chunks_to_update.insert(pack_key(r.cpos.x, r.cpos.y-1, r.cpos.z)); // bottom
+    }
+}
+
 bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     int cx = pos.x / chunk_size.x + (pos.x % chunk_size.x < 0 ? -1 : 0);
     int cy = pos.y / chunk_size.y + (pos.y % chunk_size.y < 0 ? -1 : 0);
@@ -169,83 +334,82 @@ void VoxelGrid::update(Window* window, Camera* camera) {
         for (int y = 0; y < chunk_render_size.y; y++)
             for (int z = 0; z < chunk_render_size.z; z++) {
                 glm::ivec3 cpos = front_left_bottom_chunk_pos + glm::ivec3(x, y, z);
-                Chunk* chunk_to_draw = nullptr;
-
                 uint64_t key = pack_key(cpos.x, cpos.y, cpos.z);
+
                 auto it = chunks.find(key);
-                if (it == chunks.end()) {
-                    to_update_mesh = true;
+
+                if (it != chunks.end())
+                    continue;
+                else {
                     Chunk* new_chunk = new Chunk(chunk_size, {1, 1, 1});
-                    
                     new_chunk->position = glm::vec3(cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z);
-                    // float r = (rand() % 255) / 255.0f;
-                    // float g = (rand() % 255) / 255.0f;
-                    // float b = (rand() % 255) / 255.0f;
-                    // glm::vec3 color = {r, g, b};
-
-                    new_chunk->edit_voxels([&](std::vector<Voxel>& voxels){
-
-                    for (int vx = 0; vx < new_chunk->size.x; vx++)
-                        for (int vy = 0; vy < new_chunk->size.y; vy++)
-                            for (int vz = 0; vz < new_chunk->size.z; vz++) {
-                                glm::ivec3 local_pos = glm::ivec3(vx, vy, vz);
-                                int id = Chunk::idx(local_pos, chunk_size);
-
-                                int gx = (float)vx + (float)cpos.x * chunk_size.x;
-                                int gy = (float)vy + (float)cpos.y * chunk_size.y;
-                                int gz = (float)vz + (float)cpos.z * chunk_size.z;
-                                
-                                float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
-                                float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
-
-                                float final_wave = (wave_1 + wave_2)/2.0;
-
-                                int y_threshold = (int)(final_wave * chunk_size.y);
-
-                                glm::vec3 color_1 = {0.8, 0.1, 0.1};
-                                glm::vec3 color_2 = {0.1, 0.1, 0.8};
-
-                                glm::vec3 color = {0.0, 0.0, 0.0};
-                                if (cpos.z % 2 == 0)
-                                    if (cpos.x % 2 == 0)
-                                        color = color_2;
-                                    else
-                                        color = color_1;
-                                else
-                                    if (cpos.x % 2 != 0)
-                                        color = color_2;
-                                    else
-                                        color = color_1;
-
-
-                                
-                                if (gy <= y_threshold) {
-                                    voxels[id].visible = true;
-                                    // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
-                                    
-                                    voxels[id].color = color;
-                                }
-                            }
-                    });
-
                     chunks[key] = new_chunk;
-
-                    chunks_to_update.insert(key);
-                    chunks_to_update.insert(pack_key(cpos.x-1, cpos.y, cpos.z)); // left
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z-1)); // back
-                    chunks_to_update.insert(pack_key(cpos.x+1, cpos.y, cpos.z)); // right 
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y, cpos.z+1)); // front 
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y+1, cpos.z)); // top 
-                    chunks_to_update.insert(pack_key(cpos.x, cpos.y-1, cpos.z)); // bottom 
-                    // chunks_to_update.push_back(key);
-                    // chunks_to_update.push_back(pack_key(cpos.x-1, cpos.y, cpos.z)); // left
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y, cpos.z-1)); // back
-                    // chunks_to_update.push_back(pack_key(cpos.x+1, cpos.y, cpos.z)); // right 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y, cpos.z+1)); // front 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y+1, cpos.z)); // top 
-                    // chunks_to_update.push_back(pack_key(cpos.x, cpos.y-1, cpos.z)); // bottom 
+                    enqueue_gen_job(key, cpos, chunk_size);
                 }
+                    
+
+                
+                // Chunk* chunk_to_draw = nullptr;
+
+                // uint64_t key = pack_key(cpos.x, cpos.y, cpos.z);
+                // auto it = chunks.find(key);
+                // if (it == chunks.end()) {
+                //     to_update_mesh = true;
+                //     Chunk* new_chunk = new Chunk(chunk_size, {1, 1, 1});
+                    
+                //     new_chunk->position = glm::vec3(cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z);
+                //     // float r = (rand() % 255) / 255.0f;
+                //     // float g = (rand() % 255) / 255.0f;
+                //     // float b = (rand() % 255) / 255.0f;
+                //     // glm::vec3 color = {r, g, b};
+
+                //     edit_chunk(cpos, new_chunk, [&](std::vector<Voxel>& voxels){
+                //         for (int vx = 0; vx < new_chunk->size.x; vx++)
+                //             for (int vy = 0; vy < new_chunk->size.y; vy++)
+                //                 for (int vz = 0; vz < new_chunk->size.z; vz++) {
+                //                     glm::ivec3 local_pos = glm::ivec3(vx, vy, vz);
+                //                     int id = Chunk::idx(local_pos, chunk_size);
+
+                //                     int gx = (float)vx + (float)cpos.x * chunk_size.x;
+                //                     int gy = (float)vy + (float)cpos.y * chunk_size.y;
+                //                     int gz = (float)vz + (float)cpos.z * chunk_size.z;
+                                    
+                //                     float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
+                //                     float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
+
+                //                     float final_wave = (wave_1 + wave_2)/2.0;
+
+                //                     int y_threshold = (int)(final_wave * chunk_size.y);
+
+                //                     glm::vec3 color_1 = {0.8, 0.1, 0.1};
+                //                     glm::vec3 color_2 = {0.1, 0.1, 0.8};
+
+                //                     glm::vec3 color = {0.0, 0.0, 0.0};
+                //                     if (cpos.z % 2 == 0)
+                //                         if (cpos.x % 2 == 0)
+                //                             color = color_2;
+                //                         else
+                //                             color = color_1;
+                //                     else
+                //                         if (cpos.x % 2 != 0)
+                //                             color = color_2;
+                //                         else
+                //                             color = color_1;
+
+
+                                    
+                //                     if (gy <= y_threshold) {
+                //                         voxels[id].visible = true;
+                //                         // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
+                                        
+                //                         voxels[id].color = color;
+                //                     }
+                //                 }
+                //     });
+                // }
             }
+    
+    drain_gen_results();
     
     for (auto it = chunks_to_update.begin(); it != chunks_to_update.end(); ) {
         uint64_t key = *it;
@@ -263,7 +427,8 @@ void VoxelGrid::update(Window* window, Camera* camera) {
         else
             ++it;
     }
-
+    
+    
     drain_mesh_results();
 }
 
