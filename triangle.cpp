@@ -58,7 +58,7 @@ Mesh* Triangle::create_triangle_mesh(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, g
         6 * sizeof(float)
     });
 
-    Mesh* triangle = new Mesh(std::move(vertices), std::move(indices), vertex_layout);
+    Mesh* triangle = new Mesh(vertices, indices, vertex_layout);
 
     return triangle;
 }
