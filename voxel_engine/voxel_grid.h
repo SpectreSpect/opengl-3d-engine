@@ -177,6 +177,22 @@ public:
         return glm::ivec3(cx, cy, cz);
     }
 
+    static inline uint32_t hash32(uint32_t x) {
+        x += 0x9e3779b9u;
+        x = (x ^ (x >> 16)) * 0x85ebca6bu;
+        x = (x ^ (x >> 13)) * 0xc2b2ae35u;
+        x ^= (x >> 16);
+        return x;
+    }
+
+    static inline uint32_t rand2i(int32_t x, int32_t y) {
+        // Mix coords into a 32-bit seed first (works fine with negatives)
+        uint32_t ux = (uint32_t)x;
+        uint32_t uy = (uint32_t)y;
+        uint32_t seed = ux * 0x8da6b343u ^ uy * 0xd8163841u; // big odd constants
+        return hash32(seed);
+    }
+
     bool enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk);
     void mesh_worker_loop();
     void drain_mesh_results();

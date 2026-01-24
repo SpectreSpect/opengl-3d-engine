@@ -140,62 +140,94 @@ void VoxelGrid::drain_mesh_results() {
 }
 
 std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_pos, glm::ivec3 chunk_size) {
-    // to_update_mesh = true;
-    // Chunk* new_chunk = new Chunk(chunk_size, {1, 1, 1});
-    
-    // new_chunk->position = glm::vec3(cpos.x * chunk_size.x, cpos.y * chunk_size.y, cpos.z * chunk_size.z);
-    // // float r = (rand() % 255) / 255.0f;
-    // // float g = (rand() % 255) / 255.0f;
-    // // float b = (rand() % 255) / 255.0f;
-    // // glm::vec3 color = {r, g, b};
-    std::shared_ptr<std::vector<Voxel>> voxels = std::make_shared<std::vector<Voxel>>(
-        (size_t)chunk_size.x * chunk_size.y * chunk_size.z
+    auto voxels = std::make_shared<std::vector<Voxel>>(
+        (size_t)chunk_size.x * (size_t)chunk_size.y * (size_t)chunk_size.z
     );
 
-    for (int vx = 0; vx < chunk_size.x; vx++)
-        for (int vy = 0; vy < chunk_size.y; vy++)
-            for (int vz = 0; vz < chunk_size.z; vz++) {
-                glm::ivec3 local_pos = glm::ivec3(vx, vy, vz);
-                int id = Chunk::idx(local_pos, chunk_size);
+    for (int vx = 0; vx < chunk_size.x; ++vx)
+    for (int vy = 0; vy < chunk_size.y; ++vy)
+    for (int vz = 0; vz < chunk_size.z; ++vz) {
+        glm::ivec3 local_pos(vx, vy, vz);
+        int id = (int)Chunk::idx(local_pos, chunk_size);
 
-                int gx = (float)vx + (float)chunk_pos.x * chunk_size.x;
-                int gy = (float)vy + (float)chunk_pos.y * chunk_size.y;
-                int gz = (float)vz + (float)chunk_pos.z * chunk_size.z;
-                
-                float wave_1 = (sin(gx / (float)chunk_size.x)+1.0)/2.0;
-                float wave_2 = (cos(gz / (float)chunk_size.x)+1.0)/2.0;
+        int gx = vx + chunk_pos.x * chunk_size.x;
+        int gy = vy + chunk_pos.y * chunk_size.y;
+        int gz = vz + chunk_pos.z * chunk_size.z;
 
-                float final_wave = (wave_1 + wave_2)/2.0;
+        // --- terrain height at (gx,gz) ---
+        float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
+        float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
+        float final_wave = (wave_1 + wave_2) * 0.5f;
+        int y_threshold = (int)(final_wave * chunk_size.y);
 
-                int y_threshold = (int)(final_wave * chunk_size.y);
+        int diff = gy - y_threshold;
 
-                glm::vec3 color_1 = {0.8, 0.1, 0.1};
-                glm::vec3 color_2 = {0.1, 0.1, 0.8};
+        // --- ground ---
+        if (diff <= 0) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.2f, 0.7f, 0.2f};
+            continue;
+        }
 
-                glm::vec3 color = {0.0, 0.0, 0.0};
-                if (chunk_pos.z % 2 == 0)
-                    if (chunk_pos.x % 2 == 0)
-                        color = color_2;
-                    else
-                        color = color_1;
-                else
-                    if (chunk_pos.x % 2 != 0)
-                        color = color_2;
-                    else
-                        color = color_1;
+        // --- trunk decision for THIS column (gx,gz) ---
+        uint32_t h0 = (uint32_t)rand2i(gx, gz);
+        float p0 = (h0 & 0xFFFFu) / 65535.0f;
+        bool has_tree_here = (p0 > 0.985f);     // ~1.5%
+        int trunk_h_here = 4 + (int)(h0 % 5);   // 4..8
 
+        // trunk only on its own column
+        if (has_tree_here && diff >= 1 && diff <= trunk_h_here) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.4f, 0.25f, 0.1f};
+            continue;
+        }
 
-                
-                if (gy <= y_threshold) {
-                    (*voxels)[id].visible = true;
-                    // new_chunk->voxels[new_chunk->idx(vx, vy, vz)].color = {final_wave, 0.0, 0.0};
-                    
-                    (*voxels)[id].color = color;
+        // --- leaves: check nearby columns for a tree, and if this voxel lies in its crown ---
+        bool leaf = false;
+
+        for (int dx = -2; dx <= 2 && !leaf; ++dx) {
+            for (int dz = -2; dz <= 2 && !leaf; ++dz) {
+                int tx = gx + dx;
+                int tz = gz + dz;
+
+                uint32_t ht = (uint32_t)rand2i(tx, tz);
+                float pt = (ht & 0xFFFFu) / 65535.0f;
+                if (pt <= 0.985f) continue; // no tree in that column
+
+                int trunk_h = 4 + (int)(ht % 5);
+
+                // IMPORTANT: recompute that column's terrain height (so crowns sit on top of its ground)
+                float w1t = (std::sin(tx / (float)chunk_size.x) + 1.0f) * 0.5f;
+                float w2t = (std::cos(tz / (float)chunk_size.x) + 1.0f) * 0.5f;
+                int y0t = (int)(((w1t + w2t) * 0.5f) * chunk_size.y);
+
+                int d = gy - y0t; // height above THAT column's ground
+
+                int crown_y0 = trunk_h - 1;
+                int crown_y1 = trunk_h + 2;
+                if (d < crown_y0 || d > crown_y1) continue;
+
+                // radius: smaller near the top
+                int r = (d >= trunk_h + 1) ? 1 : 2;
+
+                if (std::abs(dx) <= r && std::abs(dz) <= r) {
+                    leaf = true;
                 }
             }
-    
+        }
+
+        if (leaf) {
+            (*voxels)[id].visible = true;
+            (*voxels)[id].color = {0.05f, 0.6f, 0.1f};
+            continue;
+        }
+
+        // else: air (default Voxel)
+    }
+
     return voxels;
 }
+
 
 void VoxelGrid::gen_worker_loop() {
     while(gen_thread_running) {
