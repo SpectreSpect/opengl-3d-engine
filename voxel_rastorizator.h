@@ -27,12 +27,16 @@ public:
     // voxel_generator = Voxel* F(glm::ivec3 point)
     template <class F>
     void rasterize_triangle(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, float voxel_size, F& voxel_generator) {
-        std::vector<glm::ivec3> points = VoxelRastorizator::rasterize_triangle_to_points(v0, v1, v2, voxel_size);
-        points.erase(std::unique(points.begin(), points.end()), points.end());
+        std::vector<glm::ivec3> raster = rasterize_triangle_to_points(v0, v1, v2, voxel_size);
+        
+        std::vector<Voxel> voxels;
+        voxels.reserve(raster.size());
 
-        for (auto& point : points) {
-            Voxel* voxel = voxel_generator(point);
-            gridable->set_voxel(voxel);
+        for (auto point : raster) {
+            Voxel v = voxel_generator(point);
+            voxels.push_back(v);
         }
+
+        gridable->set_voxels(voxels, raster);
     }
 };

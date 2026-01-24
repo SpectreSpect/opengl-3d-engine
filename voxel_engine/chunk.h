@@ -44,9 +44,11 @@ public:
         revision.fetch_add(1, std::memory_order_relaxed);
     }
 
-    virtual void set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> positions);
-    virtual void set_voxel(Voxel& voxel, glm::ivec3 position);
-    virtual const Voxel* get_voxel(Voxel& voxel, glm::ivec3 position);
+    void clear_voxels();
+
+    virtual void set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> positions) override;
+    virtual void set_voxel(Voxel& voxel, glm::ivec3 position) override;
+    virtual const Voxel* get_voxel(Voxel& voxel, glm::ivec3 position) override;
 
     void upload_mesh_gpu(MeshData& mesh_data);
     static MeshData build(const std::vector<Voxel>& voxels, glm::ivec3 size);

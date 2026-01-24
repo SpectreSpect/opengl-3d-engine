@@ -35,6 +35,18 @@ Chunk::~Chunk() {
     delete vertex_layout;
 }
 
+void Chunk::clear_voxels() {
+    edit_voxels([](std::vector<Voxel>& voxels) {
+        for (auto& v : voxels) {
+            Voxel voxel;
+            voxel.color = glm::vec3(1.0f);
+            voxel.visible = false;
+            
+            v = voxel;
+        }
+    });
+}
+
 MeshData Chunk::build(const std::vector<Voxel>& voxels, glm::ivec3 size) {
     static const glm::ivec3 adjacent_dir[] = {
         {-1, 0, 0}, { 1, 0, 0},

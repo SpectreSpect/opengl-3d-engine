@@ -3,6 +3,7 @@ project(app)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
@@ -34,6 +35,8 @@ add_executable(app
   voxel_engine/voxel_grid.cpp
   imgui_layer.cpp
   voxel_rastorizator.cpp
+  ui_elements/triangle_controller.cpp
+  triangle.cpp
 )
 
 add_custom_command(TARGET app POST_BUILD
