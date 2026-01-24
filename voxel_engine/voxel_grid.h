@@ -12,6 +12,7 @@
 #include <utility>
 #include "../window.h"
 #include "voxel_editor.h"
+#include <algorithm> 
 
 struct MeshJob {
     uint64_t key;

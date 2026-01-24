@@ -66,7 +66,10 @@ public:
 
 // rgba(219, 188, 45)
 // float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
-float clear_col[4] = {0.858823529, 0.737254902, 0.176470588, 1.0f};
+// float clear_col[4] = {0.858823529, 0.737254902, 0.176470588, 1.0f}; // Venus
+float clear_col[4] = {0.952941176, 0.164705882, 0.054901961, 1.0f};
+
+
 
 int main() {
     Engine3D* engine = new Engine3D();

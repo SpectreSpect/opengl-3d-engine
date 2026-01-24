@@ -16,11 +16,8 @@ void main() {
 
     // Ambient
     // vec3 ambient = vec3(0.776470588, 0.988235294, 1.0) * albedo;
-    // vec3 ambient = vec3(0.858823529f, 0.737254902f, 0.176470588f) * albedo;
-    // vec3 ambient = vec3(0.952941176f, 0.164705882f, 0.054901961f) * albedo;
-    vec3 ambient = vec3(0.584313725f, 0.066666667f, 0.0f) * albedo;
+    vec3 ambient = vec3(0.858823529f, 0.737254902f, 0.176470588f) * albedo;
 
-    // rgba(243, 42, 14)
     // Diffuse
     float diff = max(dot(normal, light_dir), 0.0);
     vec3 diffuse = diff * albedo;
@@ -29,7 +26,7 @@ void main() {
     vec3 view_dir = normalize(uViewPos - vFragPos);
     vec3 halfway_dir = normalize(light_dir + view_dir);
     float spec = pow(max(dot(normal, halfway_dir), 0.0), 70.0);
-    vec3 specular = vec3(0.284313725f, 0.066666667f, 0.0f) * spec;
+    vec3 specular = vec3(0.8958823529f, 0.837254902f, 0.276470588f) * spec;
 
     // Final color
     vec3 color = ambient * 0.8 + specular + diffuse;
