@@ -5,30 +5,17 @@ Chunk::Chunk(glm::ivec3 size, glm::vec3 voxel_size) {
     this->size = size;
     this->voxel_size = voxel_size;
 
-    auto v = std::make_shared<std::vector<Voxel>>();
-    v->resize(size.x * size.y * size.z);
-    voxels = v;
+    const size_t count = (size_t)size.x * (size_t)size.y * (size_t)size.z;
+
+    auto v = std::make_shared<std::vector<Voxel>>(count, Voxel{});
+    std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(v));
 
     this->vertex_layout = new VertexLayout();
-    vertex_layout->add({
-        0, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        0
-    });
-    vertex_layout->add({
-        1, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        3 * sizeof(float)
-    });
-    vertex_layout->add({
-        2, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        6 * sizeof(float)
-    });
-
-    MeshData mesh_data = Chunk::build(*voxels, size);
-    upload_mesh_gpu(mesh_data);
+    vertex_layout->add({0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0});
+    vertex_layout->add({1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float)});
+    vertex_layout->add({2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 6 * sizeof(float)});
 }
+
 
 Chunk::~Chunk() {
     delete mesh;
