@@ -12,6 +12,7 @@
 #include <utility>
 #include "../window.h"
 #include "voxel_editor.h"
+#include "../gridable.h"
 
 struct MeshJob {
     uint64_t key;
@@ -55,7 +56,7 @@ constexpr int BITS = 21;
 constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
 constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
 
-class VoxelGrid : public Drawable, public Transformable {
+class VoxelGrid : public Drawable, public Gridable, public Transformable  {
 public:
     // int chunk_render_distance = 8;
     glm::ivec3 chunk_render_size;
@@ -214,8 +215,10 @@ public:
     void gen_worker_loop();
     void enqueue_gen_job(uint64_t key, glm::ivec3 cpos, glm::ivec3 chunk_size);
     void drain_gen_results();
-    
 
+    virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) override;
+    virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) override;
+    virtual Voxel get_voxel(glm::ivec3 position) const override;
 
     void update(Window* window, Camera* camera);
     void draw(RenderState state) override;

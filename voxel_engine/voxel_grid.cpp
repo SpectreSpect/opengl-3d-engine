@@ -432,6 +432,26 @@ void VoxelGrid::update(Window* window, Camera* camera) {
     drain_mesh_results();
 }
 
+void VoxelGrid::set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) {
+    edit_voxels([&](VoxelEditor& editor){
+        for (size_t i = 0; i < voxels.size(); ++i) {
+            editor.set(positions[i], voxels[i]);
+        }
+    });
+}
+
+void VoxelGrid::set_voxel(const Voxel& voxel, glm::ivec3 position) {
+    edit_voxels([&](VoxelEditor& editor){
+        editor.set(position, voxel);
+    });
+}
+
+// TODO
+Voxel VoxelGrid::get_voxel(glm::ivec3 position) const {
+    throw std::runtime_error("VoxelGrid::get_voxel not implemented yet");
+    return Voxel();
+}
+
 void VoxelGrid::draw(RenderState state) {
     state.transform *= get_model_matrix();
 
