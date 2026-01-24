@@ -7,6 +7,7 @@
 
 #include "../mesh.h"
 #include "voxel.h"
+#include "../gridable.h"
 
 
 struct MeshData {
@@ -18,7 +19,7 @@ enum class Face {Left, Right, Back, Front, Top, Bottom};
 
 class VoxelGrid;
 
-class Chunk : public Drawable, public Transformable {
+class Chunk : public Drawable, public Gridable, public Transformable {
 public:
     glm::ivec3 size;
     glm::vec3 voxel_size;
@@ -44,6 +45,11 @@ public:
         revision.fetch_add(1, std::memory_order_relaxed);
     }
 
+    void clear_voxels();
+
+    virtual void set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> positions) override;
+    virtual void set_voxel(Voxel& voxel, glm::ivec3 position) override;
+    virtual const Voxel* get_voxel(Voxel& voxel, glm::ivec3 position) override;
     void update_voxels(std::shared_ptr<const std::vector<Voxel>> new_voxels) {
         std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(new_voxels));
         revision.fetch_add(1, std::memory_order_relaxed);

@@ -3,6 +3,7 @@ project(app)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Optional: silence OpenGL CMP0072 warning on Ubuntu
 if(POLICY CMP0072)
@@ -38,6 +39,10 @@ add_executable(app
   voxel_engine/voxel.cpp
   voxel_engine/chunk.cpp
   voxel_engine/voxel_grid.cpp
+  imgui_layer.cpp
+  voxel_rastorizator.cpp
+  ui_elements/triangle_controller.cpp
+  triangle.cpp
   voxel_engine/voxel_editor.cpp
 )
 

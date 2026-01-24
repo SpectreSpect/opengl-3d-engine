@@ -22,6 +22,18 @@ Chunk::~Chunk() {
     delete vertex_layout;
 }
 
+void Chunk::clear_voxels() {
+    edit_voxels([](std::vector<Voxel>& voxels) {
+        for (auto& v : voxels) {
+            Voxel voxel;
+            voxel.color = glm::vec3(1.0f);
+            voxel.visible = false;
+            
+            v = voxel;
+        }
+    });
+}
+
 MeshData Chunk::build(const std::vector<Voxel>& voxels, glm::ivec3 size) {
     static const glm::ivec3 adjacent_dir[] = {
         {-1, 0, 0}, { 1, 0, 0},
@@ -166,6 +178,33 @@ bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3
     if (!in_bounds(pos, size)) 
         return true;
     return !voxels[idx(pos, size)].visible; 
+}
+
+void Chunk::set_voxels(std::vector<Voxel>& voxels, std::vector<glm::ivec3> positions) {
+    edit_voxels([&](std::vector<Voxel>& current){
+        for (int i = 0; i < voxels.size(); i++) {
+            glm::ivec3 pos = positions[i];
+            if (!in_bounds(pos, size))
+                continue;
+            current[idx(pos, size)] = voxels[i];
+        }
+    });
+}
+
+void Chunk::set_voxel(Voxel& voxel, glm::ivec3 position) {
+    edit_voxels([&](std::vector<Voxel>& current) {
+        if (in_bounds(position, size))
+            current[idx(position, size)] = voxel;
+    });
+}
+
+const Voxel* Chunk::get_voxel(Voxel& voxel, glm::ivec3 position) {
+    auto cur = std::atomic_load(&voxels);
+    if (!in_bounds(position, size)) {
+        return nullptr;
+    }
+
+    return &((*cur)[idx(position, size)]);
 }
 
 void Chunk::upload_mesh_gpu(MeshData& mesh_data) {
