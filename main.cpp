@@ -64,7 +64,9 @@ public:
     }
 };
 
-float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+// rgba(219, 188, 45)
+// float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+float clear_col[4] = {0.858823529, 0.737254902, 0.176470588, 1.0f};
 
 int main() {
     Engine3D* engine = new Engine3D();
@@ -123,53 +125,53 @@ int main() {
         window->draw(voxel_grid, camera);
         window->draw(triangle, camera);
 
-        ImGui::Begin("Debug");
+        // ImGui::Begin("Debug");
 
-        auto on_change_triangle = [&](glm::vec3& p0, glm::vec3& p1, glm::vec3& p2) {
-            auto key = voxel_grid->pack_key(triangle_chunk_pos.x, triangle_chunk_pos.y, triangle_chunk_pos.z);
+        // auto on_change_triangle = [&](glm::vec3& p0, glm::vec3& p1, glm::vec3& p2) {
+        //     auto key = voxel_grid->pack_key(triangle_chunk_pos.x, triangle_chunk_pos.y, triangle_chunk_pos.z);
 
-            auto it = voxel_grid->chunks.find(key);
-            if (it == voxel_grid->chunks.end()) return 1;
+        //     auto it = voxel_grid->chunks.find(key);
+        //     if (it == voxel_grid->chunks.end()) return 1;
 
-            Chunk* chunk = it->second;
-            voxel_rastorizator->gridable = chunk;
+        //     Chunk* chunk = it->second;
+        //     voxel_rastorizator->gridable = chunk;
 
-            chunk->clear_voxels();
+        //     chunk->clear_voxels();
 
-            // triangle rasterization
-            auto voxel_generator = [&](glm::ivec3 point) {
-                glm::vec3 P = (glm::vec3(point) + 0.5f) * voxel_size;
+        //     // triangle rasterization
+        //     auto voxel_generator = [&](glm::ivec3 point) {
+        //         glm::vec3 P = (glm::vec3(point) + 0.5f) * voxel_size;
 
-                glm::vec3 color = glm::vec3(1.0f);
-                glm::vec3 w = math_utils::bary_coords(p0, p1, p2, P);
-                if (w.x >= 0.0f) {
-                    w = glm::clamp(w, glm::vec3(0.0f), glm::vec3(1.0f));
-                    float s = w.x + w.y + w.z;
-                    if (s > 0.0f) w /= s;
-                    color = c0 * w.x + c1 * w.y + c2 * w.z;
-                }
+        //         glm::vec3 color = glm::vec3(1.0f);
+        //         glm::vec3 w = math_utils::bary_coords(p0, p1, p2, P);
+        //         if (w.x >= 0.0f) {
+        //             w = glm::clamp(w, glm::vec3(0.0f), glm::vec3(1.0f));
+        //             float s = w.x + w.y + w.z;
+        //             if (s > 0.0f) w /= s;
+        //             color = c0 * w.x + c1 * w.y + c2 * w.z;
+        //         }
 
-                Voxel v{};
-                v.visible = true;
-                v.color = color;
-                return v;
-            };
+        //         Voxel v{};
+        //         v.visible = true;
+        //         v.color = color;
+        //         return v;
+        //     };
 
-            voxel_rastorizator->rasterize_triangle(p0, p1, p2, voxel_size, voxel_generator);
-            triangle->update_vbo(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
+        //     voxel_rastorizator->rasterize_triangle(p0, p1, p2, voxel_size, voxel_generator);
+        //     triangle->update_vbo(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
 
-            // update chunk mesh
-            voxel_grid->chunks_to_update.insert(key);
-        };
+        //     // update chunk mesh
+        //     voxel_grid->chunks_to_update.insert(key);
+        // };
 
-        triangle_controller->triangle_controller_element(p0, p1, p2, c0, c1, c2, on_change_triangle);
+        // triangle_controller->triangle_controller_element(p0, p1, p2, c0, c1, c2, on_change_triangle);
 
         // if (ImGui::Button("Rasterize the triangle")) {
 
         // }
 
 
-        ImGui::End();
+        // ImGui::End();
 
         ui::end_frame();
 

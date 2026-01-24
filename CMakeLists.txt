@@ -46,11 +46,20 @@ add_executable(app
   voxel_engine/voxel_editor.cpp
 )
 
-add_custom_command(TARGET app POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/shaders"
-          "$<TARGET_FILE_DIR:app>/shaders"
+set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
+
+# Works for:
+# - Make/Ninja (single-config): $<CONFIG> expands to empty -> build/shaders
+# - Visual Studio (multi-config): -> build/Debug/shaders, build/Release/shaders, etc.
+set(SHADERS_DST "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/shaders")
+
+add_custom_target(copy_shaders ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DST}"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${SHADERS_SRC}" "${SHADERS_DST}"
+  COMMENT "Copying shaders -> build folder"
 )
+
+add_dependencies(app copy_shaders)
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
 include(FetchContent)

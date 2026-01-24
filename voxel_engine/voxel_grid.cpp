@@ -165,63 +165,9 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         // --- ground ---
         if (diff <= 0) {
             (*voxels)[id].visible = true;
-            (*voxels)[id].color = {0.2f, 0.7f, 0.2f};
+            (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
             continue;
         }
-
-        // --- trunk decision for THIS column (gx,gz) ---
-        uint32_t h0 = (uint32_t)rand2i(gx, gz);
-        float p0 = (h0 & 0xFFFFu) / 65535.0f;
-        bool has_tree_here = (p0 > 0.985f);     // ~1.5%
-        int trunk_h_here = 4 + (int)(h0 % 5);   // 4..8
-
-        // trunk only on its own column
-        if (has_tree_here && diff >= 1 && diff <= trunk_h_here) {
-            (*voxels)[id].visible = true;
-            (*voxels)[id].color = {0.4f, 0.25f, 0.1f};
-            continue;
-        }
-
-        // --- leaves: check nearby columns for a tree, and if this voxel lies in its crown ---
-        bool leaf = false;
-
-        for (int dx = -2; dx <= 2 && !leaf; ++dx) {
-            for (int dz = -2; dz <= 2 && !leaf; ++dz) {
-                int tx = gx + dx;
-                int tz = gz + dz;
-
-                uint32_t ht = (uint32_t)rand2i(tx, tz);
-                float pt = (ht & 0xFFFFu) / 65535.0f;
-                if (pt <= 0.985f) continue; // no tree in that column
-
-                int trunk_h = 4 + (int)(ht % 5);
-
-                // IMPORTANT: recompute that column's terrain height (so crowns sit on top of its ground)
-                float w1t = (std::sin(tx / (float)chunk_size.x) + 1.0f) * 0.5f;
-                float w2t = (std::cos(tz / (float)chunk_size.x) + 1.0f) * 0.5f;
-                int y0t = (int)(((w1t + w2t) * 0.5f) * chunk_size.y);
-
-                int d = gy - y0t; // height above THAT column's ground
-
-                int crown_y0 = trunk_h - 1;
-                int crown_y1 = trunk_h + 2;
-                if (d < crown_y0 || d > crown_y1) continue;
-
-                // radius: smaller near the top
-                int r = (d >= trunk_h + 1) ? 1 : 2;
-
-                if (std::abs(dx) <= r && std::abs(dz) <= r) {
-                    leaf = true;
-                }
-            }
-        }
-
-        if (leaf) {
-            (*voxels)[id].visible = true;
-            (*voxels)[id].color = {0.05f, 0.6f, 0.1f};
-            continue;
-        }
-
         // else: air (default Voxel)
     }
 
