@@ -139,87 +139,10 @@ void VoxelGrid::drain_mesh_results() {
     }
 }
 
-static inline uint32_t hash_u32(uint32_t x) {
-    x ^= x >> 16;
-    x *= 0x7feb352d;
-    x ^= x >> 15;
-    x *= 0x846ca68b;
-    x ^= x >> 16;
-    return x;
-}
-
-static inline float u01(uint32_t h) {
-    return (h & 0x00FFFFFF) / 16777216.0f; // [0,1)
-}
-
-static inline int floordiv(int a, int b) {
-    int q = a / b;
-    int r = a % b;
-    if (r != 0 && ((r < 0) != (b < 0))) --q;
-    return q;
-}
-
-static inline float clamp01(float x) { return std::clamp(x, 0.0f, 1.0f); }
-
-// Returns {F1, F2} in "cell units" (not normalized), using jittered points in grid cells.
-static inline void worley_F1F2(float x, float z, float cell_size, float& outF1, float& outF2) {
-    int cx = floordiv((int)std::floor(x), (int)cell_size);
-    int cz = floordiv((int)std::floor(z), (int)cell_size);
-
-    float F1 = 1e9f, F2 = 1e9f;
-
-    // Search neighboring cells (needed because nearest point may live next door)
-    for (int dz = -1; dz <= 1; ++dz)
-    for (int dx = -1; dx <= 1; ++dx) {
-        int ncx = cx + dx;
-        int ncz = cz + dz;
-
-        uint32_t h = hash_u32((uint32_t)ncx * 73856093u ^ (uint32_t)ncz * 19349663u ^ 0xA53C9E7Bu);
-
-        // Jitter point within the cell
-        float jx = u01(hash_u32(h ^ 0x1234u));
-        float jz = u01(hash_u32(h ^ 0xBEEFu));
-
-        float px = (float)ncx * cell_size + jx * cell_size;
-        float pz = (float)ncz * cell_size + jz * cell_size;
-
-        float dxw = x - px;
-        float dzw = z - pz;
-        float d = std::sqrt(dxw * dxw + dzw * dzw);
-
-        if (d < F1) { F2 = F1; F1 = d; }
-        else if (d < F2) { F2 = d; }
-    }
-
-    outF1 = F1;
-    outF2 = F2;
-}
-
 std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_pos, glm::ivec3 chunk_size) {
     auto voxels = std::make_shared<std::vector<Voxel>>(
         (size_t)chunk_size.x * (size_t)chunk_size.y * (size_t)chunk_size.z
     );
-
-    // ---------- EXTREME Voronoi/Worley terrain params ----------
-    // Bigger cell_size => bigger craters/cells
-    const float cell_size_1 = 48.0f;   // main scale
-    const float cell_size_2 = 18.0f;   // detail scale
-
-    // How deep basins and how high ridges (in voxels)
-    const float basin_amp_1 = 18.0f;
-    const float ridge_amp_1 = 14.0f;
-    const float basin_amp_2 = 6.0f;
-    const float ridge_amp_2 = 4.0f;
-
-    // Basin radius relative to cell size (0..0.5 looks good)
-    const float basin_radius_frac = 0.48f;
-
-    // Ridge sharpness: smaller -> thinner, sharper ridges
-    const float ridge_width_1 = 0.18f; // in *cell* units, relative-ish
-    const float ridge_width_2 = 0.14f;
-
-    // Make craters more “punchy”
-    const float basin_pow = 2.4f; // >1 deepens center, steepens walls
 
     for (int vx = 0; vx < chunk_size.x; ++vx)
     for (int vy = 0; vy < chunk_size.y; ++vy)
@@ -231,48 +154,21 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         int gy = vy + chunk_pos.y * chunk_size.y;
         int gz = vz + chunk_pos.z * chunk_size.z;
 
-        // ----- base height (keep yours, but reduce it a bit so craters dominate) -----
+        // --- terrain height at (gx,gz) ---
         float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
         float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
-        float base_h = ((wave_1 + wave_2) * 0.5f) * (float)chunk_size.y * 0.55f;
+        float final_wave = (wave_1 + wave_2) * 0.5f;
+        int y_threshold = (int)(final_wave * chunk_size.y);
 
-        // ----- Worley/Voronoi shaping in XZ -----
-        auto eval_layer = [&](float cell_size, float basin_amp, float ridge_amp, float ridge_width) {
-            float F1, F2;
-            worley_F1F2((float)gx, (float)gz, cell_size, F1, F2);
-
-            // Basin: near the nearest point -> deep crater
-            float R = basin_radius_frac * cell_size;
-            float basin_t = 1.0f - clamp01(F1 / R);
-            float basin = std::pow(basin_t, basin_pow); // punchier center
-
-            // Ridge: near cell borders, F2-F1 becomes small.
-            // Convert to "edge strength" where 1 = on border, 0 = far from border.
-            float edge = 1.0f - clamp01((F2 - F1) / (ridge_width * cell_size));
-            // Sharpen ridges a lot
-            float ridge = edge * edge * edge;
-
-            // Net displacement: subtract basin (down), add ridge (up)
-            return ridge_amp * ridge - basin_amp * basin;
-        };
-
-        float disp = 0.0f;
-        disp += eval_layer(cell_size_1, basin_amp_1, ridge_amp_1, ridge_width_1);
-        disp += eval_layer(cell_size_2, basin_amp_2, ridge_amp_2, ridge_width_2);
-
-        float h = base_h + disp;
-
-        int y_threshold = (int)std::floor(h);
         int diff = gy - y_threshold;
 
+        // --- ground ---
         if (diff <= 0) {
             (*voxels)[id].visible = true;
-
-            // Color hint: ridges lighter, basins darker (cheap look improvement)
-            float shade = 0.25f + 0.02f * (h - (float)gy);
-            shade = std::clamp(shade, 0.18f, 0.65f);
-            (*voxels)[id].color = {shade, shade, shade};
+            (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
+            continue;
         }
+        // else: air (default Voxel)
     }
 
     return voxels;
@@ -365,6 +261,40 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     glm::ivec3 local_pos = glm::ivec3(lx, ly, lz);
 
     return Chunk::is_free(*v, local_pos, chunk_size);
+}
+
+Voxel VoxelGrid::get_voxel(glm::ivec3 pos) {
+    glm::ivec3 chunk_pos = VoxelGrid::get_chunk_pos(pos, chunk_size);
+    uint64_t chunk_key = VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+    
+    auto it = chunks.find(chunk_key);
+    if (it == chunks.end()) {
+        Voxel air;
+        air.visible = false;
+        return air;
+    }
+
+    Chunk* chunk = it->second;
+
+    int lx = pos.x - chunk_pos.x * chunk_size.x;
+    int ly = pos.y - chunk_pos.y * chunk_size.y;
+    int lz = pos.z - chunk_pos.z * chunk_size.z;
+
+    glm::ivec3 local_voxel_pos = glm::ivec3(lx, ly, lz);
+
+    size_t voxel_id = chunk->idx(local_voxel_pos, chunk->size);
+
+    return (*chunk->voxels)[voxel_id];
+
+
+    
+    // // uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
+    // uint32_t local_voxel_key = pack_local_id(local_voxel_pos, voxel_grid->chunk_size);
+
+    // auto [it, inserted] = edited_voxels.try_emplace(chunk_key);
+    // // if you have a guess, reserve once:
+    // // if (inserted) it->second.reserve(256);
+    // it->second[local_voxel_key] = voxel;
 }
 
 void VoxelGrid::update(Window* window, Camera* camera) {

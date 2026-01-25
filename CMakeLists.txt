@@ -44,6 +44,10 @@ add_executable(app
   ui_elements/triangle_controller.cpp
   triangle.cpp
   voxel_engine/voxel_editor.cpp
+  a_star/a_star.cpp
+  a_star/occupancy_cell.cpp
+  a_star/occupancy_grid_3d.cpp
+  a_star/voxel_occupancy_grid_3d.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")

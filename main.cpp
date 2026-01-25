@@ -29,6 +29,7 @@
 #include "math_utils.h"
 #include "ui_elements/triangle_controller.h"
 #include "triangle.h"
+#include "a_star/a_star.h"
 
 
 class Grid : public Drawable, public Transformable {
@@ -65,9 +66,9 @@ public:
 };
 
 // rgba(219, 188, 45)
-// float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 // float clear_col[4] = {0.858823529, 0.737254902, 0.176470588, 1.0f}; // Venus
-float clear_col[4] = {0.952941176, 0.164705882, 0.054901961, 1.0f};
+// float clear_col[4] = {0.952941176, 0.164705882, 0.054901961, 1.0f};
 
 
 
@@ -89,6 +90,8 @@ int main() {
     float lastFrame = 0;
 
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
+    voxel_grid->update(window, camera);
+    sleep(1);
     // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
     float voxel_size = 1.0f;
@@ -110,6 +113,68 @@ int main() {
 
     VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(nullptr);
 
+
+    // glm::ivec3 min_pos = glm::ivec3(-30, -30, -30);
+    // glm::ivec3 max_pos = glm::ivec3(30, 30, 30);
+
+    AStar* a_star = new AStar(voxel_grid);
+
+    // for (int x = min_pos.x; x <= max_pos.x; x++)
+    //     for (int y = min_pos.y; y <= max_pos.y; y++)
+    //         for (int z = min_pos.z; z <= max_pos.z; z++) {
+    //             glm::ivec3 pos = glm::ivec3(x, y, z);
+    //             uint64_t key = VoxelGrid::pack_key(x, y, z);
+                
+    //             Voxel voxel = voxel_grid->get_voxel(pos);
+
+    //             OccupancyCell* occupancy_cell = new OccupancyCell(0, voxel.visible);
+                
+    //             a_star->grid->set_cell(pos, occupancy_cell);
+    //         }
+            
+    glm::ivec3 start_pos = glm::ivec3(1, 13, 0);
+    glm::ivec3 end_pos = glm::ivec3(20, 16, 0);
+
+    // std::vector<glm::ivec3> path = a_star->find_path(start_pos, end_pos);
+    std::vector<glm::ivec3> path = std::vector<glm::ivec3>();
+
+    // std::cout << path.size() << std::endl;
+
+    // path = a_star->find_path(start_pos, end_pos);
+
+    // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+        
+    //     Voxel start_voxel = Voxel();
+    //     start_voxel.color = glm::vec3(1.0, 0, 0);
+    //     start_voxel.visible = true;
+
+    //     voxel_editor.set(start_pos, start_voxel);
+
+
+    //     Voxel end_voxel = Voxel();
+    //     end_voxel.color = glm::vec3(0.0, 0.0, 1.0);
+    //     end_voxel.visible = false;
+
+    //     voxel_editor.set(end_pos, end_voxel);
+
+
+    //     for (int i = 0; i < path.size() - 2; i++) {
+    //         glm::ivec3 pos = path[i];
+
+    //         // std::cout << "(" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+            
+    //         float value = (float)i / path.size();
+
+    //         Voxel voxel = Voxel();
+    //         voxel.color = {0, value, 0};
+    //         voxel.visible = true;
+
+    //         voxel_editor.set(pos, voxel);
+    //     }
+    // });
+
+    // a_star->grid->occupancy_cells[]
+
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -127,6 +192,149 @@ int main() {
         voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
         window->draw(triangle, camera);
+
+        // ImGui::Begin("A star");
+
+        // if (ImGui::Button("Set start")) {
+        if (glfwGetKey(window->window, GLFW_KEY_R) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+                Voxel start_voxel = Voxel();
+                start_voxel.color = glm::vec3(1.0, 0.0, 0.0);
+                start_voxel.visible = false;
+
+                voxel_editor.set(start_pos, start_voxel);
+
+                start_pos = voxel_pos;
+
+                start_voxel.visible = true;
+
+                voxel_editor.set(start_pos, start_voxel);
+            });
+        }
+        // }
+
+        if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+                Voxel end_voxel = Voxel();
+                end_voxel.color = glm::vec3(0.0, 0.0, 1.0);
+                end_voxel.visible = false;
+
+                voxel_editor.set(end_pos, end_voxel);
+
+                end_pos = voxel_pos;
+
+                end_voxel.visible = true;
+
+                voxel_editor.set(end_pos, end_voxel);
+            });
+        }
+
+        if (glfwGetKey(window->window, GLFW_KEY_V) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+                Voxel new_voxel = Voxel();
+                new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+                new_voxel.visible = true;
+
+                voxel_editor.set(voxel_pos, new_voxel);
+            });
+        }
+
+
+        if (glfwGetKey(window->window, GLFW_KEY_T) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+
+            // std::cout << "(" << start_pos.x << ", " << start_pos.y << ", " << start_pos.z << ")" << std::endl;
+            // std::cout << "(" << end_pos.x << ", " << end_pos.y << ", " << end_pos.z << ")" << std::endl;
+
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+                Voxel start_voxel = Voxel();
+                start_voxel.color = glm::vec3(1.0, 0.0, 0.0);
+                start_voxel.visible = false;
+
+                // std::cout << "(" << start_pos.x << ", " << start_pos.y << ", " << start_pos.z << ")" << std::endl;
+                voxel_editor.set(start_pos, start_voxel);
+                voxel_editor.set(end_pos, start_voxel);
+
+                // std::cout << path.size() - 2 << std::endl;
+                if (path.size() > 0)
+                for (int i = 0; i < path.size() - 2; i++) {
+                    // std::cout << i << std::endl;
+                    glm::ivec3 pos = path[i];
+
+                    // // std::cout << "(" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+                    
+                    float value = (float)i / path.size();
+
+                    Voxel voxel = Voxel();
+                    voxel.color = {1.0f, 1.0f, 1.0f};
+                    voxel.visible = false;
+
+                    voxel_editor.set(pos, voxel);
+                }
+
+
+            });
+            
+            std::vector<glm::ivec3> new_path = a_star->find_path(start_pos, end_pos);
+
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+
+                path = new_path;
+
+                if (path.size() > 0)
+                for (int i = 0; i < path.size() - 2; i++) {
+                    glm::ivec3 pos = path[i];
+
+                    // std::cout << "(" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+                    
+                    float value = (float)i / path.size();
+
+                    Voxel voxel = Voxel();
+                    voxel.color = {0, value, 0};
+                    voxel.visible = true;
+
+                    voxel_editor.set(pos, voxel);
+                }
+
+                Voxel start_voxel = Voxel();
+                start_voxel.color = glm::vec3(1.0, 0.0, 0.0);
+                start_voxel.visible = true;
+
+                voxel_editor.set(start_pos, start_voxel);
+                start_voxel.color = glm::vec3(0.0, 0.0, 1.0);
+                voxel_editor.set(end_pos, start_voxel);
+            });
+
+
+
+            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+            //     Voxel end_voxel = Voxel();
+            //     end_voxel.color = glm::vec3(0.0, 0.0, 1.0);
+            //     end_voxel.visible = false;
+
+            //     voxel_editor.set(end_pos, end_voxel);
+
+            //     end_pos = voxel_pos;
+
+            //     end_voxel.visible = true;
+
+            //     voxel_editor.set(end_pos, end_voxel);
+            // });
+        }
+        // if (ImGui::Button("Set end")) {
+            
+        // }
+
+        // ImGui::End();
+
 
         // ImGui::Begin("Debug");
 

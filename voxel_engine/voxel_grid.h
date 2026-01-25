@@ -194,6 +194,8 @@ public:
         return hash32(seed);
     }
 
+    Voxel get_voxel(glm::ivec3 pos);
+
     bool enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk);
     void mesh_worker_loop();
     void drain_mesh_results();
