@@ -8,6 +8,7 @@
 struct NonholonomicPos {
     glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
     float theta = 0; // orientation
+
     float steer = 0;
     float dir = 1;
     std::vector<NonholonomicPos> motion;
@@ -109,7 +110,9 @@ public:
     float wheel_base = 2.5f;
     float max_steer = 0.6;
     float integration_steps = 8;
-    float motion_simulation_dist = 3.0f;
+    float motion_simulation_dist = 1.0f;
+    float reeds_shepp_step_world = 0.10f;
+    int try_reeds_shepp_interval = 100;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -120,11 +123,14 @@ public:
         if (d >  (float)M_PI) d -= 2.0f * (float)M_PI;
         return d;
     }
-
+    
     static void print_vec(glm::vec3 vec) {
         std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
     }
-
+    std::vector<NonholonomicPos> find_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    bool shot_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    bool adjust_and_check_path(std::vector<NonholonomicPos>& path, int max_step_up = 1, int max_drop = 1);
+    bool adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up = 1, int max_drop = 1);
     static bool almost_equal(NonholonomicPos a, NonholonomicPos b);
     std::vector<NonholonomicPos> reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos);
     std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
