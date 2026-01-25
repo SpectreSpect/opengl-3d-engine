@@ -37,7 +37,7 @@ class NonholonomicKeyPacker {
 public:
     // --- discretization ---
     static constexpr float POS_RES = 0.5f;   // world units per grid cell (tweak)
-    static constexpr int   THETA_BINS = 32;  // tweak (16/32/64...)
+    static constexpr int   THETA_BINS = 128;  // tweak (16/32/64...)
 
     // --- bit layout ---
     static constexpr int BITS_POS  = 18;     // per axis
@@ -110,9 +110,13 @@ public:
     float wheel_base = 2.5f;
     float max_steer = 0.6;
     float integration_steps = 8;
-    float motion_simulation_dist = 1.0f;
+    // float motion_simulation_dist = 0.5f;
+    float motion_simulation_dist = 0.5f;
     float reeds_shepp_step_world = 0.10f;
     int try_reeds_shepp_interval = 100;
+    int num_theta_bins = 128;
+    float switch_dir_pentalty = 1.5;
+    float change_steer_pentalty = 1.5;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -123,10 +127,23 @@ public:
         if (d >  (float)M_PI) d -= 2.0f * (float)M_PI;
         return d;
     }
+
+    uint64_t state_key(const NonholonomicPos& s) const {
+        // pick a resolution that matches your planner step / grid
+        constexpr float POS_RES = 0.5f;
+
+        int32_t ix = (int32_t)std::floor(s.pos.x / POS_RES);
+        int32_t iz = (int32_t)std::floor(s.pos.z / POS_RES);
+        int32_t it = discretize_angle(s.theta, num_theta_bins);
+
+        return grid->pack_key(ix, iz, it);
+    }
+
     
     static void print_vec(glm::vec3 vec) {
         std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
     }
+    static int discretize_angle(float value, int num_bins);
     std::vector<NonholonomicPos> find_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
     bool shot_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
     bool adjust_and_check_path(std::vector<NonholonomicPos>& path, int max_step_up = 1, int max_drop = 1);

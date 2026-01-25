@@ -196,7 +196,7 @@ int main() {
 
     std::vector<NonholonomicPos> reeds_shepp_path = nonholonomic_astar->find_reeds_shepp(start_pos, end_pos);
 
-    std::cout << reeds_shepp_path.size() << std::endl;
+    // std::cout << reeds_shepp_path.size() << std::endl;
 
     for (int dir = -1; dir <= 1; dir += 2)
         for (int steer = -1; steer <= 1; steer++) {
@@ -272,10 +272,16 @@ int main() {
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
                 Voxel new_voxel = Voxel();
-                new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-                new_voxel.visible = true;
 
-                voxel_editor.set(voxel_pos, new_voxel);
+                for (int i = 0; i < 10; i++) {
+                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+                    new_voxel.visible = true;
+                    
+                    voxel_editor.set(voxel_pos, new_voxel);
+                    voxel_pos.y += 1;
+                }
+                
+                
             });
         }
 
@@ -396,7 +402,7 @@ int main() {
             //     path_lines.push_back(line);
             // });
         }
-        ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Always);
         ImGui::Begin("Debug");
 
         glm::vec3 p = camera->position; // or any vec3
@@ -404,6 +410,10 @@ int main() {
         ImGui::TextColored(ImVec4(1,0.5,0.5,1), "x: %.3f", p.x);
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
+
+        
+        ImGui::SliderFloat("Change steer pentalty", &nonholonomic_astar->change_steer_pentalty, 0, 64);
+        ImGui::SliderFloat("Switch dir pentalty", &nonholonomic_astar->switch_dir_pentalty, 0, 64);
 
         ImGui::End();
 

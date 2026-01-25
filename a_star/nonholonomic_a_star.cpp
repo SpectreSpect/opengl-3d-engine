@@ -397,7 +397,7 @@ bool NonholonomicAStar::almost_equal(NonholonomicPos a, NonholonomicPos b) {
     float dist = glm::distance(a.pos, b.pos);
     float theta_diff = std::abs(angle_diff(a.theta, b.theta));
 
-    std::cout << theta_diff << std::endl;
+    // std::cout << theta_diff << std::endl;
 
     bool almost_equal_pos = dist <= 0.5f;
     bool almost_equal_angle = theta_diff <= 0.2f;
@@ -411,7 +411,11 @@ std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_
     NonholonomicPos cur_pos = pos;
 
     while (true) {
-        uint64_t cur_key = NonholonomicKeyPacker::pack(cur_pos);
+        // uint64_t cur_key = NonholonomicKeyPacker::pack(cur_pos);
+        // uint64_t cur_key = grid->pack_key(cur_pos.pos.x, cur_pos.pos.z, discretize_angle(cur_pos.theta, num_theta_bins));
+        uint64_t cur_key = state_key(cur_pos);
+
+        
         auto it = closed_heap.find(cur_key);
 
         if (it == closed_heap.end())
@@ -432,6 +436,20 @@ std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_
     return path;
 }
 
+int NonholonomicAStar::discretize_angle(float value, int num_bins) {
+    if (num_bins <= 0) return 0;
+
+    const float TWO_PI = 6.2831853071795864769f;
+
+    float a = std::fmod(value, TWO_PI);
+    if (a < 0.0f) a += TWO_PI;
+
+    float t = a / TWO_PI;                 // [0,1)
+    int bin = (int)std::floor(t * num_bins + 0.5f); // round-to-nearest
+    bin %= num_bins;                      // wrap in case it hits num_bins
+    return bin;
+}
+
 
 std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos) {
     std::priority_queue<NonholonomicAStarCell, std::vector<NonholonomicAStarCell>, NonholonomicByPriority> pq;
@@ -444,7 +462,7 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
     start.g = 0;
     start.f = 0;
 
-    int limit = 10000;
+    int limit = 20000;
     int counter = 0;
 
     pq.push(start);
@@ -459,11 +477,13 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
         }
         // std::cout << "KEK" << std::endl;
 
-        // std::cout << "(" << cur_cell.pos.pos.x << ", " << cur_cell.pos.pos.y << ", " << cur_cell.pos.pos.z << ", " << cur_cell.pos.theta  << ")" << std::endl;
+        std::cout << "(" << cur_cell.pos.pos.x << ", " << cur_cell.pos.pos.y << ", " << cur_cell.pos.pos.z << ", " << cur_cell.pos.theta  << ")" << std::endl;
             
-
+        // print_vec(cur_cell.pos.pos);
         
-        uint64_t cur_key = NonholonomicKeyPacker::pack(cur_cell.pos);
+        // uint64_t cur_key = NonholonomicKeyPacker::pack(cur_cell.pos);
+        // uint64_t cur_key = grid->pack_key(cur_cell.pos.pos.x, cur_cell.pos.pos.z, discretize_angle(cur_cell.pos.theta, num_theta_bins));
+        uint64_t cur_key = state_key(cur_cell.pos);
         closed_heap[cur_key] = cur_cell;
 
         // if (cur_cell.pos == end_pos) {
@@ -520,23 +540,57 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
                 if (need_continue)                    
                     continue;
 
-                uint64_t new_key = NonholonomicKeyPacker::pack(new_pos);
+                
+
+                // uint64_t new_key = NonholonomicKeyPacker::pack(new_pos);
+                // std::cout << discretize_angle(new_pos.theta, num_theta_bins) << std::endl; 
+                // uint64_t new_key = grid->pack_key(new_pos.pos.x, new_pos.pos.z, discretize_angle(new_pos.theta, num_theta_bins));
+                uint64_t new_key = state_key(new_pos);
                 auto heap_it = closed_heap.find(new_key);
                 if (heap_it != closed_heap.end()) 
                     continue;
                 
 
-                float new_g = cur_cell.g + glm::distance((glm::vec3)cur_cell.pos.pos, (glm::vec3)new_pos.pos);
+                glm::vec3 pos1 = cur_cell.pos.pos;
+                glm::vec3 pos2 = cur_cell.pos.pos;
+
+                float v1 = 1;
+
+                if (dir == -1)
+                    v1 = 1.5;
+
+                pos1.y = 0;
+                pos2.y = 0;
+                float new_g = cur_cell.g * v1  + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
 
                 auto it = g_score.find(new_key);
                 
                 if (it != g_score.end()) {
                     float old_g = it->second;
-                    if (old_g <= new_g)
+                    if (old_g <= new_g) {
+                        
                         continue;
+                    }
+                        
                 }
 
+                // float switch_dir_pentalty = 0;
+                // float change_steer_pentalty = 0;
+
+                // if (dir != cur_cell.pos.dir)
+                //     switch_dir_pentalty = 100;
+
+                // if (steer == -1 || steer == 1)
+                //     change_steer_pentalty = 100;
+
+                // if (steer != cur_cell.pos.steer) {
+                //     float diff = std::abs(steer - cur_cell.pos.steer);
+                //     switch_dir_pentalty = diff * 100;
+                // }
+                
                 g_score[new_key] = new_g;
+
+                // std::cout << "cur_key=" << cur_key << " new_key=" << new_key << "\n";
 
                 NonholonomicAStarCell new_cell;
                 new_cell.pos = new_pos;
@@ -546,7 +600,20 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
                 new_cell.came_from = cur_cell.pos;
                 new_cell.no_parent = false;
                 new_cell.g = new_g;
-                new_cell.f = new_g + get_heuristic(new_pos.pos, end_pos.pos);
+                // new_cell.f = new_g + get_heuristic(new_pos.pos, end_pos.pos) + switch_gear_pentalty + switch_dir_pentalty;
+
+
+                pos1 = new_pos.pos;
+                pos2 = end_pos.pos;
+                pos1.y = 0;
+                pos2.y = 0;
+                new_cell.f = new_g + get_heuristic(pos1, pos2) + change_steer_pentalty + switch_dir_pentalty;
+
+                if (dir != cur_cell.pos.dir)
+                     new_cell.f += switch_dir_pentalty;
+
+                if (steer == -1 || steer == 1)
+                    new_cell.f += change_steer_pentalty;
 
                 pq.push(new_cell);
             }

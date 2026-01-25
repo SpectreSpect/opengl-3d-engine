@@ -155,19 +155,26 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         int gz = vz + chunk_pos.z * chunk_size.z;
 
         // --- terrain height at (gx,gz) ---
-        float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
-        float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
-        float final_wave = (wave_1 + wave_2) * 0.5f;
-        int y_threshold = (int)(final_wave * chunk_size.y);
+        // float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
+        // float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
+        // float final_wave = (wave_1 + wave_2) * 0.5f;
+        // int y_threshold = (int)(final_wave * chunk_size.y);
 
-        int diff = gy - y_threshold;
-
+        // int diff = gy - y_threshold;
         // --- ground ---
-        if (diff <= 0) {
+        // if (diff <= 0) {
+        //     (*voxels)[id].visible = true;
+        //     (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
+        //     continue;
+        // }
+
+        if (gy <= 0) {
             (*voxels)[id].visible = true;
             (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
             continue;
         }
+
+
         // else: air (default Voxel)
     }
 
