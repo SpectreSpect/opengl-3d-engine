@@ -23,6 +23,7 @@ struct ByPriority {
 };
 
 
+
 class AStar {
 public:
     OccupancyGrid3D* grid;

@@ -1,10 +1,108 @@
 #pragma once
 #include "a_star.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/epsilon.hpp>
+#include <cmath>
+
 
 struct NonholonomicPos {
-    glm::vec3 pos;
-    glm::vec3 theta; // orientation
+    glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
+    float theta = 0; // orientation
+    float steer = 0;
+    float dir = 1;
+    std::vector<NonholonomicPos> motion;
+
+    bool operator==(const NonholonomicPos& other) const {
+        static constexpr float pos_eps = 1e-3f;
+        static constexpr float theta_eps = 1e-3f;
+
+        bool p = glm::all(glm::epsilonEqual(pos, other.pos, pos_eps));
+        bool t = std::abs(theta - other.theta) <= theta_eps;
+        return p && t;
+    }
 };
+
+struct NonholonomicAStarCell {
+    float g;
+    float f;
+    NonholonomicPos pos;
+    NonholonomicPos came_from;
+    bool no_parent = true;
+
+    
+};
+
+class NonholonomicKeyPacker {
+public:
+    // --- discretization ---
+    static constexpr float POS_RES = 0.5f;   // world units per grid cell (tweak)
+    static constexpr int   THETA_BINS = 32;  // tweak (16/32/64...)
+
+    // --- bit layout ---
+    static constexpr int BITS_POS  = 18;     // per axis
+    static constexpr int BITS_TH   = 8;      // enough for 0..255 bins (THETA_BINS must <= 256)
+
+    static_assert(THETA_BINS <= (1 << BITS_TH));
+    static_assert(3*BITS_POS + BITS_TH <= 64);
+
+    static constexpr uint64_t MASK_POS = (BITS_POS == 64) ? ~0ull : ((1ull << BITS_POS) - 1ull);
+    static constexpr uint64_t MASK_TH  = (BITS_TH  == 64) ? ~0ull : ((1ull << BITS_TH)  - 1ull);
+
+    static constexpr int32_t OFFSET_POS = 1 << (BITS_POS - 1); // for signed -> unsigned bias
+    static constexpr int32_t MIN_POS = -OFFSET_POS;
+    static constexpr int32_t MAX_POS =  OFFSET_POS - 1;
+
+    static inline uint64_t enc_pos(int32_t c) {
+        if (c < MIN_POS || c > MAX_POS)
+            throw std::out_of_range("pos coord out of packable range");
+        return (uint64_t)((int64_t)c + OFFSET_POS) & MASK_POS;
+    }
+
+    static inline uint64_t enc_th(int32_t t) {
+        if (t < 0 || t >= THETA_BINS)
+            throw std::out_of_range("theta bin out of range");
+        return (uint64_t)t & MASK_TH;
+    }
+
+    static inline int32_t qfloor(float v, float step) {
+        return (int32_t)std::floor(v / step);
+    }
+
+    static inline float wrap_2pi(float a) {
+        const float TWO_PI = 6.2831853071795864769f;
+        a = std::fmod(a, TWO_PI);
+        if (a < 0.0f) a += TWO_PI;
+        return a;
+    }
+
+    static uint64_t pack(const NonholonomicPos& s) {
+        int32_t ix = qfloor(s.pos.x, POS_RES);
+        int32_t iy = qfloor(s.pos.y, POS_RES);
+        int32_t iz = qfloor(s.pos.z, POS_RES);
+
+        float a = wrap_2pi(s.theta);
+        int32_t it = (int32_t)std::floor(a * (float)THETA_BINS / 6.2831853071795864769f);
+        if (it == THETA_BINS) it = 0; // just in case of a==2pi
+
+        uint64_t ux = enc_pos(ix);
+        uint64_t uy = enc_pos(iy);
+        uint64_t uz = enc_pos(iz);
+        uint64_t ut = enc_th(it);
+
+        // Layout: [x][y][z][theta]
+        return (ux << (BITS_POS*2 + BITS_TH))
+             | (uy << (BITS_POS*1 + BITS_TH))
+             | (uz << (BITS_TH))
+             | (ut);
+    }
+};
+
+struct NonholonomicByPriority {
+    bool operator()(const NonholonomicAStarCell& a, const NonholonomicAStarCell& b) const {
+        return a.f > b.f; // higher priority first
+    }
+};
+
 
 class NonholonomicAStar : public AStar {
 public:
@@ -13,6 +111,22 @@ public:
     float integration_steps = 8;
     float motion_simulation_dist = 3.0f;
 
-    std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer);
-    std::vector<glm::ivec3> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    NonholonomicAStar(VoxelGrid* voxel_grid);
+
+    static inline float angle_diff(float a, float b) {
+        // result in (-pi, pi]
+        float d = std::fmod(b - a, 2.0f * (float)M_PI);
+        if (d <= -(float)M_PI) d += 2.0f * (float)M_PI;
+        if (d >  (float)M_PI) d -= 2.0f * (float)M_PI;
+        return d;
+    }
+
+    static void print_vec(glm::vec3 vec) {
+        std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
+    }
+
+    static bool almost_equal(NonholonomicPos a, NonholonomicPos b);
+    std::vector<NonholonomicPos> reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos);
+    std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
+    std::vector<NonholonomicPos> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
 };
