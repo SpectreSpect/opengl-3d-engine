@@ -43,6 +43,14 @@ public:
     FragmentShader* default_fragment_shader;
     Program* default_program;
 
+
+    std::string default_line_vertex_shader_path = (executable_dir() / "shaders" / "line_vs.glsl").string();
+    std::string default_line_fragment_shader_path = (executable_dir() / "shaders" / "line_fs.glsl").string();
+
+    VertexShader* default_line_vertex_shader;
+    FragmentShader* default_line_fragment_shader;
+    Program* default_line_program;
+
     // Camera* camera;
 
     int init();

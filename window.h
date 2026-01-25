@@ -17,6 +17,7 @@
 
 class Engine3D;
 class Program;
+class Line;
 
 class Window{
 public:

@@ -48,6 +48,7 @@ add_executable(app
   a_star/occupancy_cell.cpp
   a_star/occupancy_grid_3d.cpp
   a_star/voxel_occupancy_grid_3d.cpp
+  line.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")

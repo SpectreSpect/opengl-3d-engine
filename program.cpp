@@ -44,3 +44,43 @@ void Program::set_vec3(const std::string name, const glm::vec3& value) const{
     }
     glUniform3fv(loc, 1, &value[0]); // set the uniform
 }
+
+void Program::set_float(const std::string& name, float value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform1f(loc, value);
+}
+
+void Program::set_int(const std::string& name, int value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform1i(loc, value);
+}
+
+void Program::set_vec2(const std::string& name, const glm::vec2& value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform2fv(loc, 1, &value[0]);
+}
+
+void Program::set_vec4(const std::string& name, const glm::vec4& value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform4fv(loc, 1, &value[0]);
+}

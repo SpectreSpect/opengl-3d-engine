@@ -1,54 +1,56 @@
-#include "a_star.h"
+#include "nonholonomic_a_star.h"
 
 
-AStar::AStar() {
-    this->grid = new OccupancyGrid3D();
-}
+std::vector<NonholonomicPos> NonholonomicAStar::simulate_motion(NonholonomicPos start, int steer)
+{
+    steer = std::clamp(steer, -1, 1);
 
-AStar::AStar(VoxelGrid* voxel_grid) {
-    this->grid = new VoxelOccupancyGrid3D(voxel_grid);
-}
+    // Your convention: steer = -1 => max LEFT, steer = +1 => max RIGHT.
+    // Typically +delta is left, so:
+    float delta = 0.0f;
+    if (steer != 0) delta = -steer * max_steer; // -1 -> +max_steer, +1 -> -max_steer
 
-float AStar::get_heuristic(glm::ivec3 a, glm::ivec3 b) {
-    glm::vec3 d = glm::vec3(a - b);
-    return glm::dot(d, d);
-}
+    std::vector<NonholonomicPos> out;
+    out.reserve(integration_steps);
 
-std::vector<glm::ivec3> AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos) {
-    std::vector<glm::ivec3> path;
-    path.push_back(pos);
-    glm::ivec3 cur_pos = pos;
+    glm::vec3 p = start.pos;
+    float yaw   = start.theta.y;
 
-    while (true) {
-        uint64_t cur_key = grid->pack_key(cur_pos.x, cur_pos.y, cur_pos.z);
-        auto it = closed_heap.find(cur_key);
+    const float ds = motion_simulation_dist / float(integration_steps);
+    const float eps = 1e-6f;
 
-        if (it == closed_heap.end())
-            return {};
-            
-        
-        AStarCell prev_cell = it->second;
+    for (int i = 0; i < integration_steps; ++i) {
+        if (std::abs(delta) < eps) {
+            // straight
+            p.x += ds * std::cos(yaw);
+            p.z += ds * std::sin(yaw);
+        } else {
+            // exact circular arc integration for constant steering
+            float R = wheel_base / std::tan(delta); // turning radius (signed)
+            float yaw0 = yaw;
+            float dYaw = ds / R;                    // because ds = R * dYaw
+            yaw += dYaw;
 
-        if (prev_cell.no_parent)
-            break;
-        
-        
-        path.push_back(cur_pos);
-        cur_pos = prev_cell.came_from;
+            p.x += R * (std::sin(yaw) - std::sin(yaw0));
+            p.z += R * (-std::cos(yaw) + std::cos(yaw0));
+        }
+
+        NonholonomicPos s = start;
+        s.pos = p;
+        s.theta.y = yaw;
+        out.push_back(s);
     }
 
-    std::reverse(path.begin(), path.end());
-
-    return path;
+    return out;
 }
 
-std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
+std::vector<glm::ivec3> NonholonomicAStar::find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos) {
     std::priority_queue<AStarCell, std::vector<AStarCell>, ByPriority> pq;
     std::unordered_map<uint64_t, AStarCell> closed_heap;
     std::unordered_map<uint64_t, float> g_score;
     
     AStarCell start;
-    start.pos = start_pos;
+    start.pos = start_pos.pos;
     start.no_parent = true;
     start.g = 0;
     start.f = 0;
@@ -70,7 +72,7 @@ std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
         uint64_t cur_key = grid->pack_key(cur_cell.pos.x, cur_cell.pos.y, cur_cell.pos.z);
         closed_heap[cur_key] = cur_cell;
 
-        if (cur_cell.pos == end_pos) {
+        if (cur_cell.pos == (glm::ivec3)end_pos.pos) {
             return reconstruct_path(closed_heap, cur_cell.pos);
         }
             
@@ -124,7 +126,7 @@ std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 new_cell.came_from = cur_cell.pos;
                 new_cell.no_parent = false;
                 new_cell.g = new_g;
-                new_cell.f = new_g + get_heuristic(new_pos, end_pos);
+                new_cell.f = new_g + get_heuristic(new_pos, end_pos.pos);
        
                 pq.push(new_cell);
             }

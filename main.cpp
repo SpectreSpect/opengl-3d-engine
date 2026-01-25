@@ -30,6 +30,8 @@
 #include "ui_elements/triangle_controller.h"
 #include "triangle.h"
 #include "a_star/a_star.h"
+#include "line.h"
+#include "a_star/nonholonomic_a_star.h"
 
 
 class Grid : public Drawable, public Transformable {
@@ -174,6 +176,24 @@ int main() {
     // });
 
     // a_star->grid->occupancy_cells[]
+
+    Line* line = new Line();
+
+    LineInstance line_instance1;
+    line_instance1.p0 = glm::vec3(0, 20, 0);
+    line_instance1.p1 = glm::vec3(0, 25, 0);
+
+    LineInstance line_instance2;
+    line_instance2.p0 = glm::vec3(0, 25, 0);
+    line_instance2.p1 = glm::vec3(5, 25, 0);
+
+    std::vector<LineInstance> line_instances;
+    line_instances.push_back(line_instance1);
+    line_instances.push_back(line_instance2);
+
+    line->set_lines(line_instances);
+
+    // line->set_lines(line_instance);
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
@@ -385,6 +405,9 @@ int main() {
         // ImGui::End();
 
         ui::end_frame();
+
+        // line->draw_instanced(1);
+        window->draw(line, camera);
 
         window->swap_buffers();
         engine->poll_events();

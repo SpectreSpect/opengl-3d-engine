@@ -1,5 +1,6 @@
 #include "window.h"
 #include "engine3d.h"
+#include "line.h"
 
 Window::Window(Engine3D* engine, int width, int height, std::string title) {
     this->engine = engine;
@@ -130,11 +131,13 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     float aspect = get_fbuffer_aspect_ratio();
 
     RenderState states;
-    states.vp = camera->get_projection_matrix(aspect) * camera->get_view_matrix();
+    states.proj = camera->get_projection_matrix(aspect);
+    states.vp = states.proj * camera->get_view_matrix();
     states.transform = glm::mat4(1.0f);
     states.program = program ? program : engine->default_program;
     states.camera = camera;
     states.camera->update_frustum_planes(states.vp);
+    states.engine = engine;
 
     drawable->draw(states);
 
