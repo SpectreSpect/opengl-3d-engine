@@ -29,7 +29,8 @@
 #include "math_utils.h"
 #include "ui_elements/triangle_controller.h"
 #include "triangle.h"
-
+#include "vtk_mesh_loader.h"
+#include "path_utils.h"
 
 class Grid : public Drawable, public Transformable {
 public:
@@ -110,6 +111,13 @@ int main() {
     Triangle* triangle = new Triangle(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
 
     VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(voxel_grid);
+    VtkMeshLoader* vtk_mesh_loader = new VtkMeshLoader(*cube->mesh->vertex_layout);
+
+    MeshData model_mesh_data = vtk_mesh_loader->load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
+
+    Mesh* model = new Mesh(model_mesh_data.vertices, model_mesh_data.indices, cube->mesh->vertex_layout); 
+    model->position = {0.0f, chunk_render_size * 5, 0.0f};
+    model->scale = glm::vec3(5.0f);
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
     while(window->is_open()) {
@@ -128,12 +136,27 @@ int main() {
         voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
         window->draw(triangle, camera);
-        window->draw(cube, camera);
+        // window->draw(cube, camera);
+        window->draw(model, camera);
 
         ImGui::Begin("Debug");
 
+        ImGui::TextUnformatted("Camera position");
+
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 220, 120, 255));
+        ImGui::Text("x: %.3f", camera_controller->camera->position.x);
+        ImGui::PopStyleColor();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 255, 120, 255));
+        ImGui::Text("y: %.3f", camera_controller->camera->position.y);
+        ImGui::PopStyleColor();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 180, 255, 255));
+        ImGui::Text("z: %.3f", camera_controller->camera->position.z);
+        ImGui::PopStyleColor();
+
         if (ImGui::Button("Rasterize the triangle")) {
-            MeshData mesh_data = cube->create_mesh_data(cube->get_color());
+            // MeshData mesh_data = cube->create_mesh_data(cube->get_color());
 
             auto voxel_generator = [&](glm::vec3 point) -> Voxel {
                 Voxel voxel;
@@ -143,8 +166,8 @@ int main() {
             };
 
             voxel_rastorizator->rasterize_mesh(
-                mesh_data, 
-                cube->get_model_matrix(), 
+                model_mesh_data, 
+                model->get_model_matrix(), 
                 voxel_generator, 
                 voxel_size, 
                 0, 

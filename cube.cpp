@@ -9,19 +9,25 @@ Cube::Cube(glm::vec3 position, glm::vec3 scale, glm::vec3 color) {
 
     VertexLayout* vertex_layout = new VertexLayout();
     vertex_layout->add({
+        "position",
         0, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        0
+        0, 
+        0, {0.0f, 0.0f, 0.0f}
     });
     vertex_layout->add({
+        "normal",
         1, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        3 * sizeof(float)
+        3 * sizeof(float),
+        0, {0.0f, 1.0f, 0.0f}
     });
     vertex_layout->add({
+        "color",
         2, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        6 * sizeof(float)
+        6 * sizeof(float),
+        0, {1.0f, 1.0f, 1.0f}
     });
 
     mesh = new Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);

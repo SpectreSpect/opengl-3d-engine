@@ -43,19 +43,25 @@ Mesh* Triangle::create_triangle_mesh(glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, g
 
     VertexLayout* vertex_layout = new VertexLayout();
     vertex_layout->add({
+        "position",
         0, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        0
+        0,
+        0, {0.0f, 0.0f, 0.0f}
     });
     vertex_layout->add({
+        "normal",
         1, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        3 * sizeof(float)
+        3 * sizeof(float),
+        0, {0.0f, 1.0f, 0.0f}
     });
     vertex_layout->add({
+        "color",
         2, 3, GL_FLOAT, GL_FALSE,
         9 * sizeof(float),
-        6 * sizeof(float)
+        6 * sizeof(float),
+        0, {1.0f, 1.0f, 1.0f}
     });
 
     Mesh* triangle = new Mesh(std::move(vertices), std::move(indices), vertex_layout);
