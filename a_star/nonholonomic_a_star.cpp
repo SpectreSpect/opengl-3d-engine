@@ -450,6 +450,192 @@ int NonholonomicAStar::discretize_angle(float value, int num_bins) {
     return bin;
 }
 
+void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos end_pos) {
+    state_pq = std::priority_queue<NonholonomicAStarCell, std::vector<NonholonomicAStarCell>, NonholonomicByPriority>();
+    state_closed_heap = std::unordered_map<uint64_t, NonholonomicAStarCell>();
+    state_g_score = std::unordered_map<uint64_t, float>();
+    state_path = std::vector<NonholonomicPos>();
+    state_start_pos = start_pos;
+    state_end_pos = end_pos;
+    state_counter = 0;
+
+    state_start_cell = NonholonomicAStarCell();
+    state_start_cell.pos = start_pos;
+    state_start_cell.no_parent = true;
+    state_start_cell.g = 0;
+    state_start_cell.f = 0;
+
+    state_pq.push(state_start_cell);
+
+    if (state_lines.size() > 0) {
+        for (int i = 0; i < state_lines.size(); i++)
+            delete state_lines[i];
+    }
+    state_lines = std::vector<Line*>();
+}
+
+bool NonholonomicAStar::find_nonholomic_path_step() {
+
+    if (state_pq.empty()) {
+        std::cout << "1. Priotirty queue is empty" << std::endl;
+        return true;
+    }
+        
+
+
+    NonholonomicAStarCell cur_cell = state_pq.top();
+    state_pq.pop();
+
+    if (!cur_cell.no_parent) {
+        Line* line = new Line();
+        LineInstance line_instance;
+        line_instance.p0 = cur_cell.pos.pos;
+        line_instance.p1 = cur_cell.came_from.pos;
+
+        std::vector<LineInstance> line_instances;
+        line_instances.push_back(line_instance);
+
+        float color_value = cur_cell.f / 100.0f;
+        std::cout << cur_cell.f << std::endl;
+
+        line->color = {color_value, 0.0f, 0.0f};
+
+        line->set_lines(line_instances);
+
+        // print_vec(line_instance.p0);
+        // std::cout << " ";
+        // print_vec(line_instance.p1);
+        // std::cout << std::endl;
+
+        state_lines.push_back(line);
+    }
+
+
+    if (state_counter >= iteration_limit) {
+        std::cout << "Limit exceeded" << std::endl;
+        return true;
+    }
+
+    uint64_t cur_key = state_key(cur_cell.pos);
+    state_closed_heap[cur_key] = cur_cell;
+
+    if (almost_equal(cur_cell.pos, state_end_pos)) {
+
+        state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
+
+        if (!use_reed_shepps_fallback) {
+            std::cout << "2. Almost equal = true" << std::endl;
+            return true;
+        }
+            
+        
+        std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, state_end_pos);
+        if (reeds_shepp_path.size() > 0)
+            if (adjust_and_check_path(reeds_shepp_path))
+                state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end());
+        
+        std::cout << "3. Almost equal = true (with reeds-shepp fallback)" << std::endl;
+        return true;
+    }
+
+    if (use_reed_shepps_fallback)
+        if (state_counter % try_reeds_shepp_interval == 0) {
+            std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, state_end_pos);
+
+            if (reeds_shepp_path.size() > 0) {
+                if (adjust_and_check_path(reeds_shepp_path)) {
+                    state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
+                    state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
+                    
+                    std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
+                    return true;
+                } 
+            }
+        }
+        
+    for (int dir = -1; dir <= 1; dir += 2)
+        for (int steer = -1; steer <= 1; steer++) {
+            std::vector<NonholonomicPos> motion = NonholonomicAStar::simulate_motion(cur_cell.pos, steer, dir);
+
+            NonholonomicPos new_pos = motion[motion.size() - 1];
+
+            bool need_continue = false;
+            float last_y = new_pos.pos.y;
+            for (int i = 0; i < motion.size(); i++) {
+                NonholonomicPos intermidiate_pos = motion[i];
+                glm::ivec3 vecpos = glm::ivec3(glm::floor(intermidiate_pos.pos));
+                intermidiate_pos.pos.y = last_y;
+
+                if (!adjust_to_ground(vecpos)) {
+                    need_continue = true;
+                    break;
+                }
+                    
+                intermidiate_pos.pos.y = vecpos.y;
+            }
+
+            if (need_continue)                    
+                continue;
+
+            uint64_t new_key = state_key(new_pos);
+            auto heap_it = state_closed_heap.find(new_key);
+            if (heap_it != state_closed_heap.end()) 
+                continue;
+            
+
+            glm::vec3 pos1 = cur_cell.pos.pos;
+            glm::vec3 pos2 = new_pos.pos;
+
+            float v1 = 1;
+
+            if (dir == -1)
+                v1 = 1.5;
+
+            pos1.y = 0;
+            pos2.y = 0;
+            float new_g = cur_cell.g * v1  + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
+            // std::cout << glm::distance((glm::vec3)pos1, (glm::vec3)pos2) << std::endl;
+
+            auto it = state_g_score.find(new_key);
+            
+            if (it != state_g_score.end()) {
+                float old_g = it->second;
+                if (old_g <= new_g) {
+                    continue;
+                }
+                    
+            }
+            
+            state_g_score[new_key] = new_g;
+
+            NonholonomicAStarCell new_cell;
+            new_cell.pos = new_pos;
+            new_cell.pos.steer = steer;
+            new_cell.pos.dir = dir;
+            new_cell.came_from = cur_cell.pos;
+            new_cell.no_parent = false;
+            new_cell.g = new_g;
+
+            pos1 = new_pos.pos;
+            pos2 = state_end_pos.pos;
+            pos1.y = 0;
+            pos2.y = 0;
+            // new_cell.f = new_g;
+            
+            new_cell.f = new_g + get_heuristic(pos1, pos2) + change_steer_pentalty + switch_dir_pentalty;
+
+            if (dir != cur_cell.pos.dir)
+                    new_cell.f += switch_dir_pentalty;
+
+            if (steer == -1 || steer == 1)
+                new_cell.f += change_steer_pentalty;
+
+            state_pq.push(new_cell);
+        }
+        state_counter++;
+    return false;
+}
+
 
 std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos) {
     std::priority_queue<NonholonomicAStarCell, std::vector<NonholonomicAStarCell>, NonholonomicByPriority> pq;
@@ -462,7 +648,6 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
     start.g = 0;
     start.f = 0;
 
-    int limit = 20000;
     int counter = 0;
 
     pq.push(start);
@@ -471,7 +656,7 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
         NonholonomicAStarCell cur_cell = pq.top();
         pq.pop();
 
-        if (counter >= limit) {
+        if (counter >= iteration_limit) {
             std::cout << "Limit exceeded" << std::endl;
             return {};
         }
@@ -488,11 +673,10 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
 
         // if (cur_cell.pos == end_pos) {
         if (almost_equal(cur_cell.pos, end_pos)) {
-            // std::cout << "cur_cell: " << cur_cell.pos.theta << std::endl;
-            // std::cout << "end_pos: " << end_pos.theta << std::endl;
-            // print_vec();
-
             std::vector<NonholonomicPos> a_star_path = reconstruct_path(closed_heap, cur_cell.pos);
+
+            if (!use_reed_shepps_fallback)
+                return a_star_path;
 
             std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, end_pos);
 
@@ -503,18 +687,19 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_nonholomic_path(Nonholonomi
             return a_star_path;
         }
 
-        if (counter % try_reeds_shepp_interval == 0) {
-            std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, end_pos);
+        if (use_reed_shepps_fallback)
+            if (counter % try_reeds_shepp_interval == 0) {
+                std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, end_pos);
 
-            if (reeds_shepp_path.size() > 0) {
-                if (adjust_and_check_path(reeds_shepp_path)) {
-                    std::vector<NonholonomicPos> a_star_path = reconstruct_path(closed_heap, cur_cell.pos);
-                    a_star_path.insert(a_star_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
-                    
-                    return a_star_path;
-                } 
+                if (reeds_shepp_path.size() > 0) {
+                    if (adjust_and_check_path(reeds_shepp_path)) {
+                        std::vector<NonholonomicPos> a_star_path = reconstruct_path(closed_heap, cur_cell.pos);
+                        a_star_path.insert(a_star_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
+                        
+                        return a_star_path;
+                    } 
+                }
             }
-        }
             
         for (int dir = -1; dir <= 1; dir += 2)
             for (int steer = -1; steer <= 1; steer++) {

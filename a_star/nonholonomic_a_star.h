@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/epsilon.hpp>
 #include <cmath>
+#include "../line.h"
 
 
 struct NonholonomicPos {
@@ -107,16 +108,29 @@ struct NonholonomicByPriority {
 
 class NonholonomicAStar : public AStar {
 public:
+    std::priority_queue<NonholonomicAStarCell, std::vector<NonholonomicAStarCell>, NonholonomicByPriority> state_pq;
+    std::unordered_map<uint64_t, NonholonomicAStarCell> state_closed_heap;
+    std::unordered_map<uint64_t, float> state_g_score;
+    NonholonomicPos state_start_pos;
+    NonholonomicPos state_end_pos;
+    NonholonomicAStarCell state_start_cell;
+    std::vector<NonholonomicPos> state_path;
+    std::vector<Line*> state_lines;
+
     float wheel_base = 2.5f;
     float max_steer = 0.6;
     float integration_steps = 8;
     // float motion_simulation_dist = 0.5f;
-    float motion_simulation_dist = 0.5f;
+    float motion_simulation_dist = 2.0f;
     float reeds_shepp_step_world = 0.10f;
     int try_reeds_shepp_interval = 100;
-    int num_theta_bins = 128;
+    // int num_theta_bins = 128;
+    int num_theta_bins = 2;
     float switch_dir_pentalty = 1.5;
     float change_steer_pentalty = 1.5;
+    bool use_reed_shepps_fallback = true;
+    uint64_t state_counter = 0;
+    int iteration_limit = 10000;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -141,7 +155,7 @@ public:
 
     
     static void print_vec(glm::vec3 vec) {
-        std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")" << std::endl;
+        std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")";
     }
     static int discretize_angle(float value, int num_bins);
     std::vector<NonholonomicPos> find_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
@@ -151,5 +165,8 @@ public:
     static bool almost_equal(NonholonomicPos a, NonholonomicPos b);
     std::vector<NonholonomicPos> reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos);
     std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
+    void initialize(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    bool find_nonholomic_path_step();
     std::vector<NonholonomicPos> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    
 };
