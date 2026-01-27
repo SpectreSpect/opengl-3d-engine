@@ -278,6 +278,39 @@ std::vector<NonholonomicPos> NonholonomicAStar::find_reeds_shepp(NonholonomicPos
 }
 
 
+double NonholonomicAStar::reeds_shepp_distance(
+    NonholonomicPos& start_pos,
+    NonholonomicPos& end_pos
+) {
+    const double tanMax = std::tan((double)max_steer);
+    if (std::abs(tanMax) < 1e-12) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double rho = (double)wheel_base / tanMax;
+
+    glm::vec3 d = end_pos.pos - start_pos.pos;
+
+    const double th0 = (double)start_pos.theta;
+    const double c0  = std::cos(th0);
+    const double s0  = std::sin(th0);
+
+    // XZ plane -> local start frame -> normalize by rho
+    const double dx = (double)d.x;
+    const double dy = (double)d.z;
+
+    const double x   = ( c0*dx + s0*dy ) / rho;
+    const double y   = (-s0*dx + c0*dy ) / rho;
+    const double phi = rs_detail::mod2pi((double)end_pos.theta - th0);
+
+    rs_detail::Candidate best = rs_detail::solve(x, y, phi);
+    if (!std::isfinite(best.total)) {
+        return std::numeric_limits<double>::infinity();
+    }
+    return best.total * rho;
+}
+
+
+
 
 NonholonomicAStar::NonholonomicAStar(VoxelGrid* voxel_grid) {
     this->grid = new VoxelOccupancyGrid3D(voxel_grid);
@@ -357,41 +390,41 @@ bool NonholonomicAStar::adjust_and_check_path(std::vector<NonholonomicPos>& path
 }
 
 
-bool NonholonomicAStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_drop) {
-    auto solid = [&](const glm::ivec3& q) {
-        return grid->get_cell(q).solid;
-    };
+// bool NonholonomicAStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_drop) {
+//     auto solid = [&](const glm::ivec3& q) {
+//         return grid->get_cell(q).solid;
+//     };
 
-    // 1) If we're inside solid, try stepping up
-    if (solid(voxel_pos)) {
-        bool freed = false;
-        for (int k = 1; k <= max_step_up; ++k) {
-            glm::ivec3 up = voxel_pos + glm::ivec3(0, k, 0);
-            if (!solid(up)) {
-                voxel_pos = up;
-                freed = true;
-                break;
-            }
-        }
-        if (!freed) return false;
-    }
+//     // 1) If we're inside solid, try stepping up
+//     if (solid(voxel_pos)) {
+//         bool freed = false;
+//         for (int k = 1; k <= max_step_up; ++k) {
+//             glm::ivec3 up = voxel_pos + glm::ivec3(0, k, 0);
+//             if (!solid(up)) {
+//                 voxel_pos = up;
+//                 freed = true;
+//                 break;
+//             }
+//         }
+//         if (!freed) return false;
+//     }
 
-    // 2) Now find a y such that: current is empty AND below is solid
-    // (and don't drop more than max_drop)
-    for (int drop = 0; drop <= max_drop; ++drop) {
-        if (!solid(voxel_pos) && solid(voxel_pos + glm::ivec3(0, -1, 0)))
-            return true;
+//     // 2) Now find a y such that: current is empty AND below is solid
+//     // (and don't drop more than max_drop)
+//     for (int drop = 0; drop <= max_drop; ++drop) {
+//         if (!solid(voxel_pos) && solid(voxel_pos + glm::ivec3(0, -1, 0)))
+//             return true;
 
-        // If we somehow are in solid, we're already too low → reject
-        // (or you could step up 1, but reject is safer)
-        if (solid(voxel_pos))
-            return false;
+//         // If we somehow are in solid, we're already too low → reject
+//         // (or you could step up 1, but reject is safer)
+//         if (solid(voxel_pos))
+//             return false;
 
-        voxel_pos.y -= 1;
-    }
+//         voxel_pos.y -= 1;
+//     }
 
-    return false;
-}
+//     return false;
+// }
 
 bool NonholonomicAStar::almost_equal(NonholonomicPos a, NonholonomicPos b) {
     float dist = glm::distance(a.pos, b.pos);
@@ -400,7 +433,7 @@ bool NonholonomicAStar::almost_equal(NonholonomicPos a, NonholonomicPos b) {
     // std::cout << theta_diff << std::endl;
 
     bool almost_equal_pos = dist <= 0.5f;
-    bool almost_equal_angle = theta_diff <= 0.2f;
+    bool almost_equal_angle = theta_diff <= 1.0f;
 
     return almost_equal_pos && almost_equal_angle;
 }
@@ -436,6 +469,22 @@ std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_
     return path;
 }
 
+float NonholonomicAStar::dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path) {
+    int id = 0;
+    float min_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[id]);
+    for (int i = 0; i < path.size(); i++) {
+        float cur_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[i]);
+        
+        if (cur_dist < min_dist) {
+            min_dist = cur_dist;
+            id = i;
+        }
+            
+    }
+
+    return path.size() - (id + 1) + min_dist;
+}
+
 int NonholonomicAStar::discretize_angle(float value, int num_bins) {
     if (num_bins <= 0) return 0;
 
@@ -458,6 +507,8 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     state_start_pos = start_pos;
     state_end_pos = end_pos;
     state_counter = 0;
+    state_plain_astar_path = find_path(start_pos.pos, end_pos.pos);
+    // std::cout << state_plain_astar_path.size() << std::endl;
 
     state_start_cell = NonholonomicAStarCell();
     state_start_cell.pos = start_pos;
@@ -496,7 +547,7 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         line_instances.push_back(line_instance);
 
         float color_value = cur_cell.f / 100.0f;
-        std::cout << cur_cell.f << std::endl;
+        // std::cout << cur_cell.f << std::endl;
 
         line->color = {color_value, 0.0f, 0.0f};
 
@@ -621,8 +672,24 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             pos1.y = 0;
             pos2.y = 0;
             // new_cell.f = new_g;
+            float dist_to_plain_path = dist_to_path(pos1, state_plain_astar_path) * 10;
+            // new_cell.f = new_g + get_heuristic(pos1, pos2) + dist_to_plain_path + change_steer_pentalty + switch_dir_pentalty;
+
+            float orientation_score = 0;
+            float theta_dist_threshold = 10;
+            float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
+            if (found_distance < theta_dist_threshold)
+                orientation_score = std::abs(angle_diff(new_pos.theta, state_end_pos.theta)) * (found_distance / theta_dist_threshold);
+
+            // double reeds_shepp_dist = reeds_shepp_distance(new_pos, state_end_pos);
+            // std::cout << reeds_shepp_dist << std::endl;
+            new_cell.f = new_g + dist_to_plain_path + get_heuristic(pos1, pos2) + orientation_score * 2 + change_steer_pentalty + switch_dir_pentalty;
+            // new_cell.f = new_g + reeds_shepp_dist;
+            // new_cell.f = new_g + dist_to_plain_path + reeds_shepp_dist + change_steer_pentalty + switch_dir_pentalty;
             
-            new_cell.f = new_g + get_heuristic(pos1, pos2) + change_steer_pentalty + switch_dir_pentalty;
+            // std::cout << dist_to_plain_path << std::endl;
+
+            
 
             if (dir != cur_cell.pos.dir)
                     new_cell.f += switch_dir_pentalty;

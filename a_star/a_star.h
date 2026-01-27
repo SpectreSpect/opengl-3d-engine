@@ -35,5 +35,6 @@ public:
     virtual float get_heuristic(glm::ivec3 a, glm::ivec3 b);
 
     std::vector<glm::ivec3> reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos);
+    bool adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up = 1, int max_drop = 1);
     virtual std::vector<glm::ivec3> find_path(glm::ivec3 start_pos, glm::ivec3 end_pos);
 };

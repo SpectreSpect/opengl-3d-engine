@@ -278,8 +278,40 @@ int main() {
             });
         }
         if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
+
+                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
+                    // nonholonomic_astar->state_plain_astar_path[i]
+                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path[i];
+
+                    Voxel voxel;
+                    voxel.color = {0.2f, 0.2f, 0.2f};
+                    voxel.visible = true;
+
+                    voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
+                }
+            });
+
             nonholonomic_astar->initialize(start_pos, end_pos);
             simulation_running = false;
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
+
+                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
+                    // nonholonomic_astar->state_plain_astar_path[i]
+                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path[i];
+
+                    Voxel voxel;
+                    voxel.color = {0.0, 1.0, 0.0};
+                    voxel.visible = true;
+
+                    voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
+                }
+            });
+
+            
+
         }
 
 

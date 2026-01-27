@@ -116,16 +116,17 @@ public:
     NonholonomicAStarCell state_start_cell;
     std::vector<NonholonomicPos> state_path;
     std::vector<Line*> state_lines;
+    std::vector<glm::ivec3> state_plain_astar_path;
 
     float wheel_base = 2.5f;
     float max_steer = 0.6;
     float integration_steps = 8;
     // float motion_simulation_dist = 0.5f;
-    float motion_simulation_dist = 2.0f;
+    float motion_simulation_dist = 1.5f;
     float reeds_shepp_step_world = 0.10f;
     int try_reeds_shepp_interval = 100;
     // int num_theta_bins = 128;
-    int num_theta_bins = 2;
+    int num_theta_bins = 32;
     float switch_dir_pentalty = 1.5;
     float change_steer_pentalty = 1.5;
     bool use_reed_shepps_fallback = true;
@@ -157,11 +158,14 @@ public:
     static void print_vec(glm::vec3 vec) {
         std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ")";
     }
+
+    float dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path);
     static int discretize_angle(float value, int num_bins);
     std::vector<NonholonomicPos> find_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    double reeds_shepp_distance(NonholonomicPos& start_pos, NonholonomicPos& end_pos);
     bool shot_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
     bool adjust_and_check_path(std::vector<NonholonomicPos>& path, int max_step_up = 1, int max_drop = 1);
-    bool adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up = 1, int max_drop = 1);
+    // bool adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up = 1, int max_drop = 1);
     static bool almost_equal(NonholonomicPos a, NonholonomicPos b);
     std::vector<NonholonomicPos> reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos);
     std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
