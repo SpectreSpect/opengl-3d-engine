@@ -10,8 +10,7 @@ AStar::AStar(VoxelGrid* voxel_grid) {
 }
 
 float AStar::get_heuristic(glm::ivec3 a, glm::ivec3 b) {
-    glm::vec3 d = glm::vec3(a - b);
-    return glm::dot(d, d);
+    return glm::distance(glm::vec3(a), glm::vec3(b));
 }
 
 std::vector<glm::ivec3> AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos) {
@@ -130,10 +129,18 @@ std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
         if (counter >= limit)
             return {};
 
-        counter++;
         
+
         uint64_t cur_key = grid->pack_key(cur_cell.pos.x, cur_cell.pos.y, cur_cell.pos.z);
+        auto cur_it = g_score.find(cur_key);
+
+        if (cur_it != g_score.end())
+            if (cur_cell.g > cur_it->second)
+                continue;
+        
         closed_heap[cur_key] = cur_cell;
+
+        counter++;
 
         if (cur_cell.pos == end_pos) {
             return reconstruct_path(closed_heap, cur_cell.pos);
@@ -151,14 +158,8 @@ std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
 
                 glm::ivec3 new_pos = glm::ivec3(nx, ny, nz);
 
-                bool need_continue = false;
-                if (!adjust_to_ground(new_pos)) {
-                    need_continue = true;
-                    break;
-                }
-                if (need_continue)
+                if (!adjust_to_ground(new_pos))
                     continue;
-
 
                 // if (grid->get_cell(new_pos).solid) {
                 //     if (grid->get_cell(new_pos + glm::ivec3(0, 1, 0)).solid)
@@ -198,13 +199,9 @@ std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 new_cell.came_from = cur_cell.pos;
                 new_cell.no_parent = false;
                 new_cell.g = new_g;
-                // new_cell.f = new_g + get_heuristic(new_pos, end_pos) + directional_peak(end_pos, end_pos + glm::ivec3(1, 0, 0), new_pos, 5, 2, 2.8) * 10;
-                new_cell.f = new_g + get_heuristic(new_pos, end_pos) * 10;
                 
+                new_cell.f = new_g + get_heuristic(new_pos, end_pos);
 
-
-                
-       
                 pq.push(new_cell);
             }
     }

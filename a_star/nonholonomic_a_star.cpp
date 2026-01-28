@@ -522,7 +522,7 @@ float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, Nonholonomi
     end_pos.pos.y = 0;
 
     // float dist_to_plain_path = dist_to_path(new_pos.pos, plain_a_star_path) * 10;
-    float dist_to_plain_path = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
+    float follow_plain_astar_f = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
     float orientation_score = 0;
     float theta_dist_threshold = 10;
     float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
@@ -533,7 +533,7 @@ float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, Nonholonomi
     float dist_to_end = get_heuristic(new_pos.pos, end_pos.pos);
 
     // float f = dist_to_plain_path + dist_to_end + orientation_score * 2;
-    float f = dist_to_plain_path;
+    float f = follow_plain_astar_f;
 
     // if (new_pos.dir != cur_pos.dir)
     //     f += switch_dir_pentalty;
@@ -559,7 +559,7 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     state_start_cell.pos = start_pos;
     state_start_cell.no_parent = true;
     state_start_cell.g = 0;
-    state_start_cell.f = 0;
+    state_start_cell.f = 99999999;
 
     state_pq.push(state_start_cell);
 
@@ -581,6 +581,24 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
 
     NonholonomicAStarCell cur_cell = state_pq.top();
     state_pq.pop();
+
+    
+    // uint64_t cur_key = grid->pack_key(cur_cell.pos.x, cur_cell.pos.y, cur_cell.pos.z);
+    // auto cur_it = g_score.find(cur_key);
+
+    // if (cur_it != g_score.end())
+    //     if (cur_cell.g > cur_it->second)
+    //         continue;
+    
+    // closed_heap[cur_key] = cur_cell;
+    uint64_t cur_key = state_key(cur_cell.pos);
+    auto cur_it = state_g_score.find(cur_key);
+
+    if (cur_it != state_g_score.end()) {
+        if (cur_cell.g > cur_it->second)
+            return false;
+    }
+
 
     if (!cur_cell.no_parent) {
         Line* line = new Line();
@@ -613,7 +631,7 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         return true;
     }
 
-    uint64_t cur_key = state_key(cur_cell.pos);
+    
     state_closed_heap[cur_key] = cur_cell;
 
     if (almost_equal(cur_cell.pos, state_end_pos)) {
