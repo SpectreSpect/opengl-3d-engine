@@ -13,10 +13,11 @@ float AStar::get_heuristic(glm::ivec3 a, glm::ivec3 b) {
     return glm::distance(glm::vec3(a), glm::vec3(b));
 }
 
-std::vector<glm::ivec3> AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos) {
-    std::vector<glm::ivec3> path;
-    path.push_back(pos);
+PlainAstarData AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos) {
+    PlainAstarData plain_astar_data;
+    plain_astar_data.path.push_back(pos);
     glm::ivec3 cur_pos = pos;
+    float dist_to_end = 0;
 
     while (true) {
         uint64_t cur_key = grid->pack_key(cur_pos.x, cur_pos.y, cur_pos.z);
@@ -31,14 +32,17 @@ std::vector<glm::ivec3> AStar::reconstruct_path(std::unordered_map<uint64_t, ASt
         if (prev_cell.no_parent)
             break;
         
-        
-        path.push_back(cur_pos);
+        dist_to_end += glm::distance((glm::vec3)cur_pos, (glm::vec3)prev_cell.came_from);
+            
+        plain_astar_data.path.push_back(cur_pos);
+        plain_astar_data.dist_to_end.push_back(dist_to_end);
         cur_pos = prev_cell.came_from;
     }
 
-    std::reverse(path.begin(), path.end());
+    std::reverse(plain_astar_data.path.begin(), plain_astar_data.path.end());
+    std::reverse(plain_astar_data.dist_to_end.begin(), plain_astar_data.dist_to_end.end());
 
-    return path;
+    return plain_astar_data;
 }
 
 bool AStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_drop) {
@@ -106,7 +110,7 @@ bool AStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_dro
 //     return R * std::pow(N, sharpnessK);
 // }
 
-std::vector<glm::ivec3> AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
+PlainAstarData AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
     std::priority_queue<AStarCell, std::vector<AStarCell>, ByPriority> pq;
     std::unordered_map<uint64_t, AStarCell> closed_heap;
     std::unordered_map<uint64_t, float> g_score;

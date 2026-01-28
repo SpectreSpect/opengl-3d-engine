@@ -517,12 +517,16 @@ int NonholonomicAStar::discretize_angle(float value, int num_bins) {
     return bin;
 }
 
-float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, NonholonomicPos end_pos, NonholonomicPos cur_pos, std::vector<glm::ivec3> plain_a_star_path) {
+float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, NonholonomicPos end_pos, NonholonomicPos cur_pos, PlainAstarData plain_a_star_path) {
     new_pos.pos.y = 0;
     end_pos.pos.y = 0;
 
     // float dist_to_plain_path = dist_to_path(new_pos.pos, plain_a_star_path) * 10;
-    float follow_plain_astar_f = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
+
+    DistToPathData dist_to_path_data = dist_to_path(new_pos.pos, plain_a_star_path.path);
+
+    // float follow_plain_astar_f = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
+    float follow_plain_astar_f = plain_a_star_path.dist_to_end[dist_to_path_data.id] + dist_to_path_data.dist;
     float orientation_score = 0;
     float theta_dist_threshold = 10;
     float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
@@ -701,14 +705,15 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             glm::vec3 pos1 = cur_cell.pos.pos;
             glm::vec3 pos2 = new_pos.pos;
 
-            float v1 = 1;
+            // float v1 = 1;
 
-            if (dir == -1)
-                v1 = 1.5;
+            // if (dir == -1)
+            //     v1 = 1.5;
 
             pos1.y = 0;
             pos2.y = 0;
-            float new_g = cur_cell.g * v1  + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
+            // float new_g = cur_cell.g * v1  + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
+            float new_g = cur_cell.g + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
             // std::cout << glm::distance((glm::vec3)pos1, (glm::vec3)pos2) << std::endl;
 
             auto it = state_g_score.find(new_key);
@@ -750,7 +755,7 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             // new_cell.f = new_g + dist_to_plain_path + get_heuristic(pos1, pos2) + orientation_score * 2;
 
             // new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
-            new_cell.f = get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
+            new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
             // new_cell.f = new_g + reeds_shepp_dist;
             // new_cell.f = new_g + dist_to_plain_path + reeds_shepp_dist + change_steer_pentalty + switch_dir_pentalty;
             

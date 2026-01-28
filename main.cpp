@@ -118,7 +118,7 @@ void draw_f(Window* window,
     Camera* camera, 
     VoxelGrid* voxel_grid, 
     NonholonomicAStar* astar,
-    std::vector<glm::ivec3> plain_a_star_path,
+    PlainAstarData plain_a_star_path,
     const NonholonomicPos& start_pos, const NonholonomicPos& end_pos, 
     int size) {
     glm::ivec3 camera_voxel_pos = glm::ivec3(glm::floor(camera->position));
@@ -331,9 +331,9 @@ int main() {
         if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
 
-                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
+                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
                     // nonholonomic_astar->state_plain_astar_path[i]
-                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path[i];
+                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
 
                     Voxel voxel;
                     voxel.color = {0.2f, 0.2f, 0.2f};
@@ -350,9 +350,9 @@ int main() {
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
 
-                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
+                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
                     // nonholonomic_astar->state_plain_astar_path[i]
-                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path[i];
+                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
 
                     Voxel voxel;
                     voxel.color = {0.0, 1.0, 0.0};
