@@ -137,6 +137,7 @@ public:
     bool use_reed_shepps_fallback = true;
     uint64_t state_counter = 0;
     int iteration_limit = 10000;
+    bool add_lines = true;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 

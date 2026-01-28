@@ -232,7 +232,7 @@ int main() {
 
 
     NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
-    nonholonomic_astar->use_reed_shepps_fallback = false;
+    // nonholonomic_astar->use_reed_shepps_fallback = false;
     NonholonomicPos npos;
     npos.pos.y = 20;
     std::vector<Line*> lines;
@@ -379,9 +379,10 @@ int main() {
 
         if (glfwGetKey(window->window, GLFW_KEY_T) == GLFW_PRESS) {
 
-            std::vector<NonholonomicPos> path = nonholonomic_astar->find_nonholomic_path(start_pos, end_pos);
+            // std::vector<NonholonomicPos> path = nonholonomic_astar->find_nonholomic_path(start_pos, end_pos);
+            std::vector<NonholonomicPos>& path = nonholonomic_astar->state_path;
 
-            nonholonomic_astar->adjust_and_check_path(path);
+            // nonholonomic_astar->adjust_and_check_path(path);
 
             path_lines.clear();
 
