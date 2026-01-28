@@ -469,7 +469,7 @@ std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_
     return path;
 }
 
-float NonholonomicAStar::dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path) {
+DistToPathData NonholonomicAStar::dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path) {
     int id = 0;
     float min_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[id]);
     for (int i = 0; i < path.size(); i++) {
@@ -478,11 +478,29 @@ float NonholonomicAStar::dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& p
         if (cur_dist < min_dist) {
             min_dist = cur_dist;
             id = i;
-        }
-            
+        }     
     }
 
-    return path.size() - (id + 1) + min_dist;
+
+    DistToPathData dist_to_path_data;
+    dist_to_path_data.dist = min_dist;
+    dist_to_path_data.id = id;
+
+    return dist_to_path_data;
+}
+
+float NonholonomicAStar::follow_plain_astar_heuristic(glm::ivec3 pos, std::vector<glm::ivec3>& path, float scale, float dist_to_path_threshold) {
+    DistToPathData dist_to_path_data = dist_to_path(pos, path);
+
+    float id_factor = path.size();
+
+    if (dist_to_path_data.dist < dist_to_path_threshold) {
+        id_factor -= (dist_to_path_data.id + 1);
+    }
+
+    id_factor = ((float)id_factor / path.size()) * scale;
+
+    return id_factor;
 }
 
 int NonholonomicAStar::discretize_angle(float value, int num_bins) {
@@ -497,6 +515,33 @@ int NonholonomicAStar::discretize_angle(float value, int num_bins) {
     int bin = (int)std::floor(t * num_bins + 0.5f); // round-to-nearest
     bin %= num_bins;                      // wrap in case it hits num_bins
     return bin;
+}
+
+float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, NonholonomicPos end_pos, NonholonomicPos cur_pos, std::vector<glm::ivec3> plain_a_star_path) {
+    new_pos.pos.y = 0;
+    end_pos.pos.y = 0;
+
+    // float dist_to_plain_path = dist_to_path(new_pos.pos, plain_a_star_path) * 10;
+    float dist_to_plain_path = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
+    float orientation_score = 0;
+    float theta_dist_threshold = 10;
+    float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
+
+    // if (found_distance < theta_dist_threshold)
+    //     orientation_score = std::abs(angle_diff(new_pos.theta, state_end_pos.theta)) * (found_distance / theta_dist_threshold);
+    
+    float dist_to_end = get_heuristic(new_pos.pos, end_pos.pos);
+
+    // float f = dist_to_plain_path + dist_to_end + orientation_score * 2;
+    float f = dist_to_plain_path;
+
+    // if (new_pos.dir != cur_pos.dir)
+    //     f += switch_dir_pentalty;
+
+    // if (new_pos.steer == -1 || new_pos.steer == 1)
+    //     f += change_steer_pentalty;
+
+    return f;
 }
 
 void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos end_pos) {
@@ -546,10 +591,11 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         std::vector<LineInstance> line_instances;
         line_instances.push_back(line_instance);
 
-        float color_value = cur_cell.f / 100.0f;
+        // float color_value = cur_cell.f / 100.0f;
         // std::cout << cur_cell.f << std::endl;
 
-        line->color = {color_value, 0.0f, 0.0f};
+        // line->color = {color_value, 0.0f, 0.0f};
+        line->color = {1.0f, 0.0f, 0.0f};
 
         line->set_lines(line_instances);
 
@@ -672,18 +718,21 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             pos1.y = 0;
             pos2.y = 0;
             // new_cell.f = new_g;
-            float dist_to_plain_path = dist_to_path(pos1, state_plain_astar_path) * 10;
+            
             // new_cell.f = new_g + get_heuristic(pos1, pos2) + dist_to_plain_path + change_steer_pentalty + switch_dir_pentalty;
+            // float dist_to_plain_path = dist_to_path(pos1, state_plain_astar_path) * 10;
+            // float orientation_score = 0;
+            // float theta_dist_threshold = 10;
+            // float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
+            // if (found_distance < theta_dist_threshold)
+            //     orientation_score = std::abs(angle_diff(new_pos.theta, state_end_pos.theta)) * (found_distance / theta_dist_threshold);
 
-            float orientation_score = 0;
-            float theta_dist_threshold = 10;
-            float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
-            if (found_distance < theta_dist_threshold)
-                orientation_score = std::abs(angle_diff(new_pos.theta, state_end_pos.theta)) * (found_distance / theta_dist_threshold);
+            // // double reeds_shepp_dist = reeds_shepp_distance(new_pos, state_end_pos);
+            // // std::cout << reeds_shepp_dist << std::endl;
+            // new_cell.f = new_g + dist_to_plain_path + get_heuristic(pos1, pos2) + orientation_score * 2;
 
-            // double reeds_shepp_dist = reeds_shepp_distance(new_pos, state_end_pos);
-            // std::cout << reeds_shepp_dist << std::endl;
-            new_cell.f = new_g + dist_to_plain_path + get_heuristic(pos1, pos2) + orientation_score * 2 + change_steer_pentalty + switch_dir_pentalty;
+            // new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
+            new_cell.f = get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
             // new_cell.f = new_g + reeds_shepp_dist;
             // new_cell.f = new_g + dist_to_plain_path + reeds_shepp_dist + change_steer_pentalty + switch_dir_pentalty;
             
@@ -691,11 +740,11 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
 
             
 
-            if (dir != cur_cell.pos.dir)
-                    new_cell.f += switch_dir_pentalty;
+            // if (dir != cur_cell.pos.dir)
+            //         new_cell.f += switch_dir_pentalty;
 
-            if (steer == -1 || steer == 1)
-                new_cell.f += change_steer_pentalty;
+            // if (steer == -1 || steer == 1)
+            //     new_cell.f += change_steer_pentalty;
 
             state_pq.push(new_cell);
         }

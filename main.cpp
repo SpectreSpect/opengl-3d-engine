@@ -114,6 +114,57 @@ void push_back(std::vector<T>& a, const std::vector<T>& b) {
     a.insert(a.end(), b.begin(), b.end());
 }
 
+void draw_f(Window* window, 
+    Camera* camera, 
+    VoxelGrid* voxel_grid, 
+    NonholonomicAStar* astar,
+    std::vector<glm::ivec3> plain_a_star_path,
+    const NonholonomicPos& start_pos, const NonholonomicPos& end_pos, 
+    int size) {
+    glm::ivec3 camera_voxel_pos = glm::ivec3(glm::floor(camera->position));
+
+    voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+
+        glm::ivec3 left_top_pos = (glm::ivec3)start_pos.pos -  glm::ivec3(size/2.0f, 0, size/2.0f);
+
+        Voxel paint_voxel;
+
+        float max_f = 0;
+        for (int x = 0; x < size; x++)
+            for (int z = 0; z < size; z++) {
+                NonholonomicPos new_pos;
+                new_pos.pos = (glm::vec3)left_top_pos + glm::vec3(x, 0, z);
+
+                float f = astar->get_nonholonomic_f(new_pos, end_pos, new_pos, plain_a_star_path);
+
+                if (f > max_f)
+                    max_f = f;
+            }
+
+        for (int x = 0; x < size; x++)
+            for (int z = 0; z < size; z++) {
+                NonholonomicPos new_pos;
+                new_pos.pos = (glm::vec3)left_top_pos + glm::vec3(x, 0, z);
+
+                float f = astar->get_nonholonomic_f(new_pos, end_pos, new_pos, plain_a_star_path);
+
+                float color_value = f / max_f;
+
+                paint_voxel.color = glm::vec3(0.0, 0.0, color_value);
+                paint_voxel.visible = true;
+
+                voxel_editor.set((glm::ivec3)new_pos.pos - glm::ivec3(0, 1, 0), paint_voxel);
+            }
+
+        // start_pos.pos = camera->position;
+        // start_pos.theta = glm::radians(camera_controller->yaw);
+
+        // float angle = start_pos.theta; // or + 3.14159265f
+        // glm::vec3 dir(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
+        // start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir * 1.0f));
+    });
+}
+
 
 int main() {
     Engine3D* engine = new Engine3D();
@@ -277,8 +328,7 @@ int main() {
                 
             });
         }
-        if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {
-
+        if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
 
                 for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
@@ -296,6 +346,8 @@ int main() {
             nonholonomic_astar->initialize(start_pos, end_pos);
             simulation_running = false;
 
+            draw_f(window, camera, voxel_grid, nonholonomic_astar, nonholonomic_astar->state_plain_astar_path, start_pos, end_pos, 200);
+
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
 
                 for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.size(); i++) {
@@ -309,9 +361,6 @@ int main() {
                     voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
                 }
             });
-
-            
-
         }
 
 
