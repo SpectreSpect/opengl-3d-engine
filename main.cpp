@@ -31,6 +31,7 @@
 #include "triangle.h"
 #include "vtk_mesh_loader.h"
 #include "path_utils.h"
+#include "voxel_rasterizator_gpu.h"
 
 class Grid : public Drawable, public Transformable {
 public:
@@ -110,7 +111,29 @@ int main() {
 
     Triangle* triangle = new Triangle(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
 
-    VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(voxel_grid);
+    // VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(voxel_grid);
+
+    ComputeShader* k_count_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "count_cs.glsl").string());
+    ComputeShader* k_scan_blocks_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "scan_blocks_cs.glsl").string());
+    ComputeShader* k_add_block_offsets_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "add_block_offsets_cs.glsl").string());
+    ComputeShader* k_fix_last_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "fix_last_cs.glsl").string());
+    ComputeShader* k_copy_offsets_to_cursor_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "copy_offsets_to_cursor_cs.glsl").string());
+    ComputeShader* k_fill_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "fill_cs.glsl").string());
+    ComputeShader* k_voxelize_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "voxelize_cs.glsl").string());
+    ComputeShader* k_clear_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "clear_cs.glsl").string());
+
+    VoxelRasterizatorGPU* voxel_rastorizator = new VoxelRasterizatorGPU(
+        voxel_grid,
+        k_count_cs,
+        k_scan_blocks_cs,
+        k_add_block_offsets_cs,
+        k_fix_last_cs,
+        k_copy_offsets_to_cursor_cs,
+        k_fill_cs,
+        k_voxelize_cs,
+        k_clear_cs
+    );
+
     VtkMeshLoader* vtk_mesh_loader = new VtkMeshLoader(*cube->mesh->vertex_layout);
 
     MeshData model_mesh_data = vtk_mesh_loader->load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
@@ -158,20 +181,19 @@ int main() {
         if (ImGui::Button("Rasterize the triangle")) {
             // MeshData mesh_data = cube->create_mesh_data(cube->get_color());
 
-            auto voxel_generator = [&](glm::vec3 point) -> Voxel {
-                Voxel voxel;
-                voxel.color = glm::vec3(1.0f, 0.0f, 0.0f);
-                voxel.visible = rand() % 10000 > 5000;
-                return voxel;
-            };
+            // auto voxel_generator = [&](glm::vec3 point) -> Voxel {
+            //     Voxel voxel;
+            //     voxel.color = glm::vec3(1.0f, 0.0f, 0.0f);
+            //     voxel.visible = rand() % 10000 > 5000;
+            //     return voxel;
+            // };
 
-            voxel_rastorizator->rasterize_mesh(
+            voxel_rastorizator->rasterize(
                 model_mesh_data, 
                 model->get_model_matrix(), 
-                voxel_generator, 
+                *cube->mesh->vertex_layout, 
                 voxel_size, 
-                0, 
-                vertex_stride
+                voxel_grid->chunk_size.x
             );
         }
 

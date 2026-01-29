@@ -1,12 +1,14 @@
 #include "program.h"
 
-Program::Program(VertexShader* vertex_shader, FragmentShader* fragment_shader) {
-    // compile shaders and program
-    // GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
-    // GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);
+Program::Program() {
+    
+}
+
+Program::Program(std::vector<Shader*> shaders) {
     this->id = glCreateProgram();
-    glAttachShader(this->id, vertex_shader->id);
-    glAttachShader(this->id, fragment_shader->id);
+    for (Shader* shader : shaders)
+        glAttachShader(this->id, shader->id);
+
     glLinkProgram(this->id);
     GLint linkok; glGetProgramiv(this->id, GL_LINK_STATUS, &linkok);
     if (!linkok) {

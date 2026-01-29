@@ -146,12 +146,6 @@ MeshData VtkMeshLoader::load_mesh(std::string& file_path) const {
         memcpy(mesh_data.vertices.data() + normal_base2, normal_arr, sizeof(normal_arr));
         memcpy(mesh_data.vertices.data() + normal_base3, normal_arr, sizeof(normal_arr));
     }
-
-    for (int i = 0; i < default_vertex_data.size(); i++) {
-        std::cout << "[" << i << "]: " << mesh_data.vertices[default_vertex_data.size() * 50 + i] << std::endl;
-    }
-
-    std::cout << "count_vertices: " << mesh_data.vertices.size() << std::endl;
     
     return mesh_data;
 }

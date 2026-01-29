@@ -1,5 +1,9 @@
 #include "shader.h"
 
+Shader::~Shader() {
+    glDeleteShader(id);
+}
+
 std::string Shader::load_text_file(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {

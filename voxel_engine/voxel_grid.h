@@ -89,29 +89,19 @@ public:
         return (ux << (BITS * 2)) | (uy << BITS) | uz;
     }
 
-    // void update_chunk_meshes();
+    static glm::ivec3 unpack_key(uint64_t key) {
+        static_assert(BITS > 0 && 3 * BITS <= 64);
 
+        auto dec = [](uint64_t u) -> int32_t {
+            // u в диапазоне [0, 2^BITS - 1]
+            return static_cast<int32_t>(static_cast<int64_t>(u) - OFFSET);
+        };
 
-    // void unpack_key(uint64_t key, int32_t &cx, int32_t &cy, int32_t &cz) {
-    //     uint64_t ux = (key >> (BITS*2)) & MASK;
-    //     uint64_t uy = (key >> BITS) & MASK;
-    //     uint64_t uz = key & MASK;
-    //     cx = (int)( (int)ux - OFFSET );
-    //     cy = (int)( (int)uy - OFFSET );
-    //     cz = (int)( (int)uz - OFFSET );
+        uint64_t ux = (key >> (BITS * 2)) & MASK;
+        uint64_t uy = (key >> BITS)       & MASK;
+        uint64_t uz =  key                & MASK;
 
-    //     return (glm::vec3){cx, cy, cz}
-    // }
-
-    static glm::vec3 unpack_key(uint64_t key) {
-        uint64_t ux = (key >> (BITS*2)) & MASK;
-        uint64_t uy = (key >> BITS) & MASK;
-        uint64_t uz = key & MASK;
-        int32_t cx = (int)( (int)ux - OFFSET );
-        int32_t cy = (int)( (int)uy - OFFSET );
-        int32_t cz = (int)( (int)uz - OFFSET );
-
-        return glm::ivec3(cx, cy, cz);
+        return { dec(ux), dec(uy), dec(uz) };
     }
 
     bool is_voxel_free(glm::ivec3 pos);

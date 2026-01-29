@@ -46,6 +46,10 @@ add_executable(app
   voxel_engine/voxel_editor.cpp
   vtk_mesh_loader.cpp
   compute_shader.cpp
+  vf_program.cpp
+  compute_program.cpp
+  ssbo.cpp
+  voxel_rasterizator_gpu.cpp
 )
 
 function(add_copy_dir_target tgt src_dir dst_dir)
