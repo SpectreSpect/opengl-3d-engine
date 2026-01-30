@@ -18,6 +18,7 @@ uniform uvec3 uGridDim;
 uniform uint  uChunkVoxelCount;
 uniform uint  uChunkCount;
 uniform uint uActiveCount;
+uniform uint uTriCount;
 
 bool axisOverlap(vec3 axis, vec3 v0, vec3 v1, vec3 v2, vec3 halfSize)
 {
@@ -151,4 +152,15 @@ void main() {
 
     uint outIndex = activeIdx * uChunkVoxelCount + voxelIndex;
     outVoxels[outIndex] = outVal;
+
+    // uint voxelIndex = gl_GlobalInvocationID.x;
+    // uint activeIdx  = gl_WorkGroupID.y;
+
+    // if (voxelIndex >= uChunkVoxelCount) return;
+    // if (activeIdx  >= uActiveCount)     return;
+
+    // uint outIndex = activeIdx * uChunkVoxelCount + voxelIndex;
+
+    // // DEBUG: уникальное значение на activeIdx
+    // outVoxels[outIndex] = activeIdx + 1u;
 }

@@ -7,7 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace math_utils {
-    glm::vec3 bary_coords(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
+    inline glm::vec3 bary_coords(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
         glm::vec3 v0 = b - a;
         glm::vec3 v1 = c - a;
         glm::vec3 v2 = p - a;
@@ -25,5 +25,18 @@ namespace math_utils {
         float w = (d00 * d21 - d01 * d20) / denom;
         float u = 1.0f - v - w;
         return glm::vec3(u, v, w);
+    }
+
+    inline int floor_div(int a, int b) {
+        int q = a / b;
+        int r = a % b;
+        if (r < 0) --q;
+        return q;
+    }
+
+    inline int floor_mod(int a, int b) {
+        int r = a % b;
+        if (r < 0) r += b;
+        return r;
     }
 }

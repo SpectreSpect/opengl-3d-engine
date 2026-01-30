@@ -121,6 +121,9 @@ void main(){
     vec3 mn = min(p0, min(p1, p2));
     vec3 mx = max(p0, max(p1, p2));
 
+    mn -= vec3(1e-4);
+    mx += vec3(1e-4);
+
     ivec3 vmin = ivec3(floor(mn));
     ivec3 vmax = ivec3(ceil(mx)) - ivec3(1);
     vmax = max(vmax, vmin);

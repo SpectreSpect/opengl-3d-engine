@@ -76,14 +76,14 @@ void Engine3D::set_window(Window* window) {
                         GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 
 
-    glDebugMessageCallback(
-        [](GLenum source, GLenum type, GLuint id, GLenum severity,
-        GLsizei length, const GLchar* message, const void* userParam)
-        {
-            std::cerr << "[GL DEBUG] " << message << "\n";
-        },
-        nullptr
-    );
+    // glDebugMessageCallback(
+    //     [](GLenum source, GLenum type, GLuint id, GLenum severity,
+    //     GLsizei length, const GLchar* message, const void* userParam)
+    //     {
+    //         std::cerr << "[GL DEBUG] " << message << "\n";
+    //     },
+    //     nullptr
+    // );
 }
 
 // void Engine3D::set_camera(Camera* camera) {

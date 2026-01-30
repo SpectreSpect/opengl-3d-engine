@@ -117,14 +117,14 @@ void VoxelRasterizatorGPU::calculate_roi_on_cpu(const MeshData& mesh_data,
 
     // Переводим voxel-индексы в chunk-индексы (chunk_size в voxels)
     glm::ivec3 cmin(
-        floor_div_int(vmin.x, chunk_size),
-        floor_div_int(vmin.y, chunk_size),
-        floor_div_int(vmin.z, chunk_size)
+        math_utils::floor_div(vmin.x, chunk_size),
+        math_utils::floor_div(vmin.y, chunk_size),
+        math_utils::floor_div(vmin.z, chunk_size)
     );
     glm::ivec3 cmax(
-        floor_div_int(vmax.x, chunk_size),
-        floor_div_int(vmax.y, chunk_size),
-        floor_div_int(vmax.z, chunk_size)
+        math_utils::floor_div(vmax.x, chunk_size),
+        math_utils::floor_div(vmax.y, chunk_size),
+        math_utils::floor_div(vmax.z, chunk_size)
     );
 
     // dim = cmax - cmin + 1 (включительно)
@@ -334,6 +334,9 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
                                     const VertexLayout& vertex_layout,
                                     float voxel_size,
                                     int chunk_size) {
+    prog_voxelize_.print_program_log("voxelize");
+    prog_clear_.print_program_log("clear");
+
     // 0) ROI (пока на CPU)
     calculate_roi_on_cpu(mesh_data, transform, vertex_layout, voxel_size, chunk_size, /*pad_voxels=*/1);
 
@@ -584,6 +587,14 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
         if (bad) throw std::runtime_error("fill pass failed: cursor != offsets[i+1]");
     }
     //#################################DEBUG#############################
+
+    std::vector<uint32_t> triIdsDbg(last_total_pairs_);
+    tri_indices_ssbo_.read_subdata(0, triIdsDbg.data(), triIdsDbg.size() * 4);
+
+    uint32_t mxTid = 0;
+    for (auto v: triIdsDbg) mxTid = std::max(mxTid, v);
+    std::cout << "triIds max = " << mxTid << " (tri_count=" << tri_count << ")\n";
+
     
     // На этом этапе на GPU готов CSR:
     // offsets_ssbo_ (uint[chunkCount+1])
@@ -609,8 +620,8 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
     active_chunks_ssbo_.bind_base(6);
 
     prog_clear_.use();
-    glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uChunkVoxelCount"), chunkVoxelCount);
-    glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uActiveCount"), activeCount);
+    glUniform1ui(glGetUniformLocation(prog_clear_.id, "uChunkVoxelCount"), chunkVoxelCount);
+    glUniform1ui(glGetUniformLocation(prog_clear_.id, "uActiveCount"), activeCount);
     prog_clear_.dispatch_compute(groupsX, activeCount, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -623,6 +634,7 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
     glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uChunkVoxelCount"), chunkVoxelCount);
     glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uChunkCount"), chunk_count_);
     glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uActiveCount"), activeCount);
+    glUniform1ui(glGetUniformLocation(prog_voxelize_.id, "uTriCount"), tri_count);
 
     auto drain = [](){ while (glGetError()!=GL_NO_ERROR){} };
     drain();
@@ -678,6 +690,16 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
             }
         }
     }
+
+    glm::ivec3 mn_ = glm::ivec3(INT_MAX);
+    glm::ivec3 mx_ = glm::ivec3(INT_MIN);
+    for (auto p : voxel_positions) { 
+        mn_ = glm::min(mn_, p); 
+        mx_ = glm::max(mx_, p); 
+    }
+    std::cout << "voxel_positions AABB: "
+            << mn_.x<<","<<mn_.y<<","<<mn_.z<<" .. "
+            << mx_.x<<","<<mx_.y<<","<<mx_.z<<"\n";
 
     std::vector<Voxel> voxels;
     voxels.resize(voxel_positions.size());

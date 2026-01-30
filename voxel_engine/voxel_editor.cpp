@@ -49,6 +49,15 @@ void VoxelEditor::set(glm::ivec3 pos, const Voxel& voxel) {
     int ly = pos.y - chunk_pos.y * voxel_grid->chunk_size.y;
     int lz = pos.z - chunk_pos.z * voxel_grid->chunk_size.z;
 
+    if (lx < 0 || lx >= voxel_grid->chunk_size.x ||
+    ly < 0 || ly >= voxel_grid->chunk_size.y ||
+    lz < 0 || lz >= voxel_grid->chunk_size.z) {
+        std::cout << "BAD LOCAL: pos=("<<pos.x<<","<<pos.y<<","<<pos.z<<") "
+                << "chunk=("<<chunk_pos.x<<","<<chunk_pos.y<<","<<chunk_pos.z<<") "
+                << "local=("<<lx<<","<<ly<<","<<lz<<")\n";
+        std::abort();
+    }
+
     glm::ivec3 local_voxel_pos = glm::ivec3(lx, ly, lz);
     // uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
     uint32_t local_voxel_key = pack_local_id(local_voxel_pos, voxel_grid->chunk_size);

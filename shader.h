@@ -32,6 +32,7 @@ public:
         }
         return *this;
     }
+    void print_shader_log(const char* name = "NO NAME");
 
     static std::string load_text_file(const std::string& path);
     static GLuint compile_shader(GLenum type, const char* src);

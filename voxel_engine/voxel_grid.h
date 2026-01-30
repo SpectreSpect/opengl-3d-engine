@@ -13,6 +13,7 @@
 #include "../window.h"
 #include "voxel_editor.h"
 #include "../gridable.h"
+#include "../math_utils.h"
 
 struct MeshJob {
     uint64_t key;
@@ -52,20 +53,21 @@ class VoxelGrid;
 
 
 
-constexpr int BITS = 21;
-constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
-constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
+constexpr uint32_t BITS = 21;
+constexpr uint64_t MASK = (uint64_t(1) << BITS) - 1; // 0x1FFFFF
+constexpr int64_t OFFSET = int64_t(1) << (BITS - 1); // offset to encode signed -> unsigned
 
 class VoxelGrid : public Drawable, public Gridable, public Transformable  {
 public:
     // int chunk_render_distance = 8;
     glm::ivec3 chunk_render_size;
     glm::ivec3 chunk_size;
+    float voxel_size;
     std::unordered_map<uint64_t, Chunk*> chunks;
     std::set<uint64_t> chunks_to_update;
     // bool placed = false;
     
-    VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size = {16, 6, 16});
+    VoxelGrid(glm::ivec3 chunk_size, float voxel_size, glm::ivec3 chunk_render_size = {16, 6, 16});
     ~VoxelGrid();
 
     static uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
@@ -160,12 +162,12 @@ public:
         chunks_to_update.insert(pack_key(chunk_pos.x, chunk_pos.y-1, chunk_pos.z)); // bottom
     }
 
-    static glm::ivec3 get_chunk_pos(glm::vec3 pos, glm::ivec3 chunk_size) {
-        int cx = pos.x / chunk_size.x + ((int)pos.x % chunk_size.x < 0 ? -1 : 0);
-        int cy = pos.y / chunk_size.y + ((int)pos.y % chunk_size.y < 0 ? -1 : 0);
-        int cz = pos.z / chunk_size.z + ((int)pos.z % chunk_size.z < 0 ? -1 : 0);
-
-        return glm::ivec3(cx, cy, cz);
+    static glm::ivec3 get_chunk_pos(glm::ivec3 vpos, glm::ivec3 chunk_size) {
+        return {
+            math_utils::floor_div(vpos.x, chunk_size.x),
+            math_utils::floor_div(vpos.y, chunk_size.y),
+            math_utils::floor_div(vpos.z, chunk_size.z),
+        };
     }
 
     static inline uint32_t hash32(uint32_t x) {

@@ -17,6 +17,7 @@
 #include "ssbo.h"
 #include "compute_shader.h"
 #include "compute_program.h"
+#include "math_utils.h"
 
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
@@ -35,14 +36,6 @@ public:
         ComputeShader* k_clear_cs
     );
     ~VoxelRasterizatorGPU();
-
-    static inline int floor_div_int(int a, int b) {
-        // b > 0
-        int q = a / b;      // trunc toward 0
-        int r = a % b;
-        if (r != 0 && a < 0) --q; // корректируем до floor для отрицательных
-        return q;
-    }
 
     // ROI в координатах ЧАНКОВ (dense grid)
     void set_roi(glm::ivec3 chunk_origin, glm::uvec3 grid_dim);

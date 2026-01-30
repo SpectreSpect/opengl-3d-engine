@@ -26,7 +26,6 @@
 #include "voxel_engine/voxel_grid.h"
 #include "imgui_layer.h"
 #include "voxel_rastorizator.h"
-#include "math_utils.h"
 #include "ui_elements/triangle_controller.h"
 #include "triangle.h"
 #include "vtk_mesh_loader.h"
@@ -85,12 +84,11 @@ int main() {
     float timer = 0;
     float lastFrame = 0;
 
-    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
+    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
     // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
 
     int vertex_stride = 9;
-    float voxel_size = 1.0f;
-    float chunk_render_size = voxel_grid->chunk_size.x * voxel_size;
+    float chunk_render_size = voxel_grid->chunk_size.x * voxel_grid->voxel_size;
     TriangleController* triangle_controller = new TriangleController(chunk_render_size, chunk_render_size);
     
     glm::vec3 p0(0, chunk_render_size, 0.0f);
@@ -102,7 +100,7 @@ int main() {
     glm::vec3 c2(0.0f, 0.0f, 1.0f);
 
     glm::ivec3 triangle_chunk_pos = glm::ivec3(0, 2, 0);
-    glm::vec3 chunk_origin = glm::vec3(triangle_chunk_pos) * glm::vec3(voxel_grid->chunk_size) * voxel_size;
+    glm::vec3 chunk_origin = glm::vec3(triangle_chunk_pos) * glm::vec3(voxel_grid->chunk_size) * voxel_grid->voxel_size;
 
     Cube* cube = new Cube();
     cube->position = glm::vec3(0.0f, chunk_render_size * 5, 0.0f);
@@ -139,7 +137,7 @@ int main() {
     MeshData model_mesh_data = vtk_mesh_loader->load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
 
     Mesh* model = new Mesh(model_mesh_data.vertices, model_mesh_data.indices, cube->mesh->vertex_layout); 
-    model->position = {0.0f, chunk_render_size * 5, 0.0f};
+    model->position = {chunk_render_size * -10, chunk_render_size * 5, chunk_render_size * -10};
     model->scale = glm::vec3(5.0f);
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
@@ -192,7 +190,7 @@ int main() {
                 model_mesh_data, 
                 model->get_model_matrix(), 
                 *cube->mesh->vertex_layout, 
-                voxel_size, 
+                voxel_grid->voxel_size, 
                 voxel_grid->chunk_size.x
             );
         }
