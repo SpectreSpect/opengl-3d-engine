@@ -57,12 +57,6 @@ public:
                    float voxel_size,
                    int chunk_size);
 
-    void debug_rasterize(const MeshData& mesh_data,
-                   const glm::mat4& transform,
-                   const VertexLayout& vertex_layout,
-                   float voxel_size,
-                   int chunk_size);
-
     // Полезно для дебага/аллоков
     uint32_t last_total_pairs() const { return last_total_pairs_; }
     uint32_t chunk_count() const { return chunk_count_; }
