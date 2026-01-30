@@ -37,85 +37,77 @@ void VoxelRasterizatorGPU::set_roi(glm::ivec3 chunk_origin, glm::uvec3 grid_dim)
     roi_dim_ = grid_dim;
 }
 
-void VoxelRasterizatorGPU::calculate_roi_on_cpu(const MeshData& mesh_data,
-                                                const glm::mat4& transform,
-                                                const VertexLayout& vertex_layout,
-                                                float voxel_size,
-                                                int chunk_size,
-                                                int pad_voxels)
+void VoxelRasterizatorGPU::calculate_roi_on_cpu(
+    const MeshData& mesh_data,
+    const glm::mat4& transform,
+    const VertexLayout& vertex_layout,
+    float voxel_size,
+    int chunk_size,
+    int pad_voxels)
 {
-    if (voxel_size <= 0.0f) {
-        throw std::invalid_argument("calculate_roi_on_cpu: voxel_size must be > 0");
-    }
-    if (chunk_size <= 0) {
-        throw std::invalid_argument("calculate_roi_on_cpu: chunk_size must be > 0");
-    }
+    auto finite3 = [](const glm::vec3& v) {
+        return !glm::any(glm::isnan(v)) && !glm::any(glm::isinf(v));
+    };
 
-    // stride в float-ах (как ты делаешь в других местах)
-    if (vertex_layout.attributes.empty()) {
-        throw std::runtime_error("calculate_roi_on_cpu: vertex_layout.attributes is empty");
-    }
+
+    if (voxel_size <= 0.0f) throw std::invalid_argument("voxel_size must be > 0");
+    if (chunk_size <= 0)    throw std::invalid_argument("chunk_size must be > 0");
+    if (vertex_layout.attributes.empty()) throw std::runtime_error("vertex_layout.attributes is empty");
+
     const size_t stride_f = vertex_layout.attributes[0].stride / sizeof(float);
-    if (stride_f == 0) {
-        throw std::runtime_error("calculate_roi_on_cpu: stride is 0");
-    }
-    if (mesh_data.vertices.size() % stride_f != 0) {
-        throw std::runtime_error("calculate_roi_on_cpu: vertices size not multiple of stride");
-    }
+    if (stride_f == 0) throw std::runtime_error("stride is 0");
+    if (mesh_data.vertices.size() % stride_f != 0) throw std::runtime_error("vertices size not multiple of stride");
+    if (mesh_data.indices.size() % 3 != 0) throw std::runtime_error("indices size not multiple of 3");
+    if (mesh_data.indices.empty()) { set_roi(glm::ivec3(0), glm::uvec3(0)); return; }
 
-    int pos_attr = -1;
-    try {
-        pos_attr = vertex_layout.find_attribute_id_by_name("position");
-    } catch (...) {
-        throw std::runtime_error("calculate_roi_on_cpu: vertex_layout has no attribute named 'position'");
-    }
-
+    int pos_attr = vertex_layout.find_attribute_id_by_name("position");
     const size_t pos_off_f = vertex_layout.attributes[pos_attr].offset / sizeof(float);
-    if (pos_off_f + 2 >= stride_f) {
-        throw std::runtime_error("calculate_roi_on_cpu: position offset out of stride");
-    }
+    if (pos_off_f + 2 >= stride_f) throw std::runtime_error("position offset out of stride");
 
     const size_t vertex_count = mesh_data.vertices.size() / stride_f;
-    if (vertex_count == 0) {
-        // пусто -> ROI 0
-        set_roi(glm::ivec3(0), glm::uvec3(0));
-        return;
-    }
 
-    // AABB в voxel-space (float)
     glm::vec3 mn(std::numeric_limits<float>::infinity());
     glm::vec3 mx(-std::numeric_limits<float>::infinity());
 
-    for (size_t v = 0; v < vertex_count; ++v) {
-        const size_t base = v * stride_f + pos_off_f;
-
+    auto read_pos = [&](uint32_t vid) -> glm::vec3 {
+        if (vid >= vertex_count) throw std::runtime_error("index out of range");
+        size_t base = size_t(vid) * stride_f + pos_off_f;
         glm::vec4 p(mesh_data.vertices[base + 0],
                     mesh_data.vertices[base + 1],
                     mesh_data.vertices[base + 2],
                     1.0f);
-
         glm::vec3 pv = glm::vec3(transform * p) / voxel_size;
+        return pv;
+    };
 
+    // IMPORTANT: считаем AABB только по реально используемым вершинам
+    for (uint32_t idx : mesh_data.indices) {
+        glm::vec3 pv = read_pos(idx);
+        // на всякий (если где-то NaN)
+        if (!finite3(pv)) continue;
         mn = glm::min(mn, pv);
         mx = glm::max(mx, pv);
     }
 
-    // Делаем инклюзивный диапазон voxel-индексов так же, как в compute:
-    // vmin = floor(mn)
-    // vmax = ceil(mx) - 1
-    glm::ivec3 vmin = glm::ivec3(glm::floor(mn));
-    glm::ivec3 vmax = glm::ivec3(glm::ceil(mx)) - glm::ivec3(1);
+    if (!finite3(mn) || !finite3(mx)) {
+        set_roi(glm::ivec3(0), glm::uvec3(0));
+        return;
+    }
 
-    // На всякий случай (если mx < mn из-за NaN или чего-то такого)
+    // делаем так же, как в шейдерах count/fill
+    const float eps = 1e-4f;
+    mn -= glm::vec3(eps);
+    mx += glm::vec3(eps);
+
+    glm::ivec3 vmin = glm::ivec3(glm::floor(mn));
+    glm::ivec3 vmax = glm::ivec3(glm::floor(mx));
     vmax = glm::max(vmax, vmin);
 
-    // Паддинг в вокселях (полезно против пограничных float ошибок)
     if (pad_voxels > 0) {
         vmin -= glm::ivec3(pad_voxels);
         vmax += glm::ivec3(pad_voxels);
     }
 
-    // Переводим voxel-индексы в chunk-индексы (chunk_size в voxels)
     glm::ivec3 cmin(
         math_utils::floor_div(vmin.x, chunk_size),
         math_utils::floor_div(vmin.y, chunk_size),
@@ -127,12 +119,13 @@ void VoxelRasterizatorGPU::calculate_roi_on_cpu(const MeshData& mesh_data,
         math_utils::floor_div(vmax.z, chunk_size)
     );
 
-    // dim = cmax - cmin + 1 (включительно)
     glm::ivec3 dim_i = cmax - cmin + glm::ivec3(1);
-    dim_i = glm::max(dim_i, glm::ivec3(0)); // на всякий
+    dim_i = glm::max(dim_i, glm::ivec3(0));
 
     set_roi(cmin, glm::uvec3(dim_i));
 }
+
+
 
 void VoxelRasterizatorGPU::ensure_roi_buffers(size_t vertex_count, size_t tri_count, uint32_t chunk_count, uint32_t chunk_voxel_count) {
     #ifdef VOXEL_RAST_DEBUG
@@ -213,7 +206,7 @@ void VoxelRasterizatorGPU::ensure_active_chunk_buffers(uint32_t chunk_voxel_coun
     }
 }
 
-void VoxelRasterizatorGPU::upload_positions_tris_colors(const MeshData& mesh_data, const VertexLayout& layout) {
+std::pair<std::vector<glm::vec4>, std::vector<glm::uvec4>> VoxelRasterizatorGPU::upload_positions_tris_colors(const MeshData& mesh_data, const VertexLayout& layout) {
     // Вытаскиваем ТОЛЬКО позиции (vec3) + треугольники (uvec3) на CPU и заливаем в SSBO.
     // Это дешево и упрощает compute.
     const size_t stride_f = layout.attributes[0].stride / sizeof(float);
@@ -278,6 +271,8 @@ void VoxelRasterizatorGPU::upload_positions_tris_colors(const MeshData& mesh_dat
     positions_ssbo_.update_discard(positions.data(), positions.size() * sizeof(glm::vec4));
     colors_ssbo_.update_discard(colors.data(), colors.size() * sizeof(glm::vec4));
     tris_ssbo_.update_discard(tris.data(), tris.size() * sizeof(glm::uvec4));
+
+    return std::pair<std::vector<glm::vec4>, std::vector<glm::uvec4>>(positions, tris);
 }
 
 void VoxelRasterizatorGPU::ensure_scan_level(uint32_t level, uint32_t numBlocks) {
@@ -717,3 +712,266 @@ void VoxelRasterizatorGPU::rasterize(const MeshData& mesh_data,
 
     gridable->set_voxels(voxels, voxel_positions);
 }
+
+void VoxelRasterizatorGPU::debug_rasterize(const MeshData& mesh_data,
+                                        const glm::mat4& transform,
+                                        const VertexLayout& vertex_layout,
+                                        float voxel_size,
+                                        int chunk_size) {
+    prog_voxelize_.print_program_log("voxelize");
+    prog_clear_.print_program_log("clear");
+
+    // 0) ROI (пока на CPU)
+    calculate_roi_on_cpu(mesh_data, transform, vertex_layout, voxel_size, chunk_size, /*pad_voxels=*/1);
+
+    std::cout << "roi_origin_: (" << roi_origin_.x << ", " << roi_origin_.y << ", " << roi_origin_.z << ")" << std::endl;
+    std::cout << "roi_dim_: (" << roi_dim_.x << ", " << roi_dim_.y << ", " << roi_dim_.z << ")" << std::endl;
+
+    chunk_count_ = roi_chunk_count();
+    if (chunk_count_ == 0 || roi_dim_.x == 0 || roi_dim_.y == 0 || roi_dim_.z == 0) {
+        last_total_pairs_ = 0;
+        return;
+    }
+
+    const size_t stride_f = vertex_layout.attributes[0].stride / sizeof(float);
+    if (stride_f == 0 || (mesh_data.vertices.size() % stride_f) != 0 || (mesh_data.indices.size() % 3) != 0) {
+        last_total_pairs_ = 0;
+        return;
+    }
+
+    const size_t vertex_count = mesh_data.vertices.size() / stride_f;
+    const uint32_t tri_count  = static_cast<uint32_t>(mesh_data.indices.size() / 3);
+    if (vertex_count == 0 || tri_count == 0) {
+        last_total_pairs_ = 0;
+        return;
+    }
+
+    const uint32_t chunk_voxel_count =
+        uint32_t(chunk_size) * uint32_t(chunk_size) * uint32_t(chunk_size);
+
+    // 1) Буферы (pair_capacity пока 1, после scan расширим)
+    ensure_roi_buffers(vertex_count, tri_count, chunk_count_, chunk_voxel_count);
+
+    // 2) Upload: позиции/цвета/трисы
+    auto pos_tris = upload_positions_tris_colors(mesh_data, vertex_layout);
+
+    // std::vector<uint32_t> counters;
+    // count_cs_cpu_equiv(pos_tris.first, pos_tris.second, transform, voxel_size, chunk_size, roi_origin_, roi_dim_, counters);
+
+    // // 3) Очистить counters
+    // {
+    //     uint32_t zero = 0;
+    //     counters_ssbo_.bind();
+    //     glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    //     SSBO::unbind();
+    // }
+
+// #if defined(VOXEL_RAST_DEBUG)
+//     // если count-шейдер пишет в debug_ssbo_ — очищаем (иначе можно удалить полностью)
+//     {
+//         int32_t z = 0;
+//         debug_ssbo_.bind();
+//         glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32I, GL_RED_INTEGER, GL_INT, &z);
+//         SSBO::unbind();
+//     }
+// #endif
+
+    // 4) Pass1: COUNT (GPU)
+    {
+        positions_ssbo_.bind_base(0);
+        tris_ssbo_.bind_base(1);
+        counters_ssbo_.bind_base(2);
+#if defined(VOXEL_RAST_DEBUG)
+        debug_ssbo_.bind_base(3);
+#endif
+
+        prog_count_.use();
+
+        glUniformMatrix4fv(glGetUniformLocation(prog_count_.id, "uTransform"), 1, GL_FALSE, &transform[0][0]);
+        glUniform1f       (glGetUniformLocation(prog_count_.id, "uVoxelSize"), voxel_size);
+        glUniform1i       (glGetUniformLocation(prog_count_.id, "uChunkSize"), chunk_size);
+        glUniform3i       (glGetUniformLocation(prog_count_.id, "uChunkOrigin"), roi_origin_.x, roi_origin_.y, roi_origin_.z);
+        glUniform3ui      (glGetUniformLocation(prog_count_.id, "uGridDim"), roi_dim_.x, roi_dim_.y, roi_dim_.z);
+        glUniform1ui      (glGetUniformLocation(prog_count_.id, "uTriCount"), tri_count);
+
+        const uint32_t tg = div_up_u32(tri_count, 256u);
+        if (tg > 0) {
+            prog_count_.dispatch_compute(tg, 1, 1);
+        }
+
+        // Важно: чтобы записи в SSBO стали видимы для readback/следующих проходов
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    }
+
+// #if defined(VOXEL_RAST_DEBUG)
+//     // (опционально) читать dbg буфер
+//     {
+//         std::vector<int32_t> dbg(32, 0);
+//         debug_ssbo_.read_subdata(0, dbg.data(), dbg.size() * sizeof(int32_t));
+
+//         std::cout
+//             << "dbg trianglesProcessed=" << dbg[0] << "\n"
+//             << "dbg wroteOnce=" << dbg[1] << "\n"
+//             << "vmin=" << dbg[2] << "," << dbg[3] << "," << dbg[4] << "\n"
+//             << "vmax=" << dbg[5] << "," << dbg[6] << "," << dbg[7] << "\n"
+//             << "cmin=" << dbg[8] << "," << dbg[9] << "," << dbg[10] << "\n"
+//             << "cmax=" << dbg[11] << "," << dbg[12] << "," << dbg[13] << "\n"
+//             << "roiOrigin=" << dbg[14] << "," << dbg[15] << "," << dbg[16] << "\n"
+//             << "addsInROI=" << dbg[17] << "\n"
+//             << "gridDim=" << dbg[18] << "," << dbg[19] << "," << dbg[20] << "\n";
+//     }
+// #endif
+
+//     // ---------- Pass2 (CPU): counters -> offsets/cursor (debugged) ----------
+
+    // 1) Read counters from GPU
+    std::vector<uint32_t> counters(chunk_count_);
+    counters_ssbo_.read_subdata(0, counters.data(),
+                            counters.size() * sizeof(uint32_t));
+
+    // 2) Quick stats
+    uint64_t sum = 0;
+    uint32_t mx = 0;
+    uint32_t nonzero = 0;
+    for (uint32_t v : counters) {
+        sum += v;
+        mx = std::max(mx, v);
+        if (v) ++nonzero;
+    }
+
+//     std::cout << "[CPU scan] counters: sum=" << sum
+//             << " max=" << mx
+//             << " nonzero=" << nonzero
+//             << " chunk_count=" << chunk_count_ << "\n";
+
+//     // 3) Exclusive prefix sum -> offsets (chunk_count_ + 1)
+//     std::vector<uint32_t> offsets(chunk_count_ + 1);
+//     offsets[0] = 0;
+
+//     uint64_t pref = 0;
+//     for (uint32_t i = 0; i < chunk_count_; ++i) {
+//         pref += counters[i];
+
+//         if (pref > uint64_t(std::numeric_limits<uint32_t>::max())) {
+//             throw std::runtime_error("totalPairs overflow uint32 (shrink ROI or use uint64 offsets)");
+//         }
+
+//         offsets[i + 1] = (uint32_t)pref;
+//     }
+
+//     last_total_pairs_ = (uint32_t)pref;
+//     std::cout << "[CPU scan] totalPairs=" << last_total_pairs_ << "\n";
+
+//     // 4) Invariants
+//     if (offsets[0] != 0) {
+//         throw std::runtime_error("offsets[0] != 0");
+//     }
+//     if (offsets.back() != last_total_pairs_) {
+//         throw std::runtime_error("offsets[last] != totalPairs");
+//     }
+//     for (uint32_t i = 0; i < chunk_count_; ++i) {
+//         if (offsets[i] > offsets[i + 1]) {
+//             throw std::runtime_error("offsets not monotonic");
+//         }
+//         if ((offsets[i + 1] - offsets[i]) != counters[i]) {
+//             throw std::runtime_error("offsets diff != counters[i]");
+//         }
+//     }
+
+    // 5) Print first few nonzero chunks (optional but useful)
+    auto idx_to_chunk = [&](uint32_t idx) -> glm::ivec3 {
+        uint32_t x = idx % roi_dim_.x;
+        uint32_t y = (idx / roi_dim_.x) % roi_dim_.y;
+        uint32_t z = idx / (roi_dim_.x * roi_dim_.y);
+        return roi_origin_ + glm::ivec3((int)x, (int)y, (int)z);
+    };
+
+    // int printed = 0;
+    // for (uint32_t i = 0; i < chunk_count_ && printed < 10; ++i) {
+    //     if (counters[i] == 0) continue;
+    //     glm::ivec3 c = idx_to_chunk(i);
+    //     std::cout << "  nonzero[" << printed << "]: idx=" << i
+    //             << " cnt=" << counters[i]
+    //             << " chunk=(" << c.x << "," << c.y << "," << c.z << ")\n";
+    //     ++printed;
+    // }
+
+    // // 6) If empty -> exit early
+    // if (last_total_pairs_ == 0) {
+    //     return;
+    // }
+
+    // // 8) Upload offsets/cursor/totalPairs to GPU
+    // offsets_ssbo_.update_discard(offsets.data(), offsets.size() * sizeof(uint32_t));
+    // cursor_ssbo_.update_discard(offsets.data(), chunk_count_ * sizeof(uint32_t));
+    // total_pairs_ssbo_.update_discard(&last_total_pairs_, sizeof(uint32_t));
+
+    // // 9) Verify offsets[last] on GPU
+    // uint32_t gpu_last = 0;
+    // offsets_ssbo_.read_subdata(chunk_count_ * sizeof(uint32_t), &gpu_last, sizeof(uint32_t));
+
+    // std::cout << "[GPU verify] offsets[last]=" << gpu_last
+    //         << " expected=" << last_total_pairs_ << "\n";
+
+    // if (gpu_last != last_total_pairs_) {
+    //     throw std::runtime_error("GPU offsets[last] mismatch after upload");
+    // }
+
+    std::vector<uint32_t> active_chunks;
+    active_chunks.reserve(nonzero);
+
+    for (uint32_t i = 0; i < chunk_count_; ++i) {
+        if (counters[i] != 0) 
+        active_chunks.push_back(i);
+    }
+
+    uint32_t activeCount = (uint32_t)active_chunks.size();
+    // if (activeCount == 0) return;
+
+    // ensure_active_chunk_buffers(chunk_voxel_count, last_total_pairs_, activeCount);
+
+    // active_chunks_ssbo_.update_discard(active_chunks.data(), active_chunks.size() * sizeof(uint32_t));
+
+// ---------- end Pass2 ----------
+    
+    std::vector<glm::ivec3> voxel_positions;
+    voxel_positions.reserve((size_t)activeCount * chunk_size * chunk_size); // грубая оценка
+
+    std::vector<Voxel> voxels;
+    voxels.reserve(voxel_positions.capacity());
+
+    // ROI bounds in voxel coordinates (inclusive)
+    const glm::ivec3 roi_min_vox = roi_origin_ * chunk_size;
+    const glm::ivec3 roi_max_vox = (roi_origin_ + glm::ivec3(roi_dim_)) * chunk_size - glm::ivec3(1);
+
+    auto is_on_roi_boundary = [&](const glm::ivec3& p) -> bool {
+        return (p.x == roi_min_vox.x || p.x == roi_max_vox.x ||
+                p.y == roi_min_vox.y || p.y == roi_max_vox.y ||
+                p.z == roi_min_vox.z || p.z == roi_max_vox.z);
+    };
+
+    for (uint32_t i = 0; i < (uint32_t)activeCount; ++i) {
+        glm::ivec3 chunk_pos = idx_to_chunk(active_chunks[i]);     // chunk coords
+        glm::ivec3 chunk_base = chunk_pos * chunk_size;            // voxel coords base
+
+        for (int x = 0; x < chunk_size; ++x)
+        for (int y = 0; y < chunk_size; ++y)
+        for (int z = 0; z < chunk_size; ++z) {
+            glm::ivec3 voxel_pos = chunk_base + glm::ivec3(x, y, z);
+
+            // if (!is_on_roi_boundary(voxel_pos))
+            //     continue;
+
+            voxel_positions.push_back(voxel_pos);
+
+            Voxel v{};
+            v.visible = true;
+            v.color = glm::vec3(1.0f, 0.0f, 0.0f);
+            voxels.push_back(v);
+        }
+    }
+
+    gridable->set_voxels(voxels, voxel_positions);
+
+}
+
