@@ -60,10 +60,8 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 // std::cout << new_occupancy_cell.solid << std::endl;
 
 
-                if (ground_occupancy_cell.curvature <= 0.8f)
-                    continue;
-                
-                
+                if (ground_occupancy_cell.curvature >= curvuture_limit)
+                    continue;   
 
                 uint64_t new_key = grid->pack_key(new_pos.x, new_pos.y, new_pos.z);
                 auto heap_it = closed_heap.find(new_key);

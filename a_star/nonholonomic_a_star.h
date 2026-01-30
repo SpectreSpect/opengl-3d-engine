@@ -139,7 +139,7 @@ public:
     bool use_reed_shepps_fallback = true;
     uint64_t state_counter = 0;
     int iteration_limit = 10000;
-    bool add_lines = true;
+    bool add_lines = false;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -180,6 +180,7 @@ public:
     std::vector<NonholonomicPos> reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos);
     std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
     void initialize(NonholonomicPos start_pos, NonholonomicPos end_pos);
+    bool crosses_extreme_curvuture(const std::vector<NonholonomicPos>& path, float curvature_limit);
     bool find_nonholomic_path_step();
     std::vector<NonholonomicPos> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
     

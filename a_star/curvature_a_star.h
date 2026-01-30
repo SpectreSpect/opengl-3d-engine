@@ -8,5 +8,7 @@
 
 class CurvatureAStar : public AStar {
 public:
+    const float curvuture_limit = 0.2f;
+
     PlainAstarData find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) override;
 };

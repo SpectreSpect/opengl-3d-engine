@@ -275,6 +275,7 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
 
         float h = height_at(gx, gz);
         int y_surface = (int)std::floor(h);
+        // int y_surface = 0;
 
         float cosUp = cos_up_at(gx, gz); // <-- the value you asked for
 
@@ -295,7 +296,7 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
                 if (cosUp <= 0.8)
                     (*voxels)[id].color = curvature_color;
                 
-                (*voxels)[id].curvature = cosUp;
+                (*voxels)[id].curvature = 1.0f - cosUp;
                 
 
                 // if (gy == y_surface) {

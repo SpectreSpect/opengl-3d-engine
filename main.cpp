@@ -238,13 +238,16 @@ int main() {
                 for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
                     // nonholonomic_astar->state_plain_astar_path[i]
                     glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
+                    glm::ivec3 ground_voxel_pos = pos + glm::ivec3(0, -1, 0);
+
+                    Voxel old_voxel = voxel_editor.get(ground_voxel_pos);
 
                     Voxel voxel;
                     voxel.color = {0.0, 1.0, 0.0};
                     voxel.visible = true;
-                    voxel.curvature = 1.0f;
+                    voxel.curvature = old_voxel.curvature;
 
-                    voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
+                    voxel_editor.set(ground_voxel_pos, voxel);
                 }
             });
         }

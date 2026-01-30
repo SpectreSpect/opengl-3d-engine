@@ -479,9 +479,23 @@ std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_
 
 DistToPathData NonholonomicAStar::dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path) {
     int id = 0;
-    float min_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[id]);
+    float min_dist = 99999;
+    if (path.size() > 0) {
+        glm::vec3 cur_pos = (glm::vec3)pos;
+        glm::vec3 path_pos = (glm::vec3)path[id];
+        path_pos.y = cur_pos.y;
+
+        min_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[id]);
+    }
+        
+    
     for (int i = 0; i < path.size(); i++) {
-        float cur_dist = glm::distance((glm::vec3)pos, (glm::vec3)path[i]);
+        glm::vec3 cur_pos = (glm::vec3)pos;
+        glm::vec3 path_pos = (glm::vec3)path[i];
+
+        path_pos.y = cur_pos.y;
+
+        float cur_dist = glm::distance(cur_pos, path_pos);
         
         if (cur_dist < min_dist) {
             min_dist = cur_dist;
@@ -529,31 +543,42 @@ float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, Nonholonomi
     new_pos.pos.y = 0;
     end_pos.pos.y = 0;
 
+    
+
     // float dist_to_plain_path = dist_to_path(new_pos.pos, plain_a_star_path) * 10;
 
-    DistToPathData dist_to_path_data = dist_to_path(new_pos.pos, plain_a_star_path.path);
+    
+    
 
     // float follow_plain_astar_f = follow_plain_astar_heuristic(new_pos.pos, plain_a_star_path);
-    float follow_plain_astar_f = plain_a_star_path.dist_to_end[dist_to_path_data.id] + dist_to_path_data.dist;
-    float orientation_score = 0;
-    float theta_dist_threshold = 10;
-    float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
+    float follow_plain_astar_f = 0;
+    if (plain_a_star_path.path.size() > 0) {
+        DistToPathData dist_to_path_data = dist_to_path(new_pos.pos, plain_a_star_path.path);
+        follow_plain_astar_f = plain_a_star_path.dist_to_end[dist_to_path_data.id] + dist_to_path_data.dist;
+    }
+    
+    // float orientation_score = 0;
+    // float theta_dist_threshold = 10;
+    // float found_distance = glm::distance((glm::vec3)new_pos.pos, (glm::vec3)state_end_pos.pos);
 
     // if (found_distance < theta_dist_threshold)
     //     orientation_score = std::abs(angle_diff(new_pos.theta, state_end_pos.theta)) * (found_distance / theta_dist_threshold);
     
-    float dist_to_end = get_heuristic(new_pos.pos, end_pos.pos);
+    
+    // float dist_to_end = get_heuristic(new_pos.pos, end_pos.pos);
 
     // float f = dist_to_plain_path + dist_to_end + orientation_score * 2;
     float f = follow_plain_astar_f;
 
-    if (new_pos.dir == -1)
-        f += switch_dir_pentalty;
+    // std::cout << f << std::endl;
 
-    if (new_pos.steer == -1 || new_pos.steer == 1)
-        f += change_steer_pentalty;
+    // if (new_pos.dir == -1)
+    //     f += switch_dir_pentalty;
 
-    float reeds_shepp_f = reeds_shepp_distance(new_pos, end_pos);
+    // if (new_pos.steer == -1 || new_pos.steer == 1)
+    //     f += change_steer_pentalty;
+
+    // float reeds_shepp_f = reeds_shepp_distance(new_pos, end_pos);
 
     // return follow_plain_astar_f + reeds_shepp_f;
     return f;
@@ -591,7 +616,9 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     //             // }
     //         }
 
-    state_plain_astar_path = find_path(start_pos.pos, end_pos.pos);
+    state_plain_astar_path = find_path(glm::ivec3(glm::floor(start_pos.pos)), glm::ivec3(glm::floor(end_pos.pos)));
+
+    // std::cout << state_plain_astar_path.path.size() << std::endl;
     // grid->extra_cells.clear();
     // PlainAstarData path2 = find_path(end_pos_1, end_pos_2);
 
@@ -618,6 +645,17 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
             delete state_lines[i];
     }
     state_lines = std::vector<Line*>();
+}
+
+bool NonholonomicAStar::crosses_extreme_curvuture(const std::vector<NonholonomicPos>& path, float curvature_limit) {
+    for (int i = 0; i < path.size(); i++) {
+        glm::ivec3 ground_cell_pos = glm::ivec3(glm::floor(path[i].pos)) - glm::ivec3(0, 1, 0);
+        OccupancyCell ground_cell = grid->get_cell(ground_cell_pos);
+        if (ground_cell.curvature >= curvature_limit) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool NonholonomicAStar::find_nonholomic_path_step() {
@@ -680,7 +718,7 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         std::cout << "Limit exceeded" << std::endl;
         return true;
     }
-
+    
     
     state_closed_heap[cur_key] = cur_cell;
 
@@ -697,11 +735,14 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, state_end_pos);
         if (reeds_shepp_path.size() > 0)
             if (adjust_and_check_path(reeds_shepp_path))
-                state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end());
+                if (!crosses_extreme_curvuture(reeds_shepp_path, curvuture_limit))
+                    state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end());
         
         std::cout << "3. Almost equal = true (with reeds-shepp fallback)" << std::endl;
         return true;
     }
+
+    
 
     if (use_reed_shepps_fallback)
         if (state_counter % try_reeds_shepp_interval == 0) {
@@ -709,14 +750,18 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
 
             if (reeds_shepp_path.size() > 0) {
                 if (adjust_and_check_path(reeds_shepp_path)) {
-                    state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
-                    state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
-                    
-                    std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
-                    return true;
+                    if (!crosses_extreme_curvuture(reeds_shepp_path, curvuture_limit)) {
+                        state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
+                        state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
+                        
+                        std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
+                        return true;
+                    }
                 } 
             }
         }
+    
+    
         
     for (int dir = -1; dir <= 1; dir += 2)
         for (int steer = -1; steer <= 1; steer++) {
@@ -726,25 +771,32 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             for (int i = 0; i < motion.size() - 1; i++)
                 motion_dist += glm::distance(motion[i].pos, motion[i+1].pos);
 
-            NonholonomicPos new_pos = motion[motion.size() - 1];
+            
 
             bool need_continue = false;
-            float last_y = new_pos.pos.y;
+            float last_y = motion[0].pos.y;
             for (int i = 0; i < motion.size(); i++) {
-                NonholonomicPos intermidiate_pos = motion[i];
-                glm::ivec3 vecpos = glm::ivec3(glm::floor(intermidiate_pos.pos));
-                intermidiate_pos.pos.y = last_y;
+                glm::ivec3 vecpos = glm::ivec3(glm::floor(motion[i].pos));
+                motion[i].pos.y = last_y;
 
                 if (!adjust_to_ground(vecpos)) {
                     need_continue = true;
                     break;
                 }
+
+                // OccupancyCell ground_occupancy_cell = grid->get_cell(vecpos - glm::ivec3(0, 1, 0));
+                // if (ground_occupancy_cell.curvature >= curvuture_limit) {
+                //     need_continue = true;
+                //     break;
+                // }
                     
-                intermidiate_pos.pos.y = vecpos.y;
+                motion[i].pos.y = vecpos.y;
             }
 
             if (need_continue)                    
                 continue;
+            
+            NonholonomicPos new_pos = motion[motion.size() - 1];
 
             uint64_t new_key = state_key(new_pos);
             auto heap_it = state_closed_heap.find(new_key);
@@ -752,16 +804,18 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
                 continue;
             
 
-            glm::vec3 pos1 = cur_cell.pos.pos;
-            glm::vec3 pos2 = new_pos.pos;
+            // glm::vec3 pos1 = cur_cell.pos.pos;
+            // glm::vec3 pos2 = new_pos.pos;
+
+            
 
             // float v1 = 1;
 
             // if (dir == -1)
             //     v1 = 1.5;
 
-            pos1.y = 0;
-            pos2.y = 0;
+            // pos1.y = 0;
+            // pos2.y = 0;
             // float new_g = cur_cell.g * v1  + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
             // float new_g = cur_cell.g + glm::distance((glm::vec3)pos1, (glm::vec3)pos2);
             float new_g = cur_cell.g + motion_dist;
@@ -777,6 +831,9 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
                     
             }
             
+
+            
+
             state_g_score[new_key] = new_g;
 
             NonholonomicAStarCell new_cell;
@@ -787,10 +844,10 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             new_cell.no_parent = false;
             new_cell.g = new_g;
 
-            pos1 = new_pos.pos;
-            pos2 = state_end_pos.pos;
-            pos1.y = 0;
-            pos2.y = 0;
+            // pos1 = new_pos.pos;
+            // pos2 = state_end_pos.pos;
+            // pos1.y = 0;
+            // pos2.y = 0;
             // new_cell.f = new_g;
             
             // new_cell.f = new_g + get_heuristic(pos1, pos2) + dist_to_plain_path + change_steer_pentalty + switch_dir_pentalty;
@@ -807,7 +864,11 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
 
             // new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
             // new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
-            new_cell.f = new_g * 0.2 + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
+            
+            // new_cell.f = get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
+            new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
+
+            
 
             // float dist = glm::distance(new_pos.pos, state_end_pos.pos);
             // float theta_diff = std::abs(angle_diff(new_pos.theta, state_end_pos.theta));
