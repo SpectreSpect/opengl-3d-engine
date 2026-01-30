@@ -45,41 +45,41 @@ PlainAstarData AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> c
     return plain_astar_data;
 }
 
-bool AStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_drop) {
-    auto solid = [&](const glm::ivec3& q) {
-        return grid->get_cell(q).solid;
-    };
+// bool AStar::adjust_to_ground(glm::ivec3& voxel_pos, int max_step_up, int max_drop) {
+//     auto solid = [&](const glm::ivec3& q) {
+//         return grid->get_cell(q).solid;
+//     };
 
-    // 1) If we're inside solid, try stepping up
-    if (solid(voxel_pos)) {
-        bool freed = false;
-        for (int k = 1; k <= max_step_up; ++k) {
-            glm::ivec3 up = voxel_pos + glm::ivec3(0, k, 0);
-            if (!solid(up)) {
-                voxel_pos = up;
-                freed = true;
-                break;
-            }
-        }
-        if (!freed) return false;
-    }
+//     // 1) If we're inside solid, try stepping up
+//     if (solid(voxel_pos)) {
+//         bool freed = false;
+//         for (int k = 1; k <= max_step_up; ++k) {
+//             glm::ivec3 up = voxel_pos + glm::ivec3(0, k, 0);
+//             if (!solid(up)) {
+//                 voxel_pos = up;
+//                 freed = true;
+//                 break;
+//             }
+//         }
+//         if (!freed) return false;
+//     }
 
-    // 2) Now find a y such that: current is empty AND below is solid
-    // (and don't drop more than max_drop)
-    for (int drop = 0; drop <= max_drop; ++drop) {
-        if (!solid(voxel_pos) && solid(voxel_pos + glm::ivec3(0, -1, 0)))
-            return true;
+//     // 2) Now find a y such that: current is empty AND below is solid
+//     // (and don't drop more than max_drop)
+//     for (int drop = 0; drop <= max_drop; ++drop) {
+//         if (!solid(voxel_pos) && solid(voxel_pos + glm::ivec3(0, -1, 0)))
+//             return true;
 
-        // If we somehow are in solid, we're already too low → reject
-        // (or you could step up 1, but reject is safer)
-        if (solid(voxel_pos))
-            return false;
+//         // If we somehow are in solid, we're already too low → reject
+//         // (or you could step up 1, but reject is safer)
+//         if (solid(voxel_pos))
+//             return false;
 
-        voxel_pos.y -= 1;
-    }
+//         voxel_pos.y -= 1;
+//     }
 
-    return false;
-}
+//     return false;
+// }
 
 // float my_smoothstep(float e0, float e1, float x) {
 //     float t = glm::clamp((x - e0) / (e1 - e0), 0.0f, 1.0f);
@@ -160,9 +160,9 @@ PlainAstarData AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
                 int ny = cur_cell.pos.y;
                 int nz = dz + cur_cell.pos.z;
 
-                glm::ivec3 new_pos = glm::ivec3(nx, ny, nz);
+                glm::vec3 new_pos = glm::vec3(nx, ny, nz);
 
-                if (!adjust_to_ground(new_pos))
+                if (!grid->adjust_to_ground(new_pos, max_step_up, max_drop, max_y_diff))
                     continue;
 
                 uint64_t new_key = grid->pack_key(new_pos.x, new_pos.y, new_pos.z);

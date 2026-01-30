@@ -151,6 +151,8 @@ int main() {
 
     NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
     bool simulation_running = false;
+
+    bool TEMPPPPPPPPPPPPPPPPp = true;
     
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -183,6 +185,7 @@ int main() {
         }
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
+            TEMPPPPPPPPPPPPPPPPp = true;
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
@@ -211,6 +214,58 @@ int main() {
                 }
             });
         }
+
+        if (glfwGetKey(window->window, GLFW_KEY_Q) == GLFW_PRESS) {   
+            glm::vec3 camera_dir = glm::normalize(camera->front);
+            glm::vec3 start_pos = camera->position;
+            glm::vec3 end_pos = camera->position + camera_dir * 100.0f;
+            
+            std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
+            // voxel_grid->adjust_to_ground(intersected_voxel_poses);
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
+                Voxel new_voxel = Voxel();
+
+                for (int i = 0; i < intersected_voxel_poses.size(); i++) {
+                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+                    new_voxel.visible = true;
+                    
+                    voxel_editor.set(intersected_voxel_poses[i], new_voxel);
+                }
+            });
+        }
+
+        if (glfwGetKey(window->window, GLFW_KEY_E) == GLFW_PRESS && TEMPPPPPPPPPPPPPPPPp) {  
+            TEMPPPPPPPPPPPPPPPPp = false; 
+            // glm::vec3 camera_dir = glm::normalize(camera->front);
+            // glm::vec3 start_pos = camera->position;
+            // glm::vec3 end_pos = camera->position + camera_dir * 100.0f;
+
+            std::vector<glm::ivec3> output;
+            std::vector<glm::vec3> polyline;
+
+            polyline.push_back(start_pos.pos);
+            polyline.push_back(camera->position);
+            polyline.push_back(end_pos.pos);
+
+            voxel_grid->get_ground_positions(polyline, output);
+
+            
+            // std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
+            // voxel_grid->adjust_to_ground(intersected_voxel_poses);
+
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
+                Voxel new_voxel = Voxel();
+
+                for (int i = 0; i < output.size(); i++) {
+                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+                    new_voxel.visible = true;
+                    
+                    voxel_editor.set(output[i], new_voxel);
+                }
+            });
+        }
+        // std::cout << nonholonomic_astar->state_pq.size() << std::endl;
 
         if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
             // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {

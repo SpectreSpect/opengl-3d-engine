@@ -51,6 +51,7 @@ add_executable(app
   line.cpp
   a_star/nonholonomic_a_star.cpp
   a_star/curvature_a_star.cpp
+  grid_3d.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")

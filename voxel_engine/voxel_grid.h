@@ -13,6 +13,7 @@
 #include "../window.h"
 #include "voxel_editor.h"
 #include <algorithm> 
+#include "../grid_3d.h"
 
 struct MeshJob {
     uint64_t key;
@@ -49,14 +50,11 @@ struct GenResult {
 
 class VoxelGrid;
 
+// constexpr int BITS = 21;
+// constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
+// constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
 
-
-
-constexpr int BITS = 21;
-constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
-constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
-
-class VoxelGrid : public Drawable, public Transformable {
+class VoxelGrid : public Grid3D, public Drawable, public Transformable {
 public:
     // int chunk_render_distance = 8;
     glm::ivec3 chunk_render_size;
@@ -68,26 +66,28 @@ public:
     VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size = {16, 6, 16});
     ~VoxelGrid();
 
-    static uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
-        static_assert(BITS > 0 && 3 * BITS <= 64);
+    bool is_solid(glm::ivec3 pos) override;
 
-        if (cx < -OFFSET || cx > OFFSET - 1 ||
-            cy < -OFFSET || cy > OFFSET - 1 ||
-            cz < -OFFSET || cz > OFFSET - 1) {
-            throw std::out_of_range("chunk coord out of packable range");
-        }
+    // static uint64_t pack_key(int32_t cx, int32_t cy, int32_t cz) {
+    //     static_assert(BITS > 0 && 3 * BITS <= 64);
 
-        auto enc = [](int32_t c) -> uint64_t {
-            uint64_t u = static_cast<uint64_t>(static_cast<int64_t>(c) + OFFSET);
-            return u & MASK;
-        };
+    //     if (cx < -OFFSET || cx > OFFSET - 1 ||
+    //         cy < -OFFSET || cy > OFFSET - 1 ||
+    //         cz < -OFFSET || cz > OFFSET - 1) {
+    //         throw std::out_of_range("chunk coord out of packable range");
+    //     }
 
-        uint64_t ux = enc(cx);
-        uint64_t uy = enc(cy);
-        uint64_t uz = enc(cz);
+    //     auto enc = [](int32_t c) -> uint64_t {
+    //         uint64_t u = static_cast<uint64_t>(static_cast<int64_t>(c) + OFFSET);
+    //         return u & MASK;
+    //     };
 
-        return (ux << (BITS * 2)) | (uy << BITS) | uz;
-    }
+    //     uint64_t ux = enc(cx);
+    //     uint64_t uy = enc(cy);
+    //     uint64_t uz = enc(cz);
+
+    //     return (ux << (BITS * 2)) | (uy << BITS) | uz;
+    // }
 
     // void update_chunk_meshes();
 
@@ -103,16 +103,16 @@ public:
     //     return (glm::vec3){cx, cy, cz}
     // }
 
-    static glm::vec3 unpack_key(uint64_t key) {
-        uint64_t ux = (key >> (BITS*2)) & MASK;
-        uint64_t uy = (key >> BITS) & MASK;
-        uint64_t uz = key & MASK;
-        int32_t cx = (int)( (int)ux - OFFSET );
-        int32_t cy = (int)( (int)uy - OFFSET );
-        int32_t cz = (int)( (int)uz - OFFSET );
+    // static glm::vec3 unpack_key(uint64_t key) {
+    //     uint64_t ux = (key >> (BITS*2)) & MASK;
+    //     uint64_t uy = (key >> BITS) & MASK;
+    //     uint64_t uz = key & MASK;
+    //     int32_t cx = (int)( (int)ux - OFFSET );
+    //     int32_t cy = (int)( (int)uy - OFFSET );
+    //     int32_t cz = (int)( (int)uz - OFFSET );
 
-        return glm::ivec3(cx, cy, cz);
-    }
+    //     return glm::ivec3(cx, cy, cz);
+    // }
 
     bool is_voxel_free(glm::ivec3 pos);
 
@@ -133,6 +133,12 @@ public:
         voxel_editor.update_and_schedule();
     }
 
+    // static glm::ivec3 floor_voxel(const glm::vec3& p);
+    // static std::vector<glm::ivec3> line_intersects(glm::vec3 pos1, glm::vec3 pos2);
+    // bool adjust_to_ground(std::vector<glm::vec3>& output, int max_step_up = 500, int max_drop = 500, int max_y_diff = -1);
+    // bool adjust_to_ground(std::vector<glm::ivec3>& output, int max_step_up = 500, int max_drop = 500, int max_y_diff = -1);
+    // bool adjust_to_ground(glm::vec3& output, int max_step_up = 500, int max_drop = 500);
+
     // template<class F>
     // void edit_chunk(glm::ivec3 chunk_pos, F&& apply_edits) {
     //     uint64_t key = pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
@@ -150,9 +156,9 @@ public:
     //     chunk->edit_voxels([&](std::vector<Voxel>& voxels){
             
     //     });
-    // }
-
-    bool get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop=100);
+    // // }
+    // bool get_closest_invisible_top_pos(glm::ivec3 pos, glm::ivec3 &result, int scan_height);
+    // bool get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop=100);
 
     template<class F>
     void edit_chunk(glm::ivec3 chunk_pos, Chunk* chunk, F&& apply_edits) {

@@ -44,6 +44,10 @@ VoxelGrid::~VoxelGrid() {
     //     mesh_updating_thread.join();
 }
 
+bool VoxelGrid::is_solid(glm::ivec3 pos) {
+    return get_voxel(pos).visible;
+}
+
 bool VoxelGrid::enqueue_mesh_job(uint64_t key, glm::ivec3 cpos, Chunk* chunk) {
     if (!chunk) return false;
 
@@ -405,17 +409,212 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     return Chunk::is_free(*v, local_pos, chunk_size);
 }
 
-bool VoxelGrid::get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop) {
-    for (int y = 0; y < max_drop; y++) {
-        glm::ivec3 cur_pos = pos - glm::ivec3(0, y, 0);
-        Voxel voxel = get_voxel(cur_pos);
-        if (voxel.visible) {
-            result = cur_pos;
-            return true;
-        }
-    }
-    return false;
-}
+// glm::ivec3 VoxelGrid::floor_voxel(const glm::vec3& p) {
+//     return glm::ivec3((int)std::floor(p.x), (int)std::floor(p.y), (int)std::floor(p.z));
+// }
+
+// std::vector<glm::ivec3> VoxelGrid::line_intersects(glm::vec3 pos1, glm::vec3 pos2) {
+//     std::vector<glm::ivec3> out;
+
+//     glm::vec3 d = pos2 - pos1;
+//     double len = std::sqrt((double)d.x*d.x + (double)d.y*d.y + (double)d.z*d.z);
+//     if (len == 0.0) {
+//         out.push_back(floor_voxel(pos1));
+//         return out;
+//     }
+
+//     // Adjust end slightly backward so that if pos2 is exactly on a voxel boundary,
+//     // we don't "accidentally" include the voxel beyond the endpoint.
+//     glm::vec3 dn = d / (float)len;
+//     glm::vec3 endp = pos2 - dn * 1e-6f;
+
+//     glm::ivec3 v    = floor_voxel(pos1);
+//     glm::ivec3 vend = floor_voxel(endp);
+
+//     // Unique (keeps traversal order) using your pack_key
+//     std::unordered_set<uint64_t> seen;
+//     seen.reserve(256); // optional hint; remove if you want
+
+//     auto push_unique = [&](const glm::ivec3& a) {
+//         // NOTE: pack_key throws if out of range
+//         uint64_t k = pack_key(a.x, a.y, a.z);
+//         if (seen.insert(k).second)
+//             out.push_back(a);
+//     };
+
+//     push_unique(v);
+//     if (v == vend) return out;
+
+//     auto sgn = [](float x) -> int { return (x > 0.f) - (x < 0.f); };
+
+//     int stepX = sgn(d.x), stepY = sgn(d.y), stepZ = sgn(d.z);
+
+//     const double INF = std::numeric_limits<double>::infinity();
+
+//     auto next_boundary = [](int cell, int step) -> double {
+//         // If moving +, next boundary is cell+1. If moving -, next is cell (lower face).
+//         return (step > 0) ? (double)(cell + 1) : (double)cell;
+//     };
+
+//     double tMaxX = (stepX != 0) ? (next_boundary(v.x, stepX) - (double)pos1.x) / (double)d.x : INF;
+//     double tMaxY = (stepY != 0) ? (next_boundary(v.y, stepY) - (double)pos1.y) / (double)d.y : INF;
+//     double tMaxZ = (stepZ != 0) ? (next_boundary(v.z, stepZ) - (double)pos1.z) / (double)d.z : INF;
+
+//     double tDeltaX = (stepX != 0) ? 1.0 / std::abs((double)d.x) : INF;
+//     double tDeltaY = (stepY != 0) ? 1.0 / std::abs((double)d.y) : INF;
+//     double tDeltaZ = (stepZ != 0) ? 1.0 / std::abs((double)d.z) : INF;
+
+//     // Numerical guard
+//     const double EPS = 1e-12;
+
+//     while (true) {
+//         double tNext = std::min(tMaxX, std::min(tMaxY, tMaxZ));
+//         if (tNext > 1.0 + EPS) break;
+
+//         bool hitX = std::abs(tMaxX - tNext) <= EPS;
+//         bool hitY = std::abs(tMaxY - tNext) <= EPS;
+//         bool hitZ = std::abs(tMaxZ - tNext) <= EPS;
+
+//         // Supercover: if we cross multiple planes at once, include the adjacent voxels
+//         // that share the edge/corner.
+//         glm::ivec3 base = v;
+
+//         if (hitX && hitY && hitZ) {
+//             glm::ivec3 vx   = base + glm::ivec3(stepX, 0, 0);
+//             glm::ivec3 vy   = base + glm::ivec3(0, stepY, 0);
+//             glm::ivec3 vz   = base + glm::ivec3(0, 0, stepZ);
+//             glm::ivec3 vxy  = base + glm::ivec3(stepX, stepY, 0);
+//             glm::ivec3 vxz  = base + glm::ivec3(stepX, 0, stepZ);
+//             glm::ivec3 vyz  = base + glm::ivec3(0, stepY, stepZ);
+//             glm::ivec3 vxyz = base + glm::ivec3(stepX, stepY, stepZ);
+
+//             push_unique(vx);  push_unique(vy);  push_unique(vz);
+//             push_unique(vxy); push_unique(vxz); push_unique(vyz);
+//             v = vxyz;
+//             push_unique(v);
+
+//             tMaxX += tDeltaX; tMaxY += tDeltaY; tMaxZ += tDeltaZ;
+//         } else if (hitX && hitY) {
+//             glm::ivec3 vx  = base + glm::ivec3(stepX, 0, 0);
+//             glm::ivec3 vy  = base + glm::ivec3(0, stepY, 0);
+//             glm::ivec3 vxy = base + glm::ivec3(stepX, stepY, 0);
+
+//             push_unique(vx); push_unique(vy);
+//             v = vxy;
+//             push_unique(v);
+
+//             tMaxX += tDeltaX; tMaxY += tDeltaY;
+//         } else if (hitX && hitZ) {
+//             glm::ivec3 vx  = base + glm::ivec3(stepX, 0, 0);
+//             glm::ivec3 vz  = base + glm::ivec3(0, 0, stepZ);
+//             glm::ivec3 vxz = base + glm::ivec3(stepX, 0, stepZ);
+
+//             push_unique(vx); push_unique(vz);
+//             v = vxz;
+//             push_unique(v);
+
+//             tMaxX += tDeltaX; tMaxZ += tDeltaZ;
+//         } else if (hitY && hitZ) {
+//             glm::ivec3 vy  = base + glm::ivec3(0, stepY, 0);
+//             glm::ivec3 vz  = base + glm::ivec3(0, 0, stepZ);
+//             glm::ivec3 vyz = base + glm::ivec3(0, stepY, stepZ);
+
+//             push_unique(vy); push_unique(vz);
+//             v = vyz;
+//             push_unique(v);
+
+//             tMaxY += tDeltaY; tMaxZ += tDeltaZ;
+//         } else if (hitX) {
+//             v.x += stepX;
+//             push_unique(v);
+//             tMaxX += tDeltaX;
+//         } else if (hitY) {
+//             v.y += stepY;
+//             push_unique(v);
+//             tMaxY += tDeltaY;
+//         } else { // hitZ
+//             v.z += stepZ;
+//             push_unique(v);
+//             tMaxZ += tDeltaZ;
+//         }
+
+//         if (v == vend) break;
+//     }
+
+//     return out;
+// }
+
+// bool VoxelGrid::adjust_to_ground(std::vector<glm::vec3>& output, int max_step_up, int max_drop, int max_y_diff) {
+//     for (int i = 0; i < output.size(); i++) {
+//         glm::vec3 result_pos = output[i];
+//         if (!adjust_to_ground(result_pos, max_step_up, max_drop))
+//             return false;
+        
+//         if (max_y_diff >= 0)
+//             if (std::abs(output[i].y - result_pos.y) > max_y_diff)
+//                 return false;
+        
+//         output[i].y = result_pos.y;
+//     }
+//     return true;
+// }
+
+// bool VoxelGrid::adjust_to_ground(std::vector<glm::ivec3>& output, int max_step_up, int max_drop, int max_y_diff) {
+//     for (int i = 0; i < output.size(); i++) {
+//         glm::vec3 result_pos = output[i];
+//         if (!adjust_to_ground(result_pos, max_step_up, max_drop))
+//             return false;
+        
+//         if (max_y_diff >= 0)
+//             if (std::abs(output[i].y - result_pos.y) > max_y_diff)
+//                 return false;
+        
+//         output[i].y = result_pos.y;
+//     }
+//     return true;
+// }
+
+// bool VoxelGrid::adjust_to_ground(glm::vec3& output, int max_step_up, int max_drop) {
+//     glm::ivec3 norm_pos = glm::ivec3(glm::floor(output));
+//     glm::ivec3 result_pos = norm_pos;
+
+//     if(!get_closest_visible_bottom_pos(norm_pos, result_pos, max_drop))
+//         return false; // couldn't find
+    
+//     if (norm_pos == result_pos)
+//         if (!get_closest_invisible_top_pos(norm_pos + glm::ivec3(0, 1, 0), result_pos, max_step_up))
+//             return false; // couldn't find
+//         else
+//             result_pos -= glm::ivec3(0, 1, 0); // first visible voxel;
+    
+//     output.y = result_pos.y;
+//     return true;
+// }
+
+
+// bool VoxelGrid::get_closest_invisible_top_pos(glm::ivec3 pos, glm::ivec3 &result, int scan_height) {
+//     for (int y = 0; y < scan_height; y++) {
+//         glm::ivec3 cur_pos = pos + glm::ivec3(0, y, 0);
+//         Voxel voxel = get_voxel(cur_pos);
+//         if (!voxel.visible) {
+//             result = cur_pos;
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+// bool VoxelGrid::get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop) {
+//     for (int y = 0; y < max_drop; y++) {
+//         glm::ivec3 cur_pos = pos - glm::ivec3(0, y, 0);
+//         Voxel voxel = get_voxel(cur_pos);
+//         if (voxel.visible) {
+//             result = cur_pos;
+//             return true;
+//         }
+//     }
+//     return false;
+// }
 
 Voxel VoxelGrid::get_voxel(glm::ivec3 pos) {
     glm::ivec3 chunk_pos = VoxelGrid::get_chunk_pos(pos, chunk_size);
