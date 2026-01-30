@@ -13,6 +13,8 @@ OccupancyCell VoxelOccupancyGrid3D::get_cell(glm::ivec3 pos) {
 
     OccupancyCell occupancy_cell;
     occupancy_cell.solid = voxel.visible;
+    occupancy_cell.curvature = voxel.curvature;
+    // std::cout << voxel.curvature << std::endl;
 
     return occupancy_cell;
 }

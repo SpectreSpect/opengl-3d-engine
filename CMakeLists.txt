@@ -50,6 +50,7 @@ add_executable(app
   a_star/voxel_occupancy_grid_3d.cpp
   line.cpp
   a_star/nonholonomic_a_star.cpp
+  a_star/curvature_a_star.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")

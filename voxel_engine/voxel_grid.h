@@ -152,6 +152,8 @@ public:
     //     });
     // }
 
+    bool get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop=100);
+
     template<class F>
     void edit_chunk(glm::ivec3 chunk_pos, Chunk* chunk, F&& apply_edits) {
         uint64_t key = pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);   

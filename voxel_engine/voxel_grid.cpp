@@ -1,4 +1,8 @@
 #include "voxel_grid.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <glm/glm.hpp>
 
 VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size) {
     this->chunk_render_size = chunk_render_size;
@@ -139,45 +143,175 @@ void VoxelGrid::drain_mesh_results() {
     }
 }
 
+// ---------- deterministic 2D value noise + FBM ----------
+static inline float lerp_f(float a, float b, float t) { return a + (b - a) * t; }
+static inline float fade(float t) { return t * t * t * (t * (t * 6.f - 15.f) + 10.f); }
+
+static inline uint32_t hash_u32(uint32_t x) {
+    x ^= x >> 16; x *= 0x7feb352dU;
+    x ^= x >> 15; x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+
+static inline float rand01_2d(int x, int z, uint32_t seed) {
+    uint32_t h = hash_u32((uint32_t)x * 73856093U ^ (uint32_t)z * 19349663U ^ seed * 83492791U);
+    return (h & 0x00FFFFFFu) / 16777216.0f; // [0,1)
+}
+
+static inline float value_noise2d(float x, float z, uint32_t seed) {
+    int x0 = (int)std::floor(x), z0 = (int)std::floor(z);
+    int x1 = x0 + 1,           z1 = z0 + 1;
+
+    float tx = x - (float)x0;
+    float tz = z - (float)z0;
+
+    float u = fade(tx);
+    float v = fade(tz);
+
+    float a = rand01_2d(x0, z0, seed);
+    float b = rand01_2d(x1, z0, seed);
+    float c = rand01_2d(x0, z1, seed);
+    float d = rand01_2d(x1, z1, seed);
+
+    float ab = lerp_f(a, b, u);
+    float cd = lerp_f(c, d, u);
+    return (lerp_f(ab, cd, v) * 2.0f - 1.0f); // [-1,1]
+}
+
+static inline float fbm2d(float x, float z, uint32_t seed, int octaves,
+                          float lacunarity = 2.0f, float gain = 0.5f)
+{
+    float sum = 0.0f, amp = 1.0f, freq = 1.0f, norm = 0.0f;
+    for (int i = 0; i < octaves; ++i) {
+        sum  += amp * value_noise2d(x * freq, z * freq, seed + (uint32_t)i * 1013u);
+        norm += amp;
+        freq *= lacunarity;
+        amp  *= gain;
+    }
+    return (norm > 0.0f) ? (sum / norm) : 0.0f; // ~[-1,1]
+}
+
+static inline float saturate(float x) { return std::clamp(x, 0.0f, 1.0f); }
+static inline float smoothstep(float a, float b, float x) {
+    float t = saturate((x - a) / (b - a));
+    return t * t * (3.0f - 2.0f * t);
+}
+static inline glm::vec3 lerp_v3(const glm::vec3& a, const glm::vec3& b, float t) {
+    return a * (1.0f - t) + b * t;
+}
+// -------------------------------------------------------
+
 std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_pos, glm::ivec3 chunk_size) {
     auto voxels = std::make_shared<std::vector<Voxel>>(
         (size_t)chunk_size.x * (size_t)chunk_size.y * (size_t)chunk_size.z
     );
 
+    const int base_x = chunk_pos.x * chunk_size.x;
+    const int base_y = chunk_pos.y * chunk_size.y;
+    const int base_z = chunk_pos.z * chunk_size.z;
+
+    // --- Terrain params (these actually matter a lot) ---
+    const uint32_t SEED = 1337u;
+
+    const float freq_low  = 0.006f;   // big hills
+    const float freq_high = 0.03f;    // detail
+    const int   oct_low   = 5;
+    const int   oct_high  = 3;
+
+    const float height_amp = (float)chunk_size.y * 2.2f; // overall relief in voxel-y units
+    const float sea_level  = 0.0f;
+
+    // Heightmap in GLOBAL coordinates (gx,gz) -> height in GLOBAL voxel-y
+    auto height_at = [&](int gx, int gz) -> float {
+        float n1 = fbm2d((float)gx * freq_low,  (float)gz * freq_low,  SEED,     oct_low);  // ~[-1,1]
+        float n2 = fbm2d((float)gx * freq_high, (float)gz * freq_high, SEED+999, oct_high); // ~[-1,1]
+
+        // Convert to [0,1], then shape a bit
+        float h1 = n1 * 0.5f + 0.5f;
+        float h2 = n2 * 0.5f + 0.5f;
+
+        // Add ridged effect for sharper features
+        float ridged = 1.0f - std::abs(n2);   // [0,1]
+        ridged = ridged * ridged;
+
+        float h = sea_level
+                + h1 * height_amp                 // big shapes
+                + (h2 - 0.5f) * (height_amp * 0.35f) // medium variation
+                + ridged * (height_amp * 0.25f);  // sharper ridges
+
+        return h;
+    };
+
+    // cosUp = dot(normal, up) for y=h(x,z)
+    auto cos_up_at = [&](int gx, int gz) -> float {
+        // central differences (in voxel units; if your voxel size isn't 1, scale here)
+        float hx = 0.5f * (height_at(gx + 1, gz) - height_at(gx - 1, gz));
+        float hz = 0.5f * (height_at(gx, gz + 1) - height_at(gx, gz - 1));
+
+        // cosUp = 1/sqrt(1+hx^2+hz^2)
+        return 1.0f / std::sqrt(1.0f + hx * hx + hz * hz); // (0,1]
+    };
+
+    // Colors based ONLY on cosUp (flat -> grass, steep -> rock)
+    const glm::vec3 grass = {0.20f, 0.60f, 0.25f};
+    const glm::vec3 rock  = {0.65f, 0.65f, 0.65f};
+    const glm::vec3 dirt  = {0.18f, 0.14f, 0.10f};
+
+    // This thresholding is what prevents "everything looks the same"
+    // cosUp ~ 1 is flat. Below ~0.85 starts to get rocky.
+    const float cos_flat_start = 0.92f;
+    const float cos_steep_end  = 0.75f;
+
+    const glm::vec3 road_color = {0.2f, 0.2f, 0.2f};
+    // const glm::vec3 road_color = {1.0f, 1.0f, 1.0f};
+    const glm::vec3 curvature_color = {1.0f, 0.0f, 0.0f};
+    // const glm::vec3 curvature_color = {0.0f, 0.0f, 1.0f};
+
     for (int vx = 0; vx < chunk_size.x; ++vx)
-    for (int vy = 0; vy < chunk_size.y; ++vy)
     for (int vz = 0; vz < chunk_size.z; ++vz) {
-        glm::ivec3 local_pos(vx, vy, vz);
-        int id = (int)Chunk::idx(local_pos, chunk_size);
+        int gx = base_x + vx;
+        int gz = base_z + vz;
 
-        int gx = vx + chunk_pos.x * chunk_size.x;
-        int gy = vy + chunk_pos.y * chunk_size.y;
-        int gz = vz + chunk_pos.z * chunk_size.z;
+        float h = height_at(gx, gz);
+        int y_surface = (int)std::floor(h);
 
-        // --- terrain height at (gx,gz) ---
-        // float wave_1 = (std::sin(gx / (float)chunk_size.x) + 1.0f) * 0.5f;
-        // float wave_2 = (std::cos(gz / (float)chunk_size.x) + 1.0f) * 0.5f;
-        // float final_wave = (wave_1 + wave_2) * 0.5f;
-        // int y_threshold = (int)(final_wave * chunk_size.y);
+        float cosUp = cos_up_at(gx, gz); // <-- the value you asked for
 
-        // int diff = gy - y_threshold;
-        // --- ground ---
-        // if (diff <= 0) {
-        //     (*voxels)[id].visible = true;
-        //     (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
-        //     continue;
-        // }
+        // map cosUp -> steepness in [0,1] with visible contrast
+        // flat: cosUp >= cos_flat_start -> steep=0
+        // steep: cosUp <= cos_steep_end  -> steep=1
+        float steep = 1.0f - smoothstep(cos_steep_end, cos_flat_start, cosUp);
 
-        if (gy <= 0) {
-            (*voxels)[id].visible = true;
-            (*voxels)[id].color = {0.2f, 0.2f, 0.2f};
-            continue;
+        glm::vec3 surface_col = lerp_v3(grass, rock, steep);
+
+        for (int vy = 0; vy < chunk_size.y; ++vy) {
+            int gy = base_y + vy;
+            int id = (int)Chunk::idx({vx, vy, vz}, chunk_size);
+
+            if (gy <= y_surface) {
+                (*voxels)[id].visible = true;
+                (*voxels)[id].color = lerp_v3(curvature_color, road_color, cosUp);
+                if (cosUp <= 0.8)
+                    (*voxels)[id].color = curvature_color;
+                
+                (*voxels)[id].curvature = cosUp;
+                
+
+                // if (gy == y_surface) {
+                //     (*voxels)[id].color = surface_col;
+
+                //     // DEBUG (uncomment to *see* cosUp directly as grayscale):
+                //     // (*voxels)[id].color = glm::vec3(cosUp);
+                // } else {
+                //     // underground: darker dirt-ish
+                //     glm::vec3 underground = lerp_v3(dirt, surface_col, 0.25f);
+                //     (*voxels)[id].color = underground * 0.7f;
+                // }
+            }
         }
-
-
-        // else: air (default Voxel)
     }
-
+    
     return voxels;
 }
 
@@ -268,6 +402,18 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
     glm::ivec3 local_pos = glm::ivec3(lx, ly, lz);
 
     return Chunk::is_free(*v, local_pos, chunk_size);
+}
+
+bool VoxelGrid::get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop) {
+    for (int y = 0; y < max_drop; y++) {
+        glm::ivec3 cur_pos = pos - glm::ivec3(0, y, 0);
+        Voxel voxel = get_voxel(cur_pos);
+        if (voxel.visible) {
+            result = cur_pos;
+            return true;
+        }
+    }
+    return false;
 }
 
 Voxel VoxelGrid::get_voxel(glm::ivec3 pos) {

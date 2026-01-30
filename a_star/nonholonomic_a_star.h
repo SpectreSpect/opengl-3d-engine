@@ -1,5 +1,6 @@
 #pragma once
-#include "a_star.h"
+// #include "a_star.h"
+#include "curvature_a_star.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/epsilon.hpp>
 #include <cmath>
@@ -110,7 +111,8 @@ struct DistToPathData {
     float id;
 };
 
-class NonholonomicAStar : public AStar {
+// class NonholonomicAStar : public AStar {
+class NonholonomicAStar : public CurvatureAStar {
 public:
     std::priority_queue<NonholonomicAStarCell, std::vector<NonholonomicAStarCell>, NonholonomicByPriority> state_pq;
     std::unordered_map<uint64_t, NonholonomicAStarCell> state_closed_heap;

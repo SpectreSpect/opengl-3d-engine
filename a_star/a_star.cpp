@@ -165,20 +165,6 @@ PlainAstarData AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
                 if (!adjust_to_ground(new_pos))
                     continue;
 
-                // if (grid->get_cell(new_pos).solid) {
-                //     if (grid->get_cell(new_pos + glm::ivec3(0, 1, 0)).solid)
-                //         continue;
-                //     new_pos.y += 1;
-                // }
-                // else {
-                //     if (!grid->get_cell(new_pos + glm::ivec3(0, -1, 0)).solid)
-                //         if (!grid->get_cell(new_pos + glm::ivec3(0, -2, 0)).solid)
-                //             continue;
-                //         else {
-                //             new_pos.y -= 1;
-                //         }
-                // }
-
                 uint64_t new_key = grid->pack_key(new_pos.x, new_pos.y, new_pos.z);
                 auto heap_it = closed_heap.find(new_key);
                 if (heap_it != closed_heap.end())

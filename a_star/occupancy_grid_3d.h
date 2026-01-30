@@ -14,7 +14,7 @@ constexpr int OFFSET2 = (1 << (BITS2-1)); // offset to encode signed -> unsigned
 class OccupancyGrid3D {
 public:
     std::unordered_map<uint64_t, OccupancyCell> occupancy_cells;
-    std::unordered_map<uint64_t, OccupancyCell> extra_cells;
+    // std::unordered_map<uint64_t, OccupancyCell> extra_cells;
     
     virtual void set_cell(glm::ivec3 pos, OccupancyCell occupancy_cell);
     virtual OccupancyCell get_cell(glm::ivec3 pos);

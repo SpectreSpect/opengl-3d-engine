@@ -34,43 +34,7 @@
 #include "a_star/nonholonomic_a_star.h"
 
 
-class Grid : public Drawable, public Transformable {
-public:
-    Cube*** cubes;
-    int width;
-    int height;
-    
-    Grid(int width, int height) {
-        this->width = width;
-        this->height = height;
-
-        cubes = new Cube**[width];
-
-        for (int x = 0; x < width; x++) {
-            cubes[x] = new Cube*[height];
-            for (int y = 0; y < height; y++) {
-                cubes[x][y] = new Cube();
-                cubes[x][y]->position.x = x * 2;
-                cubes[x][y]->position.z = y * 2;
-            }
-        }
-    }
-
-    void draw(RenderState state) override {
-        state.transform *= get_model_matrix();
-
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                cubes[x][y]->draw(state);
-            }
-        }
-    }
-};
-
-// rgba(219, 188, 45)
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
-// float clear_col[4] = {0.858823529, 0.737254902, 0.176470588, 1.0f}; // Venus
-// float clear_col[4] = {0.952941176, 0.164705882, 0.054901961, 1.0f};
 
 std::vector<LineInstance> get_arrow(glm::vec3 p0, glm::vec3 p1) {
     LineInstance middle{p0, p1};
@@ -106,12 +70,6 @@ std::vector<LineInstance> get_arrow(glm::vec3 p0, glm::vec3 p1) {
 
     // return { left, middle, right };
     return { left, middle, right };
-}
-
-
-template<class T>
-void push_back(std::vector<T>& a, const std::vector<T>& b) {
-    a.insert(a.end(), b.begin(), b.end());
 }
 
 void draw_f(Window* window, 
@@ -155,13 +113,6 @@ void draw_f(Window* window,
 
                 voxel_editor.set((glm::ivec3)new_pos.pos - glm::ivec3(0, 1, 0), paint_voxel);
             }
-
-        // start_pos.pos = camera->position;
-        // start_pos.theta = glm::radians(camera_controller->yaw);
-
-        // float angle = start_pos.theta; // or + 3.14159265f
-        // glm::vec3 dir(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
-        // start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir * 1.0f));
     });
 }
 
@@ -185,38 +136,11 @@ int main() {
 
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
     voxel_grid->update(window, camera);
-    sleep(1);
-    // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {12, 12, 12});
-
-    float voxel_size = 1.0f;
-    float chunk_render_size = voxel_grid->chunk_size.x * voxel_size;
-    TriangleController* triangle_controller = new TriangleController(chunk_render_size, chunk_render_size);
-    
-    glm::vec3 p0(0, chunk_render_size, 0.0f);
-    glm::vec3 p1(chunk_render_size, chunk_render_size, 0.0f);
-    glm::vec3 p2(chunk_render_size / 2.0f, 0.0f, chunk_render_size);
-
-    glm::vec3 c0(1.0f, 0.0f, 0.0f);
-    glm::vec3 c1(0.0f, 1.0f, 0.0f);
-    glm::vec3 c2(0.0f, 0.0f, 1.0f);
-
-    glm::ivec3 triangle_chunk_pos = glm::ivec3(0, 2, 0);
-    glm::vec3 chunk_origin = glm::vec3(triangle_chunk_pos) * glm::vec3(voxel_grid->chunk_size) * voxel_size;
-
-    Triangle* triangle = new Triangle(p0+chunk_origin, p1+chunk_origin, p2+chunk_origin, c0, c1, c2);
-
-    VoxelRastorizator* voxel_rastorizator = new VoxelRastorizator(nullptr);
-
-
-    AStar* a_star = new AStar(voxel_grid);
-
+    // sleep(1);
 
     NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(1, 13, 0), 0};
     NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(20, 16, 0), 0};
 
-    std::vector<NonholonomicPos> path = std::vector<NonholonomicPos>();
-
-    std::vector<LineInstance> arrow_line_instances;
     std::vector<Line*> path_lines;
     std::vector<std::vector<LineInstance>> path_line_instances;
 
@@ -225,44 +149,8 @@ int main() {
     Line* end_dir_line = new Line();
     end_dir_line->color = glm::vec3(0.023529412f, 0.768627451f, 1.0f);
 
-
-    Line* path_arrows = new Line();
-    path_arrows->width = 5.0f;
-    path_arrows->color = {1.0f, 0.0f, 0.0f};
-
-
     NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
-    // nonholonomic_astar->use_reed_shepps_fallback = false;
-    NonholonomicPos npos;
-    npos.pos.y = 20;
-    std::vector<Line*> lines;
-
-    std::vector<NonholonomicPos> reeds_shepp_path = nonholonomic_astar->find_reeds_shepp(start_pos, end_pos);
-
     bool simulation_running = false;
-
-    std::vector<Line> closed_heap_lines;
-
-
-    for (int dir = -1; dir <= 1; dir += 2)
-        for (int steer = -1; steer <= 1; steer++) {
-            std::vector<NonholonomicPos> motion = nonholonomic_astar->simulate_motion(npos, steer, dir);
-            
-            std::vector<LineInstance> line_instances;
-            for (int i = 0; i < motion.size() - 1; i++) {
-                LineInstance line_instance;
-                line_instance.p0 = motion[i].pos;
-                line_instance.p1 = motion[i + 1].pos;
-
-
-                line_instances.push_back(line_instance);
-            }
-
-            Line* line = new Line();
-            line->set_lines(line_instances);
-
-            lines.push_back(line);
-        }
     
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -279,8 +167,6 @@ int main() {
 
         voxel_grid->update(window, camera);
         window->draw(voxel_grid, camera);
-        window->draw(triangle, camera);
-
 
         if (glfwGetKey(window->window, GLFW_KEY_R) == GLFW_PRESS) {
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
@@ -290,12 +176,11 @@ int main() {
                 start_pos.pos = camera->position;
                 start_pos.theta = glm::radians(camera_controller->yaw);
 
-                float angle = start_pos.theta; // or + 3.14159265f
+                float angle = start_pos.theta;
                 glm::vec3 dir(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
                 start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir * 1.0f));
             });
         }
-        // }
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
@@ -324,32 +209,32 @@ int main() {
                     voxel_editor.set(voxel_pos, new_voxel);
                     voxel_pos.y += 1;
                 }
-                
-                
             });
         }
+
         if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
+            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
 
-                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
-                    // nonholonomic_astar->state_plain_astar_path[i]
-                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
+            //     for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
+            //         // nonholonomic_astar->state_plain_astar_path[i]
+            //         glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
 
-                    Voxel voxel;
-                    voxel.color = {0.2f, 0.2f, 0.2f};
-                    voxel.visible = true;
+            //         Voxel voxel;
+            //         voxel.color = {0.2f, 0.2f, 0.2f};
+            //         voxel.visible = true;
 
-                    voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
-                }
-            });
+            //         // std::cout << voxel.curvature << std::endl;
+
+            //         voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
+            //     }
+            // });
 
             nonholonomic_astar->initialize(start_pos, end_pos);
             simulation_running = false;
 
-            draw_f(window, camera, voxel_grid, nonholonomic_astar, nonholonomic_astar->state_plain_astar_path, start_pos, end_pos, 200);
+            // draw_f(window, camera, voxel_grid, nonholonomic_astar, nonholonomic_astar->state_plain_astar_path, start_pos, end_pos, 200);
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
-
                 for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
                     // nonholonomic_astar->state_plain_astar_path[i]
                     glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
@@ -357,6 +242,7 @@ int main() {
                     Voxel voxel;
                     voxel.color = {0.0, 1.0, 0.0};
                     voxel.visible = true;
+                    voxel.curvature = 1.0f;
 
                     voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
                 }
@@ -418,7 +304,8 @@ int main() {
                 flush(cur_dir);
             }
         }
-        ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Always);
+
+        // ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Always);
         ImGui::Begin("Debug");
 
         glm::vec3 p = camera->position; // or any vec3
@@ -427,35 +314,22 @@ int main() {
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
 
-        
-        ImGui::SliderFloat("Change steer pentalty", &nonholonomic_astar->change_steer_pentalty, 0, 64);
-        ImGui::SliderFloat("Switch dir pentalty", &nonholonomic_astar->switch_dir_pentalty, 0, 64);
-
         ImGui::End();
 
         ui::end_frame();
 
-        for (int i = 0; i < lines.size(); i++)
-            window->draw(lines[i], camera);
-        
-        // window->draw(path_arrows, camera);
-
         for (int i = 0; i < path_lines.size(); i++)
             window->draw(path_lines[i], camera);
         
-        // std::cout << nonholonomic_astar->state_lines.size() << std::endl;
         for (int i = 0; i < nonholonomic_astar->state_lines.size(); i++) {
             window->draw(nonholonomic_astar->state_lines[i], camera);
         }
             
-        
         window->draw(start_dir_line, camera);
         window->draw(end_dir_line, camera);
-            
         
         window->swap_buffers();
         engine->poll_events();
-
     }
     
     ui::shutdown();
