@@ -15,7 +15,7 @@ float AStar::get_heuristic(glm::ivec3 a, glm::ivec3 b) {
 
 PlainAstarData AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> closed_heap, glm::ivec3 pos) {
     PlainAstarData plain_astar_data;
-    plain_astar_data.path.push_back(pos);
+    // plain_astar_data.path.push_back(pos);
     glm::ivec3 cur_pos = pos;
     float dist_to_end = 0;
 
@@ -26,17 +26,16 @@ PlainAstarData AStar::reconstruct_path(std::unordered_map<uint64_t, AStarCell> c
         if (it == closed_heap.end())
             return {};
             
-        
         AStarCell prev_cell = it->second;
-
-        if (prev_cell.no_parent)
-            break;
         
         dist_to_end += glm::distance((glm::vec3)cur_pos, (glm::vec3)prev_cell.came_from);
             
         plain_astar_data.path.push_back(cur_pos);
         plain_astar_data.dist_to_end.push_back(dist_to_end);
         cur_pos = prev_cell.came_from;
+
+        if (prev_cell.no_parent)
+            break;
     }
 
     std::reverse(plain_astar_data.path.begin(), plain_astar_data.path.end());

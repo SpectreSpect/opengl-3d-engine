@@ -315,9 +315,6 @@ double NonholonomicAStar::reeds_shepp_distance(
     return best.total * rho;
 }
 
-
-
-
 NonholonomicAStar::NonholonomicAStar(VoxelGrid* voxel_grid) {
     this->grid = new VoxelOccupancyGrid3D(voxel_grid);
 }
@@ -399,15 +396,11 @@ bool NonholonomicAStar::almost_equal(NonholonomicPos a, NonholonomicPos b) {
 
 std::vector<NonholonomicPos> NonholonomicAStar::reconstruct_path(std::unordered_map<uint64_t, NonholonomicAStarCell> closed_heap, NonholonomicPos pos) {
     std::vector<NonholonomicPos> path;
-    path.push_back(pos);
     NonholonomicPos cur_pos = pos;
 
     while (true) {
-        // uint64_t cur_key = NonholonomicKeyPacker::pack(cur_pos);
-        // uint64_t cur_key = grid->pack_key(cur_pos.pos.x, cur_pos.pos.z, discretize_angle(cur_pos.theta, num_theta_bins));
         uint64_t cur_key = state_key(cur_pos);
 
-        
         auto it = closed_heap.find(cur_key);
 
         if (it == closed_heap.end())
@@ -509,6 +502,7 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     state_closed_heap = std::unordered_map<uint64_t, NonholonomicAStarCell>();
     state_g_score = std::unordered_map<uint64_t, float>();
     state_path = std::vector<NonholonomicPos>();
+    state_explored_paths = std::vector<LineInstance>();
     state_start_pos = start_pos;
     state_end_pos = end_pos;
     state_counter = 0;
@@ -521,26 +515,42 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     state_start_cell.g = 0;
     state_start_cell.f = 99999999;
 
-    state_pq.push(state_start_cell);
-
-    if (state_lines.size() > 0) {
-        for (int i = 0; i < state_lines.size(); i++)
-            delete state_lines[i];
-    }
-    state_lines = std::vector<Line*>();
+    state_pq.push(state_start_cell);   
 }
 
-// std::vector<glm::ivec3> NonholonomicAStar::get_ground_cells(glm::vec3 p0, glm::vec3 p1) {
-//     grid->get_ground_positions();
-// }
+bool NonholonomicAStar::crosses_extreme_curvature(const std::vector<NonholonomicPos>& path, float curvature_limit) {
+    for (const auto& s : path) {
+        glm::ivec3 ground_cell = glm::ivec3(glm::floor(s.pos)) - glm::ivec3(0, 1, 0);
+        OccupancyCell cell = grid->get_cell(ground_cell);
 
-bool NonholonomicAStar::crosses_extreme_curvuture(const std::vector<NonholonomicPos>& path, float curvature_limit) {
-    for (int i = 0; i < path.size(); i++) {
-        glm::ivec3 ground_cell_pos = glm::ivec3(glm::floor(path[i].pos)) - glm::ivec3(0, 1, 0);
-        OccupancyCell ground_cell = grid->get_cell(ground_cell_pos);
-        if (ground_cell.curvature >= curvature_limit) {
-            return true;
-        }
+        if (cell.curvature >= curvature_limit)
+            return false;
+    }
+    return true;
+}
+
+bool NonholonomicAStar::try_reeds_shepp_shot(NonholonomicPos& start, NonholonomicPos& end, std::vector<NonholonomicPos>& out_path) {
+    out_path = find_reeds_shepp(start, end);
+
+    if (out_path.empty())
+        return false;
+
+    if (!grid->adjust_to_ground(out_path, max_step_up, max_drop, max_y_diff))
+        return false;
+
+    if (!crosses_extreme_curvature(out_path, curvature_limit))
+        return false;
+    
+    return true;
+}
+
+bool NonholonomicAStar::try_finish_with_reeds_shepp(NonholonomicPos& from, NonholonomicPos& to) {
+    std::vector<NonholonomicPos> reeds_shepp_path;
+    if (try_reeds_shepp_shot(from, to, reeds_shepp_path)) {
+        state_path = reconstruct_path(state_closed_heap, from);
+        state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate        
+        // std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
+        return true;
     }
     return false;
 }
@@ -563,20 +573,13 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             return false;
     }
 
-    if (add_lines)
+    if (track_explored_paths)
         if (!cur_cell.no_parent) {
-            Line* line = new Line();
             LineInstance line_instance;
             line_instance.p0 = cur_cell.pos.pos;
             line_instance.p1 = cur_cell.came_from.pos;
 
-            std::vector<LineInstance> line_instances;
-            line_instances.push_back(line_instance);
-            line->color = {1.0f, 0.0f, 0.0f};
-
-            line->set_lines(line_instances);
-
-            state_lines.push_back(line);
+            state_explored_paths.push_back(line_instance);
         }
 
     if (state_counter >= iteration_limit) {
@@ -588,7 +591,6 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
     state_closed_heap[cur_key] = cur_cell;
 
     if (almost_equal(cur_cell.pos, state_end_pos)) {
-
         state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
 
         if (!use_reed_shepps_fallback) {
@@ -596,68 +598,19 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             return true;
         }
 
-        std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, state_end_pos);
-        if (reeds_shepp_path.size() > 0)
-            if (adjust_and_check_path(reeds_shepp_path))
-                if (!crosses_extreme_curvuture(reeds_shepp_path, curvuture_limit))
-                    state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end());
+        bool status = try_finish_with_reeds_shepp(cur_cell.pos, state_end_pos);
+        if (status)
+            std::cout << "3. Almost equal = true (with reeds-shepp fallback)" << std::endl;
         
-        std::cout << "3. Almost equal = true (with reeds-shepp fallback)" << std::endl;
         return true;
     }
 
     if (use_reed_shepps_fallback)
         if (state_counter % try_reeds_shepp_interval == 0) {
-            std::vector<NonholonomicPos> reeds_shepp_path = find_reeds_shepp(cur_cell.pos, state_end_pos);
-
-            if (reeds_shepp_path.size() > 0) {
-                std::vector<glm::vec3> reeds_shepp_path_vec;
-                for (int i = 0; i < reeds_shepp_path.size(); i++) {
-                    reeds_shepp_path_vec.push_back(reeds_shepp_path[i].pos);
-                }
-
-                if (!grid->adjust_to_ground(reeds_shepp_path_vec, max_step_up, max_drop, max_y_diff)) {
-                    std::vector<glm::ivec3> ground_positions;
-                    grid->get_ground_positions(reeds_shepp_path_vec, ground_positions);
-
-                    std::cout << "REED_SHEPP" << std::endl;
-
-
-                    bool should_coninue = false;
-                    for(int i = 0; i < ground_positions.size(); i++) {
-                        OccupancyCell cell = grid->get_cell(ground_positions[i]);
-                        if (cell.curvature >= curvuture_limit) {
-                            should_coninue = true;
-                            break;
-                        }
-                    }
-
-                    if (!should_coninue) {
-                        state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
-                        state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
-                        
-                        std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
-                        return true;
-
-                    }
-                    // if (!crosses_extreme_curvuture(reeds_shepp_path, curvuture_limit)) {
-                    //     state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
-                    //     state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
-                        
-                    //     std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
-                    //     return true;
-                    // }
-                }
-
-                // if (adjust_and_check_path(reeds_shepp_path)) {
-                //     if (!crosses_extreme_curvuture(reeds_shepp_path, curvuture_limit)) {
-                //         state_path = reconstruct_path(state_closed_heap, cur_cell.pos);
-                //         state_path.insert(state_path.end(), reeds_shepp_path.begin(), reeds_shepp_path.end()); // concatenate
-                        
-                //         std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
-                //         return true;
-                //     }
-                // } 
+            bool status = try_finish_with_reeds_shepp(cur_cell.pos, state_end_pos);
+            if (status) {
+                std::cout << "4. Reeds-shepp shot succeeded" << std::endl;
+                return true;
             }
         }
     
@@ -665,64 +618,18 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
         for (int steer = -1; steer <= 1; steer++) {
             std::vector<NonholonomicPos> motion = NonholonomicAStar::simulate_motion(cur_cell.pos, steer, dir);
 
+            if (!grid->adjust_to_ground(motion, max_step_up, max_drop, max_y_diff))
+                continue;
             
-            // for (int i = 0; i < motion.size() - 1; i++)
-            //     motion_dist += glm::distance(motion[i].pos, motion[i+1].pos);
-
-            std::vector<glm::vec3> motion_vec;
+            if (!crosses_extreme_curvature(motion, curvature_limit))
+                continue;
 
             float motion_dist = 0;
             for (int i = 0; i < motion.size() -1; i++) {
-                motion_vec.push_back(motion[i].pos);
                 motion_dist += glm::distance(motion[i].pos, motion[i+1].pos);
-            }
-            // std::cout << "A1 " << state_pq.size() << std::endl;
-            // std::cout << max_y_diff << std::endl;
-            if(!grid->adjust_to_ground(motion_vec, max_step_up, max_drop, max_y_diff)) {
-                continue;
-            }
-
-            std::vector<glm::ivec3> ground_positions;
-            grid->get_ground_positions(motion_vec, ground_positions);
-
-            bool should_coninue = false;
-            for(int i = 0; i < ground_positions.size(); i++) {
-                OccupancyCell cell = grid->get_cell(ground_positions[i]);
-                if (cell.curvature >= curvuture_limit) {
-                    should_coninue = true;
-                    break;
-                }
-            }
-
-            if (should_coninue)
-                continue;
-
-                
-            
-            
-
-
-            // grid->adjust_to_ground(motion, max_step_up, max_drop, max_y_diff);
-
-            // bool need_continue = false;
-            // float last_y = motion[0].pos.y;
-            // for (int i = 0; i < motion.size(); i++) {
-            //     glm::vec3 vecpos = glm::vec3(glm::floor(motion[i].pos));
-            //     motion[i].pos.y = last_y;
-
-            //     if (!grid->adjust_to_ground(vecpos)) {
-            //         need_continue = true;
-            //         break;
-            //     }
-
-            //     motion[i].pos.y = vecpos.y;
-            // }
-
-            // if (need_continue)                    
-            //     continue;
+            }  
             
             NonholonomicPos new_pos = motion[motion.size() - 1];
-            new_pos.pos = motion_vec[motion_vec.size() - 1];
 
             uint64_t new_key = state_key(new_pos);
             auto heap_it = state_closed_heap.find(new_key);
@@ -747,7 +654,6 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             new_cell.came_from = cur_cell.pos;
             new_cell.no_parent = false;
             new_cell.g = new_g;
-            // new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
             new_cell.f = new_g + get_nonholonomic_f(new_pos, state_end_pos, cur_cell.pos, state_plain_astar_path);
 
             state_pq.push(new_cell);

@@ -5,25 +5,26 @@
 #include <glm/gtc/epsilon.hpp>
 #include <cmath>
 #include "../line.h"
+#include "../nonholonomic_pos.h"
 
 
-struct NonholonomicPos {
-    glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
-    float theta = 0; // orientation
+// struct NonholonomicPos {
+//     glm::vec3 pos = glm::vec3(0.0f, 0.0f, 0.0f);
+//     float theta = 0; // orientation
 
-    float steer = 0;
-    float dir = 1;
-    std::vector<NonholonomicPos> motion;
+//     float steer = 0;
+//     float dir = 1;
+//     // std::vector<NonholonomicPos> motion;
 
-    bool operator==(const NonholonomicPos& other) const {
-        static constexpr float pos_eps = 1e-3f;
-        static constexpr float theta_eps = 1e-3f;
+//     // bool operator==(const NonholonomicPos& other) const {
+//     //     static constexpr float pos_eps = 1e-3f;
+//     //     static constexpr float theta_eps = 1e-3f;
 
-        bool p = glm::all(glm::epsilonEqual(pos, other.pos, pos_eps));
-        bool t = std::abs(theta - other.theta) <= theta_eps;
-        return p && t;
-    }
-};
+//     //     bool p = glm::all(glm::epsilonEqual(pos, other.pos, pos_eps));
+//     //     bool t = std::abs(theta - other.theta) <= theta_eps;
+//     //     return p && t;
+//     // }
+// };
 
 struct NonholonomicAStarCell {
     float g;
@@ -121,7 +122,8 @@ public:
     NonholonomicPos state_end_pos;
     NonholonomicAStarCell state_start_cell;
     std::vector<NonholonomicPos> state_path;
-    std::vector<Line*> state_lines;
+    // std::vector<Line*> state_lines;
+    std::vector<LineInstance> state_explored_paths;
     PlainAstarData state_plain_astar_path;
     float state_plain_astar_path_length = 999999;
 
@@ -139,7 +141,7 @@ public:
     bool use_reed_shepps_fallback = true;
     uint64_t state_counter = 0;
     int iteration_limit = 10000;
-    bool add_lines = true;
+    bool track_explored_paths = true;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -181,7 +183,9 @@ public:
     std::vector<NonholonomicPos> simulate_motion(NonholonomicPos start_pos, int steer, int direction);
     void initialize(NonholonomicPos start_pos, NonholonomicPos end_pos);
     std::vector<glm::ivec3> get_ground_cells(glm::vec3 p0, glm::vec3 p1);
-    bool crosses_extreme_curvuture(const std::vector<NonholonomicPos>& path, float curvature_limit);
+    bool crosses_extreme_curvature(const std::vector<NonholonomicPos>& path, float curvature_limit);
+    bool try_reeds_shepp_shot(NonholonomicPos& start, NonholonomicPos& end, std::vector<NonholonomicPos>& out_path);
+    bool try_finish_with_reeds_shepp(NonholonomicPos& from, NonholonomicPos& to);
     bool find_nonholomic_path_step();
     // std::vector<NonholonomicPos> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
     

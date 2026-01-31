@@ -59,7 +59,7 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                     
                 
                 OccupancyCell ground_occupancy_cell = grid->get_cell(new_pos - glm::vec3(0, 1, 0));
-                if (ground_occupancy_cell.curvature >= curvuture_limit)
+                if (ground_occupancy_cell.curvature >= curvature_limit)
                     continue; 
 
                 uint64_t new_key = grid->pack_key(new_pos.x, new_pos.y, new_pos.z);

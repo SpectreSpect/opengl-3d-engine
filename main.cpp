@@ -141,18 +141,21 @@ int main() {
     NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(1, 13, 0), 0};
     NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(20, 16, 0), 0};
 
+    float const path_lines_width = 5.0f;
     std::vector<Line*> path_lines;
     std::vector<std::vector<LineInstance>> path_line_instances;
+    std::vector<std::pair<glm::ivec3, Voxel>> old_voxels;
 
     Line* start_dir_line = new Line();
     start_dir_line->color = glm::vec3(1.0f, 0.501960784, 0);
     Line* end_dir_line = new Line();
     end_dir_line->color = glm::vec3(0.023529412f, 0.768627451f, 1.0f);
 
+    Line* explored_path_lines = new Line();
+    explored_path_lines->color = glm::vec3(0.0f, 0, 0);
+
     NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
     bool simulation_running = false;
-
-    bool TEMPPPPPPPPPPPPPPPPp = true;
     
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -174,8 +177,10 @@ int main() {
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-
                 start_pos.pos = camera->position;
+                voxel_grid->adjust_to_ground(start_pos.pos);
+                start_pos.pos.y += 0.2f;
+
                 start_pos.theta = glm::radians(camera_controller->yaw);
 
                 float angle = start_pos.theta;
@@ -185,12 +190,14 @@ int main() {
         }
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
-            TEMPPPPPPPPPPPPPPPPp = true;
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
 
                 end_pos.pos = camera->position;
+                voxel_grid->adjust_to_ground(end_pos.pos);
+                end_pos.pos.y += 0.2f;
+
                 end_pos.theta = glm::radians(camera_controller->yaw);
 
                 float angle = end_pos.theta; // or + 3.14159265f
@@ -221,7 +228,6 @@ int main() {
             glm::vec3 end_pos = camera->position + camera_dir * 100.0f;
             
             std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
-            // voxel_grid->adjust_to_ground(intersected_voxel_poses);
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
                 Voxel new_voxel = Voxel();
@@ -235,12 +241,7 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_E) == GLFW_PRESS && TEMPPPPPPPPPPPPPPPPp) {  
-            TEMPPPPPPPPPPPPPPPPp = false; 
-            // glm::vec3 camera_dir = glm::normalize(camera->front);
-            // glm::vec3 start_pos = camera->position;
-            // glm::vec3 end_pos = camera->position + camera_dir * 100.0f;
-
+        if (glfwGetKey(window->window, GLFW_KEY_E) == GLFW_PRESS) {  
             std::vector<glm::ivec3> output;
             std::vector<glm::vec3> polyline;
 
@@ -249,10 +250,6 @@ int main() {
             polyline.push_back(end_pos.pos);
 
             voxel_grid->get_ground_positions(polyline, output);
-
-            
-            // std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
-            // voxel_grid->adjust_to_ground(intersected_voxel_poses);
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
                 Voxel new_voxel = Voxel();
@@ -265,37 +262,27 @@ int main() {
                 }
             });
         }
-        // std::cout << nonholonomic_astar->state_pq.size() << std::endl;
 
         if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
-            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
-
-            //     for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
-            //         // nonholonomic_astar->state_plain_astar_path[i]
-            //         glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
-
-            //         Voxel voxel;
-            //         voxel.color = {0.2f, 0.2f, 0.2f};
-            //         voxel.visible = true;
-
-            //         // std::cout << voxel.curvature << std::endl;
-
-            //         voxel_editor.set(pos + glm::ivec3(0, -1, 0), voxel);
-            //     }
-            // });
-
             nonholonomic_astar->initialize(start_pos, end_pos);
             simulation_running = false;
 
-            // draw_f(window, camera, voxel_grid, nonholonomic_astar, nonholonomic_astar->state_plain_astar_path, start_pos, end_pos, 200);
-
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
+                for (int i = 0; i < old_voxels.size(); i++) {
+                    glm::ivec3 pos = old_voxels[i].first;
+                    Voxel voxel = old_voxels[i].second;
+                    voxel_editor.set(pos, voxel);
+                }
+
+                old_voxels.clear();
+
                 for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
                     // nonholonomic_astar->state_plain_astar_path[i]
                     glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
                     glm::ivec3 ground_voxel_pos = pos + glm::ivec3(0, -1, 0);
 
                     Voxel old_voxel = voxel_editor.get(ground_voxel_pos);
+                    old_voxels.push_back(std::pair<glm::ivec3, Voxel>(ground_voxel_pos, old_voxel));
 
                     Voxel voxel;
                     voxel.color = {0.0, 1.0, 0.0};
@@ -307,7 +294,6 @@ int main() {
             });
         }
 
-
         if (glfwGetKey(window->window, GLFW_KEY_O) == GLFW_PRESS) {
             simulation_running = true;
         }
@@ -318,15 +304,9 @@ int main() {
                 std::cout << "Simulation ended" << std::endl;
             }
         }
-        // std::cout << "---" << simulation_running << std::endl;
-
 
         if (glfwGetKey(window->window, GLFW_KEY_T) == GLFW_PRESS) {
-
-            // std::vector<NonholonomicPos> path = nonholonomic_astar->find_nonholomic_path(start_pos, end_pos);
             std::vector<NonholonomicPos>& path = nonholonomic_astar->state_path;
-
-            // nonholonomic_astar->adjust_and_check_path(path);
 
             path_lines.clear();
 
@@ -337,6 +317,7 @@ int main() {
                 if (cur.empty()) return;
                 Line* line = new Line();
                 line->color = (dir == 1) ? glm::vec3(1,0,0) : glm::vec3(0,0,1); // red forward, blue reverse
+                line->width = path_lines_width;
                 line->set_lines(cur);
                 path_lines.push_back(line);
                 cur.clear();
@@ -362,8 +343,6 @@ int main() {
                 flush(cur_dir);
             }
         }
-
-        // ImGui::SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Always);
         ImGui::Begin("Debug");
 
         glm::vec3 p = camera->position; // or any vec3
@@ -379,9 +358,8 @@ int main() {
         for (int i = 0; i < path_lines.size(); i++)
             window->draw(path_lines[i], camera);
         
-        for (int i = 0; i < nonholonomic_astar->state_lines.size(); i++) {
-            window->draw(nonholonomic_astar->state_lines[i], camera);
-        }
+        explored_path_lines->set_lines(nonholonomic_astar->state_explored_paths);
+        window->draw(explored_path_lines, camera);
             
         window->draw(start_dir_line, camera);
         window->draw(end_dir_line, camera);
