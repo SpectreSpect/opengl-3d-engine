@@ -1,59 +1,81 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=0) readonly buffer Positions { vec4 pos[]; };
-layout(std430, binding=1) readonly buffer Tris      { uvec4 tri[]; };
-layout(std430, binding=2) buffer Cursor            { coherent uint cursor[]; };
-layout(std430, binding=3) buffer OutTriIds         { uint outTriIds[]; };
+layout(std430, binding=0) readonly buffer Vert   { float v[]; };
+layout(std430, binding=1) readonly buffer Ind    { uint  idx[]; };
+layout(std430, binding=2) buffer Cursor          { coherent uint cursor[]; };
+layout(std430, binding=3) buffer OutTriIds       { uint outTriIds[]; };
 
 uniform mat4  uTransform;
 uniform float uVoxelSize;
-uniform int   uChunkSize;    // > 0
-uniform ivec3 uChunkOrigin;  // ROI origin in CHUNKS
-uniform uvec3 uGridDim;      // ROI dim in CHUNKS
+uniform int   uChunkSize;
+uniform ivec3 uChunkOrigin;
+uniform uvec3 uGridDim;
 uniform uint  uTriCount;
 uniform uint  uOutCapacity;
 
-int chunk_of_vox(int v) {
-    // floor(v / chunkSize) через float (без % на отрицательных)
-    return int(floor(float(v) / float(uChunkSize)));
+uniform uint uStrideF;
+uniform uint uPosOffF;
+
+int floor_div_no_mod(int a, int b) {
+    int q = a / b;
+    int prod = q * b;
+    if (prod != a && ((a < 0) != (b < 0)))
+        q -= 1;
+    return q;
 }
 
-void main(){
+vec3 load_pos(uint vid) {
+    uint base = vid * uStrideF + uPosOffF;
+    return vec3(v[base+0u], v[base+1u], v[base+2u]);
+}
+
+bool in_roi(ivec3 c, out uint idxOut) {
+    ivec3 rel = c - uChunkOrigin;
+    ivec3 dim = ivec3(uGridDim);
+    if (any(lessThan(rel, ivec3(0))) || any(greaterThanEqual(rel, dim))) return false;
+    idxOut = (uint(rel.z) * uGridDim.y + uint(rel.y)) * uGridDim.x + uint(rel.x);
+    return true;
+}
+
+void main() {
     uint tid = gl_GlobalInvocationID.x;
     if (tid >= uTriCount) return;
 
-    uvec4 t = tri[tid];
+    uint i0 = idx[tid*3u + 0u];
+    uint i1 = idx[tid*3u + 1u];
+    uint i2 = idx[tid*3u + 2u];
 
-    vec3 p0 = (uTransform * pos[t.x]).xyz / uVoxelSize;
-    vec3 p1 = (uTransform * pos[t.y]).xyz / uVoxelSize;
-    vec3 p2 = (uTransform * pos[t.z]).xyz / uVoxelSize;
+    vec3 p0 = (uTransform * vec4(load_pos(i0), 1.0)).xyz / uVoxelSize;
+    vec3 p1 = (uTransform * vec4(load_pos(i1), 1.0)).xyz / uVoxelSize;
+    vec3 p2 = (uTransform * vec4(load_pos(i2), 1.0)).xyz / uVoxelSize;
 
-    vec3 mn = min(p0, min(p1, p2)) - vec3(1e-4);
-    vec3 mx = max(p0, max(p1, p2)) + vec3(1e-4);
+    vec3 mn = min(p0, min(p1, p2));
+    vec3 mx = max(p0, max(p1, p2));
+
+    mn -= vec3(1e-4);
+    mx += vec3(1e-4);
 
     ivec3 vmin = ivec3(floor(mn));
     ivec3 vmax = ivec3(floor(mx));
     vmax = max(vmax, vmin);
 
-    ivec3 cmin = ivec3(chunk_of_vox(vmin.x), chunk_of_vox(vmin.y), chunk_of_vox(vmin.z));
-    ivec3 cmax = ivec3(chunk_of_vox(vmax.x), chunk_of_vox(vmax.y), chunk_of_vox(vmax.z));
+    ivec3 cmin = ivec3(
+        floor_div_no_mod(vmin.x, uChunkSize),
+        floor_div_no_mod(vmin.y, uChunkSize),
+        floor_div_no_mod(vmin.z, uChunkSize)
+    );
+    ivec3 cmax = ivec3(
+        floor_div_no_mod(vmax.x, uChunkSize),
+        floor_div_no_mod(vmax.y, uChunkSize),
+        floor_div_no_mod(vmax.z, uChunkSize)
+    );
 
-    // ROI bounds in chunk space (inclusive)
-    ivec3 roiMin = uChunkOrigin;
-    ivec3 roiMax = uChunkOrigin + ivec3(uGridDim) - ivec3(1);
-
-    // clamp to ROI so we never compute indices from negative rel
-    cmin = max(cmin, roiMin);
-    cmax = min(cmax, roiMax);
-
-    if (any(greaterThan(cmin, cmax))) return;
-
-    for (int cz = cmin.z; cz <= cmax.z; ++cz)
-    for (int cy = cmin.y; cy <= cmax.y; ++cy)
-    for (int cx = cmin.x; cx <= cmax.x; ++cx) {
-        ivec3 rel = ivec3(cx,cy,cz) - roiMin; // guaranteed >= 0
-        uint cidx = (uint(rel.z) * uGridDim.y + uint(rel.y)) * uGridDim.x + uint(rel.x);
+    for (int cz=cmin.z; cz<=cmax.z; ++cz)
+    for (int cy=cmin.y; cy<=cmax.y; ++cy)
+    for (int cx=cmin.x; cx<=cmax.x; ++cx) {
+        uint cidx;
+        if (!in_roi(ivec3(cx,cy,cz), cidx)) continue;
 
         uint dst = atomicAdd(cursor[cidx], 1u);
         if (dst < uOutCapacity) outTriIds[dst] = tid;

@@ -1,14 +1,14 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=0) readonly buffer Positions { vec4 pos[]; };
-layout(std430, binding=1) readonly buffer Colors    { vec4 col[]; };
-layout(std430, binding=2) readonly buffer Tris      { uvec4 tri[]; };
+layout(std430, binding=0) readonly buffer Vertices { float vertex_data[]; };
+layout(std430, binding=1) readonly buffer Ind       { uint idx[]; };
 
-layout(std430, binding=3) readonly buffer Offsets   { uint offsets[]; };
-layout(std430, binding=4) readonly buffer TriIds    { uint triIds[]; };
-layout(std430, binding=5) buffer OutVoxels          { uint outVoxels[]; };
-layout(std430, binding=6) readonly buffer ActiveChunks { uint activeChunk[]; };
+layout(std430, binding=2) readonly buffer Offsets   { uint offsets[]; };
+layout(std430, binding=3) readonly buffer TriIds    { uint triIds[]; };
+layout(std430, binding=4) buffer OutVoxels          { uint outVoxels[]; };
+layout(std430, binding=5) readonly buffer ActiveChunks { uint activeChunk[]; };
+
 
 uniform mat4  uTransform;
 uniform float uVoxelSize;
@@ -19,6 +19,9 @@ uniform uint  uChunkVoxelCount;
 uniform uint  uChunkCount;
 uniform uint uActiveCount;
 uniform uint uTriCount;
+uniform uint vertex_stride_f;
+uniform uint pos_offset_f;
+
 
 bool axisOverlap(vec3 axis, vec3 v0, vec3 v1, vec3 v2, vec3 halfSize)
 {
@@ -137,11 +140,21 @@ void main() {
 
     for (uint it = begin; it < end; ++it) {
         uint tid = triIds[it];
-        uvec4 t = tri[tid];
+        uint i0 = idx[tid*3u + 0u];
+        uint i1 = idx[tid*3u + 1u];
+        uint i2 = idx[tid*3u + 2u];
 
-        vec3 p0 = (uTransform * pos[t.x]).xyz / uVoxelSize - vec3(chunkOriginVox);
-        vec3 p1 = (uTransform * pos[t.y]).xyz / uVoxelSize - vec3(chunkOriginVox);
-        vec3 p2 = (uTransform * pos[t.z]).xyz / uVoxelSize - vec3(chunkOriginVox);
+        uint v0_base = i0 * vertex_stride_f + pos_offset_f;
+        uint v1_base = i1 * vertex_stride_f + pos_offset_f;
+        uint v2_base = i2 * vertex_stride_f + pos_offset_f;
+
+        vec4 v0 = vec4(vertex_data[v0_base + 0], vertex_data[v0_base + 1], vertex_data[v0_base + 2], 1.0f);
+        vec4 v1 = vec4(vertex_data[v1_base + 0], vertex_data[v1_base + 1], vertex_data[v1_base + 2], 1.0f);
+        vec4 v2 = vec4(vertex_data[v2_base + 0], vertex_data[v2_base + 1], vertex_data[v2_base + 2], 1.0f);
+
+        vec3 p0 = (uTransform * v0).xyz / uVoxelSize - vec3(chunkOriginVox);
+        vec3 p1 = (uTransform * v1).xyz / uVoxelSize - vec3(chunkOriginVox);
+        vec3 p2 = (uTransform * v2).xyz / uVoxelSize - vec3(chunkOriginVox);
 
         if (!triBoxOverlap(boxcenter, halfsize, p0, p1, p2)) continue;
 
@@ -149,18 +162,6 @@ void main() {
         break;
     }
 
-
     uint outIndex = activeIdx * uChunkVoxelCount + voxelIndex;
     outVoxels[outIndex] = outVal;
-
-    // uint voxelIndex = gl_GlobalInvocationID.x;
-    // uint activeIdx  = gl_WorkGroupID.y;
-
-    // if (voxelIndex >= uChunkVoxelCount) return;
-    // if (activeIdx  >= uActiveCount)     return;
-
-    // uint outIndex = activeIdx * uChunkVoxelCount + voxelIndex;
-
-    // // DEBUG: уникальное значение на activeIdx
-    // outVoxels[outIndex] = activeIdx + 1u;
 }

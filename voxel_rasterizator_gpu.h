@@ -12,6 +12,7 @@
 #include <iostream>
 
 #include "gridable.h"
+#include "mesh.h"
 #include "mesh_data.h"
 #include "vertex_layout.h"
 #include "ssbo.h"
@@ -41,19 +42,15 @@ public:
     void set_roi(glm::ivec3 chunk_origin, glm::uvec3 grid_dim);
 
     // ПОТОМ ПЕРЕВЕСТИ НА GPU!!!
-    void calculate_roi_on_cpu(const MeshData& mesh_data,
-                              const glm::mat4& transform,
-                              const VertexLayout& vertex_layout,
-                              float voxel_size,
-                              int chunk_size,
-                              int pad_voxels = 0);
+    // void calculate_roi_on_cpu(const Mesh& mesh,
+    //                           float voxel_size,
+    //                           int chunk_size,
+    //                           int pad_voxels = 0);
 
     // Основная функция: построить CSR на GPU для mesh_data в ROI.
     // voxel_size: размер вокселя в world units
     // chunk_size: размер чанка в ВОКСЕЛЯХ по стороне (например 16)
-    void rasterize(const MeshData& mesh_data,
-                   const glm::mat4& transform,
-                   const VertexLayout& vertex_layout,
+    void rasterize(const Mesh& mesh,
                    float voxel_size,
                    int chunk_size);
 
@@ -114,10 +111,10 @@ private:
 
 private:
     void clear_counters();
-    void count_triangles_in_chunks(const glm::mat4& transform, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
-    void fill_triangle_indices(const glm::mat4& transform, float voxel_size, int chunk_size, size_t tri_count); //pass 3
+    void count_triangles_in_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
+    void fill_triangle_indices(const Mesh& mesh, float voxel_size, int chunk_size, size_t tri_count); //pass 3
     void clear_active_voxels(int chunk_size, uint32_t active_count);
-    void voxelize_chunks(const glm::mat4& transform, float voxel_size, int chunk_size, uint32_t active_count, uint32_t tri_count);
+    void voxelize_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t active_count, uint32_t tri_count);
 
     void ensure_roi_buffers(size_t vertex_count, size_t tri_count, uint32_t chunk_count, uint32_t chunk_voxel_count);
     void ensure_active_chunk_buffers(uint32_t chunk_voxel_count, uint32_t pair_capacity, uint32_t activeCount);

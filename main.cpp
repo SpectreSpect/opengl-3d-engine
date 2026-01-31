@@ -137,7 +137,7 @@ int main() {
     MeshData model_mesh_data = vtk_mesh_loader->load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
 
     Mesh* model = new Mesh(model_mesh_data.vertices, model_mesh_data.indices, cube->mesh->vertex_layout); 
-    model->position = {chunk_render_size * -10, chunk_render_size * 5, chunk_render_size * -10};
+    model->position = {chunk_render_size * 0, chunk_render_size * 5, chunk_render_size * 0};
     model->scale = glm::vec3(5.0f);
 
     glm::vec3 prev_cam_pos = camera_controller->camera->position;
@@ -187,9 +187,7 @@ int main() {
             // };
 
             voxel_rastorizator->rasterize(
-                model_mesh_data, 
-                model->get_model_matrix(), 
-                *cube->mesh->vertex_layout, 
+                *model,
                 voxel_grid->voxel_size, 
                 voxel_grid->chunk_size.x
             );
