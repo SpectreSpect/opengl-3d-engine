@@ -34,7 +34,10 @@ public:
         ComputeShader* k_copy_offsets_to_cursor_cs,
         ComputeShader* k_fill_cs,
         ComputeShader* k_voxelize_cs,
-        ComputeShader* k_clear_cs
+        ComputeShader* k_clear_cs,
+        ComputeShader* k_roi_reduce_indices_cs,
+        ComputeShader* k_roi_reduce_pairs_cs,
+        ComputeShader* k_roi_finalize_cs
     );
     ~VoxelRasterizatorGPU();
 
@@ -72,10 +75,11 @@ private:
     ComputeProgram prog_fill_;
     ComputeProgram prog_voxelize_;
     ComputeProgram prog_clear_;
+    ComputeProgram prog_roi_reduce_indices_;
+    ComputeProgram prog_roi_reduce_pairs_;
+    ComputeProgram prog_roi_finalize_;
 
     // GPU buffers
-    SSBO positions_ssbo_;       // vec3 positions (model space)
-    SSBO tris_ssbo_;            // uvec3 (i0,i1,i2) per triangle
     SSBO counters_ssbo_;        // uint counters[chunkCount]
     SSBO offsets_ssbo_;         // uint offsets[chunkCount+1]
     SSBO cursor_ssbo_;          // uint cursor[chunkCount]
@@ -83,23 +87,23 @@ private:
     SSBO total_pairs_ssbo_;     // uint totalPairs (1 элемент)
     SSBO block_sums_ssbo_;      // uint blockSums[numBlocks]
     SSBO block_prefix_ssbo_;    // uint blockPrefix[numBlocks]
-    SSBO colors_ssbo_;          // vec4 colors per vertex (rgb + pad)
     SSBO voxels_ssbo_;          // uint packed RGBA8 per voxel in ROI
+    SSBO roi_out_ssbo_;
     SSBO active_chunks_ssbo_;
+    std::vector<SSBO> roi_reduce_levels_;
 
     SSBO debug_ssbo_; // int dbg[32]
 
     // capacities (bytes)
-    size_t pos_cap_bytes_ = 0;
-    size_t tri_cap_bytes_ = 0;
     size_t counters_cap_bytes_ = 0;
     size_t offsets_cap_bytes_ = 0;
     size_t cursor_cap_bytes_ = 0;
     size_t tri_indices_cap_bytes_ = 0;
     size_t block_cap_bytes_ = 0;
-    size_t col_cap_bytes_ = 0;
     size_t vox_cap_bytes_ = 0;
     size_t active_cap_bytes_ = 0;
+    size_t roi_out_cap_bytes_ = 0;
+    std::vector<size_t> roi_reduce_caps_;
 
     uint32_t last_total_pairs_ = 0;
     uint32_t chunk_count_ = 1;
@@ -110,6 +114,8 @@ private:
     std::vector<size_t> scan_caps_; // bytes per level
 
 private:
+    void ensure_roi_reduce_level(uint32_t level, uint32_t numPairs); 
+    void calculate_roi(const Mesh& mesh, float voxel_size, int chunk_size, int pad_voxels);
     void clear_counters();
     void count_triangles_in_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
     void fill_triangle_indices(const Mesh& mesh, float voxel_size, int chunk_size, size_t tri_count); //pass 3
@@ -121,8 +127,6 @@ private:
 
     void ensure_scan_level(uint32_t level, uint32_t numBlocks);
     void gpu_exclusive_scan_u32_impl(SSBO& in_u32, SSBO& out_u32, uint32_t n, uint32_t level);
-
-    void upload_positions_tris_colors(const MeshData& mesh_data, const VertexLayout& layout);
 
     // GPU exclusive scan: in=counters, out=offsets (первые n элементов), блок-суммы в scratch
     void gpu_exclusive_scan_u32(SSBO& in_u32, SSBO& out_u32, uint32_t n);

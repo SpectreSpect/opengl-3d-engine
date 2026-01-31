@@ -120,6 +120,11 @@ int main() {
     ComputeShader* k_voxelize_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "voxelize_cs.glsl").string());
     ComputeShader* k_clear_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "clear_cs.glsl").string());
 
+
+    ComputeShader* k_roi_reduce_indices_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_reduce_indices_cs.glsl").string());
+    ComputeShader* k_roi_reduce_pairs_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_reduce_pairs_cs.glsl").string());
+    ComputeShader* k_roi_finalize_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_finalize_cs.glsl").string());
+
     VoxelRasterizatorGPU* voxel_rastorizator = new VoxelRasterizatorGPU(
         voxel_grid,
         k_count_cs,
@@ -129,7 +134,10 @@ int main() {
         k_copy_offsets_to_cursor_cs,
         k_fill_cs,
         k_voxelize_cs,
-        k_clear_cs
+        k_clear_cs,
+        k_roi_reduce_indices_cs,
+        k_roi_reduce_pairs_cs,
+        k_roi_finalize_cs
     );
 
     VtkMeshLoader* vtk_mesh_loader = new VtkMeshLoader(*cube->mesh->vertex_layout);
