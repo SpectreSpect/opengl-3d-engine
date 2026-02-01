@@ -119,10 +119,9 @@ int main() {
     ComputeShader* k_fill_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "fill_cs.glsl").string());
     ComputeShader* k_voxelize_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "voxelize_cs.glsl").string());
     ComputeShader* k_clear_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "clear_cs.glsl").string());
-
-
     ComputeShader* k_roi_reduce_indices_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_reduce_indices_cs.glsl").string());
     ComputeShader* k_roi_reduce_pairs_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_reduce_pairs_cs.glsl").string());
+    ComputeShader* k_build_active_chunks_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "build_active_chunks_cs.glsl").string());
     ComputeShader* k_roi_finalize_cs = new ComputeShader((executable_dir() / "shaders" / "voxel_rasterization" / "roi_finalize_cs.glsl").string());
 
     VoxelRasterizatorGPU* voxel_rastorizator = new VoxelRasterizatorGPU(
@@ -137,7 +136,8 @@ int main() {
         k_clear_cs,
         k_roi_reduce_indices_cs,
         k_roi_reduce_pairs_cs,
-        k_roi_finalize_cs
+        k_roi_finalize_cs,
+        k_build_active_chunks_cs
     );
 
     VtkMeshLoader* vtk_mesh_loader = new VtkMeshLoader(*cube->mesh->vertex_layout);

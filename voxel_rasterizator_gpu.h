@@ -37,7 +37,8 @@ public:
         ComputeShader* k_clear_cs,
         ComputeShader* k_roi_reduce_indices_cs,
         ComputeShader* k_roi_reduce_pairs_cs,
-        ComputeShader* k_roi_finalize_cs
+        ComputeShader* k_roi_finalize_cs,
+        ComputeShader* k_build_active_chunks_cs
     );
     ~VoxelRasterizatorGPU();
 
@@ -78,6 +79,7 @@ private:
     ComputeProgram prog_roi_reduce_indices_;
     ComputeProgram prog_roi_reduce_pairs_;
     ComputeProgram prog_roi_finalize_;
+    ComputeProgram prog_build_active_chunks_;
 
     // GPU buffers
     SSBO counters_ssbo_;        // uint counters[chunkCount]
@@ -90,6 +92,7 @@ private:
     SSBO voxels_ssbo_;          // uint packed RGBA8 per voxel in ROI
     SSBO roi_out_ssbo_;
     SSBO active_chunks_ssbo_;
+    SSBO active_count_ssbo_;
     std::vector<SSBO> roi_reduce_levels_;
 
     SSBO debug_ssbo_; // int dbg[32]
@@ -103,18 +106,18 @@ private:
     size_t vox_cap_bytes_ = 0;
     size_t active_cap_bytes_ = 0;
     size_t roi_out_cap_bytes_ = 0;
+    size_t active_count_cap_bytes_ = 0;
     std::vector<size_t> roi_reduce_caps_;
 
     uint32_t last_total_pairs_ = 0;
     uint32_t chunk_count_ = 1;
 
     // scan scratch уровни (чтобы не было ограничения numBlocks<=256)
-    std::vector<SSBO> scan_sums_;
-    std::vector<SSBO> scan_prefix_;
+    std::vector<std::unique_ptr<SSBO>> scan_sums_;
+    std::vector<std::unique_ptr<SSBO>> scan_prefix_;
     std::vector<size_t> scan_caps_; // bytes per level
 
 private:
-    void ensure_roi_reduce_level(uint32_t level, uint32_t numPairs); 
     void calculate_roi(const Mesh& mesh, float voxel_size, int chunk_size, int pad_voxels);
     void clear_counters();
     void count_triangles_in_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
@@ -122,6 +125,10 @@ private:
     void clear_active_voxels(int chunk_size, uint32_t active_count);
     void voxelize_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t active_count, uint32_t tri_count);
 
+    void pass2_build_offsets_and_active_gpu(uint32_t chunk_count);
+
+    void ensure_roi_reduce_level(uint32_t level, uint32_t numPairs); 
+    void ensure_active_index_capacity(uint32_t chunk_count);
     void ensure_roi_buffers(size_t vertex_count, size_t tri_count, uint32_t chunk_count, uint32_t chunk_voxel_count);
     void ensure_active_chunk_buffers(uint32_t chunk_voxel_count, uint32_t pair_capacity, uint32_t activeCount);
 
