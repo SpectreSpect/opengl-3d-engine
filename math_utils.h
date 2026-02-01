@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <chrono>
+
 namespace math_utils {
     static glm::vec3 bary_coords(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
         glm::vec3 v0 = b - a;
@@ -42,5 +44,12 @@ namespace math_utils {
 
     static uint32_t div_up_u32(uint32_t a, uint32_t b) { 
         return (a + b - 1u) / b; 
+    }
+
+    static double ms_now() {
+        using clock = std::chrono::high_resolution_clock;
+        static auto t0 = clock::now();
+        auto t = clock::now();
+        return std::chrono::duration<double, std::milli>(t - t0).count();
     }
 }

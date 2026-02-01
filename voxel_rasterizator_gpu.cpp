@@ -29,8 +29,6 @@ VoxelRasterizatorGPU::VoxelRasterizatorGPU(
     prog_roi_finalize_ = ComputeProgram(k_roi_finalize_cs);
     prog_build_active_chunks_ = ComputeProgram(k_build_active_chunks_cs);
 
-    // минимальные буферы (чтобы SSBO(0) был валиден) — если твой SSBO(0) не поддерживает,
-    // замени на SSBO(4, nullptr, usage) и т.п.
     total_pairs_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
     active_chunks_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
     active_cap_bytes_ = sizeof(uint32_t);
@@ -161,7 +159,7 @@ void VoxelRasterizatorGPU::ensure_active_chunk_buffers(uint32_t chunk_voxel_coun
     #ifdef VOXEL_RAST_DEBUG
         const GLenum readUsage = GL_STREAM_READ;
     #else
-        const GLenum readUsage = GL_DYNAMIC_DRAW; // в релизе мы почти не читаем
+        const GLenum readUsage = GL_DYNAMIC_DRAW;
     #endif
 
     // triangleIndices uint[pair_capacity]
@@ -449,11 +447,20 @@ void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_cou
 void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
                                     float voxel_size,
                                     int chunk_size) {
+    #ifdef RASTERIZE_DEBUG
+        double t0 = math_utils::ms_now();
+    #endif
+
     prog_voxelize_.print_program_log("voxelize");
     prog_clear_.print_program_log("clear");
 
     // 0) ROI (пока на CPU)
     calculate_roi(mesh, voxel_size, chunk_size, 1);
+    
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t1 = math_utils::ms_now();
+    #endif
 
     chunk_count_ = roi_dim_.x * roi_dim_.y * roi_dim_.z;
     if (chunk_count_ == 0 || roi_dim_.x == 0 || roi_dim_.y == 0 || roi_dim_.z == 0) {
@@ -475,14 +482,34 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
     // 1) Буферы (pair_capacity пока 1, после scan расширим)
     ensure_roi_buffers(vertex_count, tri_count, chunk_count_, chunk_voxel_count);
 
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t2 = math_utils::ms_now();
+    #endif
+
     // 3) Очистить counters
     clear_counters();
+
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t3 = math_utils::ms_now();
+    #endif
 
     // 4) Pass1: COUNT (GPU)
     count_triangles_in_chunks(mesh, voxel_size, chunk_size, tri_count);
 
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t4 = math_utils::ms_now();
+    #endif
+
     // ---------- Pass2 (CPU): counters -> offsets/cursor (debugged) ----------
     pass2_build_offsets_and_active_gpu(chunk_count_);
+
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t5 = math_utils::ms_now();
+    #endif
 
     uint32_t totalPairs = 0;
     total_pairs_ssbo_.read_subdata(0, &totalPairs, sizeof(uint32_t));
@@ -497,9 +524,19 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
     // Теперь можно аллоцировать tri_indices + voxels под реальные размеры
     ensure_active_chunk_buffers(chunk_voxel_count, totalPairs, activeCount);
 
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t6 = math_utils::ms_now();
+    #endif
+
     // ---------- end Pass2 ----------
     // Pass 3: fill triangleIndices
     fill_triangle_indices(mesh, voxel_size, chunk_size, tri_count);
+
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t7 = math_utils::ms_now();
+    #endif
 
     // На этом этапе на GPU готов CSR:
     // offsets_ssbo_ (uint[chunkCount+1])
@@ -508,6 +545,11 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
     // Дальше Pass 4: "один workgroup на чанк" и растеризация по списку треугольников.
     clear_active_voxels(chunk_size, activeCount);
     voxelize_chunks(mesh, voxel_size, chunk_size, activeCount, tri_count);
+
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t8 = math_utils::ms_now();
+    #endif
 
     // Pass 5: Считывание данных
     std::vector<uint32_t> active(activeCount);
@@ -545,5 +587,26 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
         voxels[i] = std::move(voxel);
     }
 
+    #ifdef RASTERIZE_DEBUG
+        glFinish();
+        double t9 = math_utils::ms_now();
+    #endif
+
     gridable->set_voxels(voxels, voxel_positions);
+
+    #ifdef RASTERIZE_DEBUG
+        double t10 = math_utils::ms_now();
+
+        std::cout << "calculate_roi: " << t1-t0 << " ms" << std::endl;
+        std::cout << "ensure_roi_buffers: " << t2-t1 << " ms" << std::endl;
+        std::cout << "clear_counters: " << t3-t2 << " ms" << std::endl;
+        std::cout << "count_triangles_in_chunks: " << t4-t3 << " ms" << std::endl;
+        std::cout << "pass2: " << t5-t4 << " ms" << std::endl;
+        std::cout << "ensure_active_chunk_buffers: " << t6-t5 << " ms" << std::endl;
+        std::cout << "fill_triangle_indices: " << t7-t6 << " ms" << std::endl;
+        std::cout << "clear+voxelize: " << t8-t7 << " ms" << std::endl;
+        std::cout << "read_voxels: " << t10-t8 << " ms" << std::endl;
+        std::cout << "--------------------------" << std::endl;
+        std::cout << "raterization: " << t10-t0 << "ms" << std::endl;
+    #endif
 }
