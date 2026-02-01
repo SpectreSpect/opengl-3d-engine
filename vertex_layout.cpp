@@ -22,3 +22,11 @@ void VertexLayout::apply() const {
         }
     }
 }
+
+size_t VertexLayout::find_attribute_id_by_name(std::string attribute_name) const {
+    for (size_t i = 0; i < attributes.size(); i++) {
+        if (attribute_name == attributes[i].name)
+            return i;
+    }
+    return -1;
+}

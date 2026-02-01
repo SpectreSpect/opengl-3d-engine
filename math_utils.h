@@ -6,8 +6,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <chrono>
+
 namespace math_utils {
-    glm::vec3 bary_coords(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
+    static glm::vec3 bary_coords(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
         glm::vec3 v0 = b - a;
         glm::vec3 v1 = c - a;
         glm::vec3 v2 = p - a;
@@ -25,5 +27,29 @@ namespace math_utils {
         float w = (d00 * d21 - d01 * d20) / denom;
         float u = 1.0f - v - w;
         return glm::vec3(u, v, w);
+    }
+
+    static int floor_div(int a, int b) {
+        int q = a / b;
+        int r = a % b;
+        if (r < 0) --q;
+        return q;
+    }
+
+    static int floor_mod(int a, int b) {
+        int r = a % b;
+        if (r < 0) r += b;
+        return r;
+    }
+
+    static uint32_t div_up_u32(uint32_t a, uint32_t b) { 
+        return (a + b - 1u) / b; 
+    }
+
+    static double ms_now() {
+        using clock = std::chrono::high_resolution_clock;
+        static auto t0 = clock::now();
+        auto t = clock::now();
+        return std::chrono::duration<double, std::milli>(t - t0).count();
     }
 }

@@ -12,10 +12,9 @@
 
 class VertexLayout {
 public:
-    void add(const VertexAttribute& attr);
-
-    void apply() const;
-
-private:
     std::vector<VertexAttribute> attributes;
+
+    void add(const VertexAttribute& attr);
+    void apply() const;
+    size_t find_attribute_id_by_name(std::string attribute_name) const;
 };

@@ -1,8 +1,9 @@
 #include "voxel_grid.h"
 
-VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, glm::ivec3 chunk_render_size) {
+VoxelGrid::VoxelGrid(glm::ivec3 chunk_size, float voxel_size, glm::ivec3 chunk_render_size) {
     this->chunk_render_size = chunk_render_size;
     this->chunk_size = chunk_size;
+    this->voxel_size = voxel_size;
 
     mesh_thread_running = true;
     gen_thread_running = true;
@@ -319,11 +320,8 @@ bool VoxelGrid::is_voxel_free(glm::ivec3 pos) {
 
 void VoxelGrid::update(Window* window, Camera* camera) {
     glm::vec3 cam_pos = camera->position;
-    glm::ivec3 center_voxel_pos = (glm::ivec3)cam_pos;
-    glm::ivec3 center_chunk_pos = glm::ivec3(0, 0, 0);
-    center_chunk_pos.x = cam_pos.x / chunk_size.x + ((int)cam_pos.x % chunk_size.x < 0 ? -1 : 0);
-    center_chunk_pos.y = cam_pos.y / chunk_size.y + ((int)cam_pos.y % chunk_size.y < 0 ? -1 : 0);
-    center_chunk_pos.z = cam_pos.z / chunk_size.z + ((int)cam_pos.z % chunk_size.z < 0 ? -1 : 0);
+    glm::ivec3 center_voxel_pos = glm::ivec3(glm::floor(cam_pos / voxel_size));
+    glm::ivec3 center_chunk_pos = VoxelGrid::get_chunk_pos(center_voxel_pos, chunk_size);
 
     // glm::ivec3 center_chunk_pos = glm::ivec3(cam_pos.x / chunk_size.x, cam_pos.y / chunk_size.y, cam_pos.z / chunk_size.z);
 
@@ -456,10 +454,8 @@ void VoxelGrid::draw(RenderState state) {
     state.transform *= get_model_matrix();
 
     glm::vec3 cam_pos = state.camera->position;
-    glm::ivec3 center_chunk_pos = glm::ivec3(0, 0, 0);
-    center_chunk_pos.x = cam_pos.x / chunk_size.x + ((int)cam_pos.x % chunk_size.x < 0 ? -1 : 0);
-    center_chunk_pos.y = cam_pos.y / chunk_size.y + ((int)cam_pos.y % chunk_size.y < 0 ? -1 : 0);
-    center_chunk_pos.z = cam_pos.z / chunk_size.z + ((int)cam_pos.z % chunk_size.z < 0 ? -1 : 0);
+    glm::ivec3 center_voxel_pos = glm::ivec3(glm::floor(cam_pos / voxel_size));
+    glm::ivec3 center_chunk_pos = VoxelGrid::get_chunk_pos(center_voxel_pos, chunk_size);
 
     glm::ivec3 front_left_bottom_chunk_pos = center_chunk_pos - chunk_render_size / 2;
 

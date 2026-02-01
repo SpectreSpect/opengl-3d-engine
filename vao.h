@@ -8,7 +8,7 @@
 #include "ebo.h"
 #include "vertex_layout.h"
 
-class VAO{
+class VAO {
 public:
     GLuint id;
     // VBO* vbo;

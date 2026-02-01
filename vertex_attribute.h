@@ -11,6 +11,7 @@
 #include <chrono>
 
 struct VertexAttribute {
+    std::string name;
     GLuint index;
     GLint size;
     GLenum type = GL_FLOAT;
@@ -18,4 +19,5 @@ struct VertexAttribute {
     GLsizei stride;
     size_t offset;
     GLuint divisor = 0;   // for instancing
+    std::vector<float> default_value;
 };
