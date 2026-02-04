@@ -1,33 +1,20 @@
 #include "voxel_rasterizator_gpu.h"
 
-VoxelRasterizatorGPU::VoxelRasterizatorGPU(
-    Gridable* gridable, 
-    ComputeShader* k_count_cs, 
-    ComputeShader* k_scan_blocks_cs,
-    ComputeShader* k_add_block_offsets_cs,
-    ComputeShader* k_fix_last_cs,
-    ComputeShader* k_copy_offsets_to_cursor_cs,
-    ComputeShader* k_fill_cs,
-    ComputeShader* k_voxelize_cs,
-    ComputeShader* k_clear_cs,
-    ComputeShader* k_roi_reduce_indices_cs,
-    ComputeShader* k_roi_reduce_pairs_cs,
-    ComputeShader* k_roi_finalize_cs,
-    ComputeShader* k_build_active_chunks_cs)
+VoxelRasterizatorGPU::VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& shader_manager)
 {
     this->gridable = gridable;
-    prog_count_ = ComputeProgram(k_count_cs);
-    prog_scan_blocks_ = ComputeProgram(k_scan_blocks_cs);
-    prog_add_block_offsets_ = ComputeProgram(k_add_block_offsets_cs);
-    prog_fix_last_ = ComputeProgram(k_fix_last_cs);
-    prog_copy_offsets_to_cursor_ = ComputeProgram(k_copy_offsets_to_cursor_cs);
-    prog_fill_ = ComputeProgram(k_fill_cs);
-    prog_voxelize_ = ComputeProgram(k_voxelize_cs);
-    prog_clear_ = ComputeProgram(k_clear_cs);
-    prog_roi_reduce_indices_ = ComputeProgram(k_roi_reduce_indices_cs);
-    prog_roi_reduce_pairs_ = ComputeProgram(k_roi_reduce_pairs_cs);
-    prog_roi_finalize_ = ComputeProgram(k_roi_finalize_cs);
-    prog_build_active_chunks_ = ComputeProgram(k_build_active_chunks_cs);
+    prog_count_ = ComputeProgram(&shader_manager.count_cs);
+    prog_scan_blocks_ = ComputeProgram(&shader_manager.scan_blocks_cs);
+    prog_add_block_offsets_ = ComputeProgram(&shader_manager.add_block_offsets_cs);
+    prog_fix_last_ = ComputeProgram(&shader_manager.fix_last_cs);
+    prog_copy_offsets_to_cursor_ = ComputeProgram(&shader_manager.copy_offsets_to_cursor_cs);
+    prog_fill_ = ComputeProgram(&shader_manager.fill_cs);
+    prog_voxelize_ = ComputeProgram(&shader_manager.voxelize_cs);
+    prog_clear_ = ComputeProgram(&shader_manager.clear_cs);
+    prog_roi_reduce_indices_ = ComputeProgram(&shader_manager.roi_reduce_indices_cs);
+    prog_roi_reduce_pairs_ = ComputeProgram(&shader_manager.roi_reduce_pairs_cs);
+    prog_roi_finalize_ = ComputeProgram(&shader_manager.roi_finalize_cs);
+    prog_build_active_chunks_ = ComputeProgram(&shader_manager.build_active_chunks_cs);
 
     total_pairs_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
     active_chunks_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);

@@ -19,27 +19,14 @@
 #include "compute_shader.h"
 #include "compute_program.h"
 #include "math_utils.h"
+#include "shader_manager.h"
 
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
 public:
     Gridable* gridable = nullptr;
 
-    VoxelRasterizatorGPU(
-        Gridable* gridable, 
-        ComputeShader* k_count_cs, 
-        ComputeShader* k_scan_blocks_cs,
-        ComputeShader* k_add_block_offsets_cs,
-        ComputeShader* k_fix_last_cs,
-        ComputeShader* k_copy_offsets_to_cursor_cs,
-        ComputeShader* k_fill_cs,
-        ComputeShader* k_voxelize_cs,
-        ComputeShader* k_clear_cs,
-        ComputeShader* k_roi_reduce_indices_cs,
-        ComputeShader* k_roi_reduce_pairs_cs,
-        ComputeShader* k_roi_finalize_cs,
-        ComputeShader* k_build_active_chunks_cs
-    );
+    VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& shader_manager);
     ~VoxelRasterizatorGPU();
 
     // ROI в координатах ЧАНКОВ (dense grid)

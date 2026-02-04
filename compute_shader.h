@@ -3,6 +3,7 @@
 
 class ComputeShader : public Shader {
 public:
+    ComputeShader() = default;
     ComputeShader(std::string& path);
 
     ComputeShader(const ComputeShader&) = delete;

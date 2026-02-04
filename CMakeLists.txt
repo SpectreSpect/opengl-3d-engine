@@ -50,6 +50,8 @@ add_executable(app
   compute_program.cpp
   ssbo.cpp
   voxel_rasterizator_gpu.cpp
+  voxel_grid_gpu.cpp
+  shader_manager.cpp
 )
 
 function(add_copy_dir_target tgt src_dir dst_dir)
