@@ -32,6 +32,7 @@
 #include "a_star/a_star.h"
 #include "line.h"
 #include "a_star/nonholonomic_a_star.h"
+#include "a_star/reeds_shepp.h"
 
 
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
@@ -123,7 +124,7 @@ int main() {
     engine->set_window(window);
     ui::init(window->window);
     
-    window->disable_cursor();
+    
 
     Camera* camera = new Camera();
     window->set_camera(camera);
@@ -138,8 +139,8 @@ int main() {
     voxel_grid->update(window, camera);
     // sleep(1);
 
-    NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(1, 13, 0), 0};
-    NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(20, 16, 0), 0};
+    NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(0, 0, 0), 0};
+    NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(5, 0, 10), 0};
 
     float const path_lines_width = 5.0f;
     std::vector<Line*> path_lines;
@@ -147,16 +148,51 @@ int main() {
     std::vector<std::pair<glm::ivec3, Voxel>> old_voxels;
 
     Line* start_dir_line = new Line();
-    start_dir_line->color = glm::vec3(1.0f, 0.501960784, 0);
+    start_dir_line->color = glm::vec3(1.0f, 0.466666667f, 0.0f);
     Line* end_dir_line = new Line();
     end_dir_line->color = glm::vec3(0.023529412f, 0.768627451f, 1.0f);
+
+    glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
+    end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + dir * 1.0f));
+
+    glm::vec3 dir2(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
+    start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir2 * 1.0f));
 
     Line* explored_path_lines = new Line();
     explored_path_lines->color = glm::vec3(0.0f, 0, 0);
 
     NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
     bool simulation_running = false;
+
+    ReedsShepp reeds_shepp;
+    float min_radius = 5;
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.get_optimal_path(start_pos, end_pos, min_radius);
+
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path;
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.path1(end_pos.pos.x, -end_pos.pos.z, -end_pos.theta);
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(2.0f, Steering::LEFT, Gear::BACKWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(2.0f, Steering::RIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // std::vector<NonholonomicPos> discretized_path = reeds_shepp.discretize_path(reeds_shepp_test_path, 4, min_radius);
+
+    // std::vector<LineInstance> reeds_shepp_test_line_instances;
+    // if (discretized_path.size() >= 2)
+    // for (int i = 0; i < discretized_path.size() - 1; i++) {
+    //     LineInstance line_instance;
+    //     line_instance.p0 = discretized_path[i].pos;
+    //     line_instance.p1 = discretized_path[i+1].pos;
+
+    //     reeds_shepp_test_line_instances.push_back(line_instance);
+    // }
     
+    Line* reeds_shepp_test_path_lines = new Line();
+    reeds_shepp_test_path_lines->color = glm::vec3(1.0f, 0, 0);
+    reeds_shepp_test_path_lines->width = 5;
+
+    window->disable_cursor();
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
@@ -188,6 +224,25 @@ int main() {
                 start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir * 1.0f));
             });
         }
+
+        if (glfwGetKey(window->window, GLFW_KEY_J) == GLFW_PRESS) {
+            std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.get_optimal_dubins_path(start_pos, end_pos, min_radius);
+            std::vector<NonholonomicPos> discretized_path = reeds_shepp.discretize_path(start_pos, reeds_shepp_test_path, 8, min_radius);
+            // std::vector<NonholonomicPos> discretized_path = reeds_shepp.get_optimal_path_discretized(start_pos, end_pos, 8, min_radius);
+
+            std::vector<LineInstance> reeds_shepp_test_line_instances;
+            if (discretized_path.size() >= 2)
+            for (int i = 0; i < discretized_path.size() - 1; i++) {
+                LineInstance line_instance;
+                line_instance.p0 = discretized_path[i].pos;
+                line_instance.p1 = discretized_path[i+1].pos;
+
+                reeds_shepp_test_line_instances.push_back(line_instance);
+
+                reeds_shepp_test_path_lines->set_lines(reeds_shepp_test_line_instances);
+            }
+        }
+
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
@@ -239,6 +294,16 @@ int main() {
                     voxel_editor.set(intersected_voxel_poses[i], new_voxel);
                 }
             });
+        }
+
+        if (glfwGetKey(window->window, GLFW_KEY_U) == GLFW_PRESS) {  
+            nonholonomic_astar->TEMPPPPPTESTTTT = false;
+            std::cout << "FALSE" << std::endl;
+        }
+
+        if (glfwGetKey(window->window, GLFW_KEY_Y) == GLFW_PRESS) {  
+            nonholonomic_astar->TEMPPPPPTESTTTT = true;
+            std::cout << "TRUE" << std::endl;
         }
 
         if (glfwGetKey(window->window, GLFW_KEY_E) == GLFW_PRESS) {  
@@ -363,6 +428,8 @@ int main() {
             
         window->draw(start_dir_line, camera);
         window->draw(end_dir_line, camera);
+
+        window->draw(reeds_shepp_test_path_lines, camera);
         
         window->swap_buffers();
         engine->poll_events();

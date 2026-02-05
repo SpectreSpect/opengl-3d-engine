@@ -278,8 +278,8 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         int gz = base_z + vz;
 
         float h = height_at(gx, gz);
-        int y_surface = (int)std::floor(h);
-        // int y_surface = 0;
+        // int y_surface = (int)std::floor(h);
+        int y_surface = 0;
 
         float cosUp = cos_up_at(gx, gz); // <-- the value you asked for
 

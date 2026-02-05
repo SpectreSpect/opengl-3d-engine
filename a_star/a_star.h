@@ -32,6 +32,7 @@ public:
     const int max_step_up = 500;
     const int max_drop = 500;
     const int max_y_diff = 1;
+    bool allow_diagonal_moves = false;
 
     OccupancyGrid3D* grid;
     AStar();

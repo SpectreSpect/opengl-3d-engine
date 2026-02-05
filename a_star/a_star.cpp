@@ -154,6 +154,11 @@ PlainAstarData AStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_pos) {
 
                 if (dx == 0 && dz == 0)
                     continue;
+                
+                if (!allow_diagonal_moves) {
+                    if (dx != 0 && dz != 0)
+                        continue;
+                }
 
                 int nx = dx + cur_cell.pos.x;
                 int ny = cur_cell.pos.y;

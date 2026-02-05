@@ -25,7 +25,6 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
             std::cout << "LIMIT EXCEEDED" << std::endl;
             return {};
         }
-            
 
         uint64_t cur_key = grid->pack_key(cur_cell.pos.x, cur_cell.pos.y, cur_cell.pos.z);
         auto cur_it = g_score.find(cur_key);
@@ -37,8 +36,6 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
         closed_heap[cur_key] = cur_cell;
 
         counter++;
-        // std::cout << "(" << cur_cell.pos.x << ", " << cur_cell.pos.y << ", " << cur_cell.pos.z << ") ";
-        // std::cout << "(" << end_pos.x << ", " << end_pos.y << ", " << end_pos.z << ")" << std::endl;
         if (cur_cell.pos == end_pos)
             return reconstruct_path(closed_heap, cur_cell.pos);
             
@@ -47,6 +44,11 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
 
                 if (dx == 0 && dz == 0)
                     continue;
+                
+                if (!allow_diagonal_moves) {
+                    if (dx != 0 && dz != 0)
+                        continue;
+                }
 
                 int nx = dx + cur_cell.pos.x;
                 int ny = cur_cell.pos.y;
@@ -92,6 +94,5 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 pq.push(new_cell);
             }
     }
-    // std::cout << "FFFFFFFFFF" << std::endl;
     return {};
 }

@@ -46,7 +46,7 @@ public:
         // float movment_speed = 5.0
     ) : position(pos), up(up_vec), fov(fov_deg)
     {
-        front = {0.0f, 0.0f, -1.0f};
+        front = {0.0f, 0.0f, 1.0f};
     }
 
     glm::mat4 get_view_matrix() const;

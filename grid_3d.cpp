@@ -328,7 +328,7 @@ bool Grid3D::adjust_to_ground(glm::vec3& output, int max_step_up, int max_drop, 
         result_pos += glm::ivec3(0, 1, 0); // first invisible pos
     
     if (max_y_diff >= 0) {
-        float diff = std::abs(norm_pos.y - output.y);
+        float diff = std::abs(result_pos.y - norm_pos.y);
         if (diff > max_y_diff) {
             return false;
         }
@@ -383,6 +383,18 @@ bool Grid3D::get_ground_positions(std::vector<glm::vec3> polyline, std::vector<g
        
     for (int i = 0; i < polyline.size() - 1; i++) {
         if (!get_ground_positions(polyline[i], polyline[i+1], output, max_step_up, max_drop, max_y_diff))
+            return false;
+    }
+    
+    return true;
+}
+
+bool Grid3D::get_ground_positions(std::vector<NonholonomicPos> polyline, std::vector<glm::ivec3>& output, int max_step_up, int max_drop, int max_y_diff) {
+    if (polyline.size() < 2)
+        return false;
+       
+    for (int i = 0; i < polyline.size() - 1; i++) {
+        if (!get_ground_positions(polyline[i].pos, polyline[i+1].pos, output, max_step_up, max_drop, max_y_diff))
             return false;
     }
     

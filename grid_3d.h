@@ -28,6 +28,8 @@ public:
     bool get_closest_visible_bottom_pos(glm::ivec3 pos, glm::ivec3 &result, int max_drop);
     bool get_ground_positions(glm::vec3 pos1, glm::vec3 pos2, std::vector<glm::ivec3>& output, int max_step_up = 500, int max_drop = 500, int max_y_diff = -1);
     bool get_ground_positions(std::vector<glm::vec3> polyline, std::vector<glm::ivec3>& output, int max_step_up = 500, int max_drop = 500, int max_y_diff = -1);
+    bool get_ground_positions(std::vector<NonholonomicPos> polyline, std::vector<glm::ivec3>& output, int max_step_up = 500, int max_drop = 500, int max_y_diff = -1);
+    
     // glm::ivec2 floor_pos2(const glm::vec2& p);
     // static uint64_t pack_key2(int32_t x, int32_t y);
     std::vector<glm::ivec3> line_intersects_xz(glm::vec3 pos1, glm::vec3 pos2);
