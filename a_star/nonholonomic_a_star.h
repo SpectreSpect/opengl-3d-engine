@@ -173,6 +173,7 @@ public:
     }
 
     DistToPathData dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path);
+    DistToPathData max_unimpended_dist_to_path(glm::ivec3 pos, std::vector<glm::ivec3>& path);
     DistToPathData dist_to_path_dubins(NonholonomicPos pos, std::vector<glm::ivec3>& path);
     float follow_plain_astar_heuristic(glm::ivec3 pos, std::vector<glm::ivec3>& path, float scale = 1.0f, float dist_to_path_threshold = 2.0f);
     static int discretize_angle(float value, int num_bins);
