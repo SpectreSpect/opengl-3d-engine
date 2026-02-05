@@ -140,7 +140,7 @@ public:
     int num_theta_bins = 128;
     float switch_dir_pentalty = 1.5;
     float change_steer_pentalty = 1.5;
-    bool use_reed_shepps_fallback = false;
+    bool use_reed_shepps_fallback = true;
     uint64_t state_counter = 0;
     int iteration_limit = 10000;
     bool track_explored_paths = true;

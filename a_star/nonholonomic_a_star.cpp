@@ -648,7 +648,7 @@ float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, Nonholonomi
     unimpended_dist.id = -1;
     if (plain_a_star_path.path.size() > 0) {
         dist_to_path_data = dist_to_path(new_pos.pos, plain_a_star_path.path);
-        unimpended_dist = max_unimpended_dist_to_path(new_pos.pos, plain_a_star_path.path);
+        // unimpended_dist = max_unimpended_dist_to_path(new_pos.pos, plain_a_star_path.path);
         // dist_to_path_data = dist_to_path_dubins(new_pos, plain_a_star_path.path);
         if (dist_to_path_data.id == -1)
             follow_plain_astar_f = 0;
@@ -718,32 +718,56 @@ float NonholonomicAStar::get_nonholonomic_f(NonholonomicPos new_pos, Nonholonomi
     // int target_id = ((int)((dist_to_path_data.id / 5.0f) + 1) * 5.0f) + 5.0f;
     // std::cout << target_id << std::endl;
 
-    int target_id = unimpended_dist.id;
-    std::cout << target_id << std::endl;
+    // int target_id = unimpended_dist.id;
+    // std::cout << target_id << std::endl;
     
 
-    glm::vec3 dir = glm::normalize((glm::vec3)plain_a_star_path.path[target_id] - (glm::vec3)plain_a_star_path.path[target_id-1]);
-    NonholonomicPos remote_plain_astar_pos;
-    remote_plain_astar_pos.pos = plain_a_star_path.path[target_id];
-    remote_plain_astar_pos.theta = std::atan2(dir.z, dir.x);
+    // glm::vec3 dir = glm::normalize((glm::vec3)plain_a_star_path.path[target_id] - (glm::vec3)plain_a_star_path.path[target_id-1]);
+    // NonholonomicPos remote_plain_astar_pos;
+    // remote_plain_astar_pos.pos = plain_a_star_path.path[target_id];
+    // remote_plain_astar_pos.theta = std::atan2(dir.z, dir.x);
 
     // std::vector<NonholonomicPathElement> reeds_shepp_path = ReedsShepp::get_optimal_path(new_pos, remote_plain_astar_pos, min_radius);
     // // std::vector<NonholonomicPathElement> reeds_shepp_test_path = ReedsShepp::get_optimal_dubins_path(new_pos, end_pos, min_radius);
     // float reeds_shepp_f = ReedsShepp::get_length(reeds_shepp_path) * min_radius;
 
-    float f = plain_a_star_path.dist_to_end[dist_to_path_data.id];
-    if (glm::distance(new_pos.pos, remote_plain_astar_pos.pos) > 8.0f) {
-        std::vector<NonholonomicPathElement> dubins_path = ReedsShepp::get_optimal_dubins_path(new_pos, remote_plain_astar_pos, min_radius);
-        f = plain_a_star_path.dist_to_end[target_id] + ReedsShepp::get_length(dubins_path) * min_radius;
-    }
-    else {
-        std::cout << "NO" << std::endl;
-    }
+    // float f = plain_a_star_path.dist_to_end[dist_to_path_data.id] + dist_to_path_data.dist;
+    // if (glm::distance(new_pos.pos, remote_plain_astar_pos.pos) > .0f) {
+    //     std::vector<NonholonomicPathElement> dubins_path = ReedsShepp::get_optimal_dubins_path(new_pos, remote_plain_astar_pos, min_radius);
+    //     f = plain_a_star_path.dist_to_end[0] + plain_a_star_path.dist_to_end[target_id] + ReedsShepp::get_length(dubins_path) * min_radius;
+    // }
+    // else {
+    //     std::cout << "NO" << std::endl;
+    // }
 
-    if (glm::distance(new_pos.pos, end_pos.pos) <= 8.0f) {
-        std::vector<NonholonomicPathElement> reeds_shepp_path = ReedsShepp::get_optimal_path(new_pos, end_pos, min_radius);
-        f = ReedsShepp::get_length(reeds_shepp_path) * min_radius;
-    }
+
+    // float f = plain_a_star_path.dist_to_end[dist_to_path_data.id] + dist_to_path_data.dist;
+    // if (glm::distance(new_pos.pos, remote_plain_astar_pos.pos) > 20.0f) {
+    // std::vector<NonholonomicPathElement> dubins_path = ReedsShepp::get_optimal_dubins_path(new_pos, end_pos, min_radius);
+
+    float f = follow_plain_astar_f;
+    // if (glm::distance(new_pos.pos, end_pos.pos) <= 5.0f) {
+    // std::vector<NonholonomicPathElement> reeds_shepp_path = ReedsShepp::get_optimal_path(new_pos, end_pos, min_radius);
+    // f = ReedsShepp::get_length(reeds_shepp_path) * min_radius;
+    // }
+        
+
+    // float f = plain_a_star_path.dist_to_end[target_id] + ReedsShepp::get_length(dubins_path) * min_radius * 0.9f;
+    // float f = follow_plain_astar_f;
+    // }
+    // else {
+    //     std::cout << "NO" << std::endl;
+    // }
+
+
+
+
+
+
+    // if (glm::distance(new_pos.pos, end_pos.pos) <= 8.0f) {
+    //     std::vector<NonholonomicPathElement> reeds_shepp_path = ReedsShepp::get_optimal_path(new_pos, end_pos, min_radius);
+    //     f = ReedsShepp::get_length(reeds_shepp_path) * min_radius;
+    // }
 
     
 
@@ -822,17 +846,22 @@ bool NonholonomicAStar::crosses_extreme_curvature(const std::vector<glm::ivec3>&
 }
 
 bool NonholonomicAStar::try_reeds_shepp_shot(NonholonomicPos& start, NonholonomicPos& end, std::vector<NonholonomicPos>& out_path) {
-    out_path = find_reeds_shepp(start, end);
-    // const float min_radius = wheel_base / std::tan(max_steer);
-    // out_path = ReedsShepp::get_optimal_path_discretized(start, end, 8, min_radius);
+    // out_path = find_reeds_shepp(start, end);
+
+    const float min_radius = wheel_base / std::tan(max_steer);
+    out_path = ReedsShepp::get_optimal_path_discretized(start, end, 8, min_radius);
 
     if (out_path.empty())
         return false;
 
     if (!grid->adjust_to_ground(out_path, max_step_up, max_drop, max_y_diff))
         return false;
+    
+    std::vector<glm::ivec3> ground_positions;
+    if (!grid->get_ground_positions(out_path, ground_positions, max_step_up, max_drop, max_y_diff))
+        return false;
 
-    if (!crosses_extreme_curvature(out_path, curvature_limit))
+    if (!crosses_extreme_curvature(ground_positions, curvature_limit))
         return false;
     
     return true;
@@ -929,8 +958,8 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
             }
 
 
-            // if (dir == -1 && TEMPPPPPTESTTTT)  
-            //     motion_dist *= 1.2f;
+            if (dir == -1)  
+                motion_dist *= 4.0f;
 
             // if (dir != cur_cell.pos.dir && TEMPPPPPTESTTTT)  
             //     motion_dist += 2.0f;
