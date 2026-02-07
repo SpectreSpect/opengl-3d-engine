@@ -177,7 +177,7 @@ public:
     DistToPathData dist_to_path_dubins(NonholonomicPos pos, std::vector<glm::ivec3>& path);
     float follow_plain_astar_heuristic(glm::ivec3 pos, std::vector<glm::ivec3>& path, float scale = 1.0f, float dist_to_path_threshold = 2.0f);
     static int discretize_angle(float value, int num_bins);
-    float get_nonholonomic_f(NonholonomicPos new_pos, NonholonomicPos end_pos, NonholonomicPos cur_pos, PlainAstarData plain_a_star_path);
+    float get_nonholonomic_f(NonholonomicPos& new_pos, NonholonomicPos end_pos, NonholonomicPos cur_pos, PlainAstarData plain_a_star_path);
     std::vector<NonholonomicPos> find_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);
     double reeds_shepp_distance(NonholonomicPos& start_pos, NonholonomicPos& end_pos);
     bool shot_reeds_shepp(NonholonomicPos start_pos, NonholonomicPos end_pos);

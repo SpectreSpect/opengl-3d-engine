@@ -139,8 +139,8 @@ int main() {
     voxel_grid->update(window, camera);
     // sleep(1);
 
-    NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(0, 0, 0), 0};
-    NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(5, 0, 10), 0};
+    NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(-0.388, 1.2f, -1.719), 0};
+    NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(-4.061, 1.2f, -7.569), 0};
 
     float const path_lines_width = 5.0f;
     std::vector<Line*> path_lines;
@@ -191,6 +191,17 @@ int main() {
     Line* reeds_shepp_test_path_lines = new Line();
     reeds_shepp_test_path_lines->color = glm::vec3(1.0f, 0, 0);
     reeds_shepp_test_path_lines->width = 5;
+
+
+    // end_pos.pos = camera->position;
+    // voxel_grid->adjust_to_ground(end_pos.pos);
+    // end_pos.pos.y += 0.2f;
+
+    end_pos.theta = glm::radians(30.0f);
+    glm::vec3 end_dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
+    end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + end_dir * 1.0f));
+
+
 
     window->disable_cursor();
     while(window->is_open()) {
@@ -243,8 +254,35 @@ int main() {
             }
         }
 
+        if (glfwGetKey(window->window, GLFW_KEY_H) == GLFW_PRESS) {
+            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+                Voxel new_voxel = Voxel();
+                new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+                new_voxel.visible = true;
+
+                for (int z = 0; z < 5; z++) {
+                    for (int y = 0; y < 5; y++) {
+                        glm::ivec3 pos = glm::ivec3(-3, y, -z);
+                        voxel_editor.set(pos, new_voxel);
+                    }
+                }
+
+                for (int x = -3; x < 5; x++) {
+                    for (int y = 0; y < 5; y++) {
+                        glm::ivec3 pos = glm::ivec3(x, y, -5);
+                        voxel_editor.set(pos, new_voxel);
+                    }
+                }
+            });
+        }
+
+
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
+
+
+
+
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
