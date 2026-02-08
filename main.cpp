@@ -192,6 +192,10 @@ int main() {
     reeds_shepp_test_path_lines->color = glm::vec3(1.0f, 0, 0);
     reeds_shepp_test_path_lines->width = 5;
 
+    Line* unimpended_line = new Line();
+    unimpended_line->color = glm::vec3(1.0f, 0, 0);
+    unimpended_line->width = 5;
+
 
     // end_pos.pos = camera->position;
     // voxel_grid->adjust_to_ground(end_pos.pos);
@@ -255,25 +259,53 @@ int main() {
         }
 
         if (glfwGetKey(window->window, GLFW_KEY_H) == GLFW_PRESS) {
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-                Voxel new_voxel = Voxel();
-                new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-                new_voxel.visible = true;
+            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+            //     Voxel new_voxel = Voxel();
+            //     new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
+            //     new_voxel.visible = true;
 
-                for (int z = 0; z < 5; z++) {
-                    for (int y = 0; y < 5; y++) {
-                        glm::ivec3 pos = glm::ivec3(-3, y, -z);
-                        voxel_editor.set(pos, new_voxel);
-                    }
-                }
+            //     for (int z = 0; z < 5; z++) {
+            //         for (int y = 0; y < 5; y++) {
+            //             glm::ivec3 pos = glm::ivec3(-3, y, -z);
+            //             voxel_editor.set(pos, new_voxel);
+            //         }
+            //     }
 
-                for (int x = -3; x < 5; x++) {
-                    for (int y = 0; y < 5; y++) {
-                        glm::ivec3 pos = glm::ivec3(x, y, -5);
-                        voxel_editor.set(pos, new_voxel);
-                    }
-                }
-            });
+            //     for (int x = -3; x < 5; x++) {
+            //         for (int y = 0; y < 5; y++) {
+            //             glm::ivec3 pos = glm::ivec3(x, y, -5);
+            //             voxel_editor.set(pos, new_voxel);
+            //         }
+            //     }
+            // });
+
+            std::vector<LineInstance> unimpended_line_instances;
+
+            if(nonholonomic_astar->unimpended_astar_positions.size() >= 2)
+            for (int i = 0; i < nonholonomic_astar->unimpended_astar_positions.size()-1; i++) {
+                LineInstance unimpended_line_instance;
+                unimpended_line_instance.p0 = nonholonomic_astar->unimpended_astar_positions[i].pos + glm::vec3(0.0f, 0.2f, 0.f);
+                unimpended_line_instance.p1 = nonholonomic_astar->unimpended_astar_positions[i+1].pos + glm::vec3(0.0f, 0.2f, 0.f);
+
+                unimpended_line_instances.push_back(unimpended_line_instance);
+            }
+
+            unimpended_line->set_lines(unimpended_line_instances);
+
+
+
+            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
+
+            //     end_pos.pos = camera->position;
+            //     voxel_grid->adjust_to_ground(end_pos.pos);
+            //     end_pos.pos.y += 0.2f;
+
+            //     end_pos.theta = glm::radians(camera_controller->yaw);
+
+            //     float angle = end_pos.theta; // or + 3.14159265f
+            //     glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
+            //     end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + dir * 1.0f));
+            // });
         }
 
 
@@ -466,6 +498,7 @@ int main() {
             
         window->draw(start_dir_line, camera);
         window->draw(end_dir_line, camera);
+        window->draw(unimpended_line, camera);
 
         window->draw(reeds_shepp_test_path_lines, camera);
         
