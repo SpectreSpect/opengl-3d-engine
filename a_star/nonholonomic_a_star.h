@@ -143,6 +143,7 @@ public:
     float switch_dir_pentalty = 1.5;
     float change_steer_pentalty = 1.5;
     bool use_reed_shepps_fallback = false;
+    bool force_reeds_shepp_shot = false;
     uint64_t state_counter = 0;
     int iteration_limit = 10000;
     bool track_explored_paths = true;

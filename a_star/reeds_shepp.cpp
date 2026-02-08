@@ -79,6 +79,7 @@ std::vector<NonholonomicPos> ReedsShepp::discretize_path(NonholonomicPos start_p
             glm::vec3 dir = glm::vec3(cos(last_point.theta), 0, sin(last_point.theta));
             last_point.pos += dir * (path[i].dist * min_radius) * gear;
 
+            last_point.dir = gear;
             output_path.push_back(last_point);
         }
         else {
@@ -93,6 +94,7 @@ std::vector<NonholonomicPos> ReedsShepp::discretize_path(NonholonomicPos start_p
                 last_point.pos.x += (std::sin(theta0 + dtheta) - std::sin(theta0)) / k;
                 last_point.pos.z += (-std::cos(theta0 + dtheta) + std::cos(theta0)) / k;
                 last_point.theta = theta0 + dtheta;
+                last_point.dir = gear;
                 
                 // glm::vec3(cos(stride * steering), 0, sin(stride * steering)) * gear;  
                 
