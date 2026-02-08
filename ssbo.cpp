@@ -313,3 +313,7 @@ uint32_t SSBO::read_u32(std::size_t offset_bytes) const {
     read_subdata(offset_bytes, &v, sizeof(uint32_t));
     return v;
 }
+
+GLuint SSBO::id() {
+    return id_;
+}

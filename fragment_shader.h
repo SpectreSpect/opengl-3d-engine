@@ -13,5 +13,11 @@
 
 class FragmentShader : public Shader {
 public:
+    FragmentShader() = default;
     FragmentShader(std::string path);
+
+    FragmentShader(const FragmentShader&) = delete;
+    FragmentShader& operator=(const FragmentShader&) = delete;
+    FragmentShader(FragmentShader&& o) noexcept;
+    FragmentShader& operator=(FragmentShader&& o) noexcept;
 };

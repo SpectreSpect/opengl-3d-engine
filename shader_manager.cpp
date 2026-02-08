@@ -19,5 +19,20 @@ void ShaderManager::init_shaders(std::string& root_path) {
     add_shader(build_active_chunks_cs, ComputeShader((p / "shaders" / "voxel_rasterization" / "build_active_chunks_cs.glsl").string()));
     add_shader(roi_finalize_cs, ComputeShader((p / "shaders" / "voxel_rasterization" / "roi_finalize_cs.glsl").string()));
 
+    add_shader(clear_chunks_cs, ComputeShader((p / "shaders" / "voxel_grid" / "clear_chunks.glsl").string()));
+    add_shader(set_chunks_cs, ComputeShader((p / "shaders" / "voxel_grid" / "set_chunks.glsl").string()));
+    add_shader(world_init_cs, ComputeShader((p / "shaders" / "voxel_grid" / "world_init.glsl").string()));
+    add_shader(apply_writes_to_world_cs, ComputeShader((p / "shaders" / "voxel_grid" / "apply_writes_to_world.glsl").string()));
+    add_shader(mesh_counters_reset_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_counters_reset.glsl").string()));
+    add_shader(mesh_reset_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_reset.glsl").string()));
+    add_shader(mesh_count_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_count.glsl").string()));
+    add_shader(mesh_alloc_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_alloc.glsl").string()));
+    add_shader(mesh_emit_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_emit.glsl").string()));
+    add_shader(mesh_finalize_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mesh_finalize.glsl").string()));
+    add_shader(cmdcount_reset_cs, ComputeShader((p / "shaders" / "voxel_grid" / "cmdcount_reset.glsl").string()));
+    add_shader(build_indirect_cmds_cs, ComputeShader((p / "shaders" / "voxel_grid" / "build_indirect_cmds.glsl").string()));
+    add_shader(reset_dirty_count_cs, ComputeShader((p / "shaders" / "voxel_grid" / "reset_dirty_count.glsl").string()));
+    add_shader(voxel_mesh_vs, VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string()));
+    add_shader(voxel_mesh_fs, FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string()));
 }
 

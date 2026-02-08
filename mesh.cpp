@@ -6,7 +6,7 @@ Mesh::Mesh(std::vector<float>& vertices, std::vector<unsigned int>& indices, Ver
     ebo = new EBO(indices.data(), indices.size() * sizeof(unsigned int));
     this->vertex_layout = vertex_layout;
 
-    vao->setup(vbo, ebo, vertex_layout);
+    vao->setup(*vbo, *ebo, *vertex_layout);
 }
 
 Mesh::~Mesh() {

@@ -5,5 +5,11 @@
 
 class VfProgram : public Program {
 public:
+    VfProgram() = default;
     VfProgram(VertexShader* vertex_shader, FragmentShader* fragment_shader);
+
+    VfProgram(const VfProgram&) = delete;
+    VfProgram& operator=(const VfProgram&) = delete;
+    VfProgram(VfProgram&& o) noexcept;
+    VfProgram& operator=(VfProgram&& o) noexcept;
 };

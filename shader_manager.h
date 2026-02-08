@@ -4,6 +4,8 @@
 #include <filesystem>
 
 #include "compute_shader.h"
+#include "vertex_shader.h"
+#include "fragment_shader.h"
 
 namespace fs = std::filesystem;
 
@@ -22,6 +24,23 @@ public:
     ComputeShader roi_reduce_pairs_cs;
     ComputeShader build_active_chunks_cs;
     ComputeShader roi_finalize_cs;
+
+    //voxel_grid
+    ComputeShader clear_chunks_cs;
+    ComputeShader set_chunks_cs;
+    ComputeShader world_init_cs;
+    ComputeShader apply_writes_to_world_cs;
+    ComputeShader mesh_counters_reset_cs;
+    ComputeShader mesh_reset_cs;
+    ComputeShader mesh_count_cs;
+    ComputeShader mesh_alloc_cs;
+    ComputeShader mesh_emit_cs;
+    ComputeShader mesh_finalize_cs;
+    ComputeShader cmdcount_reset_cs;
+    ComputeShader build_indirect_cmds_cs;
+    ComputeShader reset_dirty_count_cs;
+    VertexShader voxel_mesh_vs;
+    FragmentShader voxel_mesh_fs;
 
     std::vector<Shader*> shaders;
 
