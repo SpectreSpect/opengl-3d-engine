@@ -630,6 +630,9 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
 
     state_plain_astar_path = find_path(glm::ivec3(glm::floor(start_pos.pos)), glm::ivec3(glm::floor(end_pos.pos)));
 
+    if (state_plain_astar_path.path.empty())
+        return;
+
     unimpended_astar_positions = std::vector<NonholonomicPos>();
 
     NonholonomicPos first_unimpended_pos = start_pos;
@@ -639,14 +642,20 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
     dubins_segment_lengths = std::vector<float>();
 
     NonholonomicPos cur_pos = start_pos;
-    int last_id = -1;
+    // int last_id = -1;
+    int last_id = 0;
+    int stride = 5;
     while(true) {
-        DistToPathData unimpended_dist_data = max_unimpended_dist_to_path(cur_pos.pos, state_plain_astar_path.path, last_id + 1, end_pos.pos, true);
+        // DistToPathData unimpended_dist_data = max_unimpended_dist_to_path(cur_pos.pos, state_plain_astar_path.path, last_id + 1, end_pos.pos, true);
+        last_id = std::min((float)last_id + stride, (float)state_plain_astar_path.path.size() - 1);
+        DistToPathData unimpended_dist_data;
+        unimpended_dist_data.id = last_id;
+        
 
-        if (last_id == unimpended_dist_data.id || unimpended_dist_data.id == -1)
-            break;
+        // if (last_id == unimpended_dist_data.id || unimpended_dist_data.id == -1)
+        //     break;
 
-        last_id = unimpended_dist_data.id;
+        // last_id = unimpended_dist_data.id;
 
         NonholonomicPos unimpended_pos;
         
