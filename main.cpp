@@ -193,7 +193,7 @@ int main() {
     reeds_shepp_test_path_lines->width = 5;
 
     Line* unimpended_line = new Line();
-    unimpended_line->color = glm::vec3(1.0f, 0, 0);
+    unimpended_line->color = glm::vec3(1.0f, 1.0f, 0);
     unimpended_line->width = 5;
 
 
@@ -205,7 +205,8 @@ int main() {
     glm::vec3 end_dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
     end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + end_dir * 1.0f));
 
-
+    bool force_stop = false;
+    bool TEMP_block_start_pathfinnding = false;
 
     window->disable_cursor();
     while(window->is_open()) {
@@ -308,6 +309,11 @@ int main() {
             // });
         }
 
+        if (glfwGetKey(window->window, GLFW_KEY_M) == GLFW_PRESS) {  
+            force_stop = true;
+        }
+
+
 
 
         if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
@@ -398,8 +404,10 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {            
+        if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {      
+            TEMP_block_start_pathfinnding = false;      
             nonholonomic_astar->initialize(start_pos, end_pos);
+
             simulation_running = false;
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
@@ -429,14 +437,56 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_O) == GLFW_PRESS) {
+        if (glfwGetKey(window->window, GLFW_KEY_O) == GLFW_PRESS && !TEMP_block_start_pathfinnding) {
             simulation_running = true;
+            // TEMP_block_start_pathfinnding = true;
+
+            // auto start_point = std::chrono::steady_clock::now();
+            // nonholonomic_astar->initialize(start_pos, end_pos);
+            // nonholonomic_astar->find_nonholomic_path();
+            // auto end_point = std::chrono::steady_clock::now();
+
+            // double ms = std::chrono::duration<double, std::milli>(end_point - start_point).count();
+
+            // std::cout << "Nonholonomic path finding time: " << ms << " ms,   " << 1000.0 / ms << " fps" << std::endl;
         }
 
+
         if (simulation_running) {
-            if (nonholonomic_astar->find_nonholomic_path_step()) {
+            if (nonholonomic_astar->find_nonholomic_path_step() || force_stop) {
+                force_stop = false;
                 simulation_running = false;
-                std::cout << "Simulation ended" << std::endl;
+                // std::cout << "Simulation ended" << std::endl;
+                std::cout << std::endl;
+                std::cout << std::endl;
+                std::cout << std::endl;
+
+                double motion_simulation_time = nonholonomic_astar->motion_simulation_time.average_ms();
+                double adjust_to_ground_time = nonholonomic_astar->adjust_to_ground_time.average_ms();
+                double get_ground_positions_time = nonholonomic_astar->get_ground_positions_time.average_ms();
+                double crosses_extreme_curvature_time = nonholonomic_astar->crosses_extreme_curvature_time.average_ms();
+                double get_nonholonomic_f_time = nonholonomic_astar->get_nonholonomic_f_time.average_ms();
+
+                double total_time = 0;
+
+                total_time += motion_simulation_time;
+                total_time += adjust_to_ground_time;
+                total_time += get_ground_positions_time;
+                total_time += crosses_extreme_curvature_time;
+                total_time += get_nonholonomic_f_time;
+
+                std::cout << "motion_simulation_time: " << motion_simulation_time << " ms   " << (motion_simulation_time / total_time) * 100.0 << " %" << std::endl;
+                std::cout << "adjust_to_ground_time: " << adjust_to_ground_time << " ms     " << (adjust_to_ground_time / total_time) * 100.0 << " %" << std::endl;
+                std::cout << "get_ground_positions_time: " << get_ground_positions_time << " ms     " << (get_ground_positions_time / total_time) * 100.0 << " %" << std::endl;
+                std::cout << "crosses_extreme_curvature_time: " << crosses_extreme_curvature_time << " ms   " << (crosses_extreme_curvature_time / total_time) * 100.0 << " %" << std::endl;
+                std::cout << "get_nonholonomic_f_time: " << get_nonholonomic_f_time << " ms     " << (get_nonholonomic_f_time / total_time) * 100.0 << " %" << std::endl;
+                std::cout << "total: " << total_time << " ms" << std::endl;
+
+                // AvgTimer motion_simulation_time;
+                // AvgTimer adjust_to_ground_time;
+                // AvgTimer get_ground_positions_time;
+                // AvgTimer crosses_extreme_curvature_time;
+                // AvgTimer get_nonholonomic_f_time;
             }
         }
 

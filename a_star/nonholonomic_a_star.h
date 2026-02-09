@@ -8,6 +8,7 @@
 #include "../nonholonomic_pos.h"
 #include "reeds_shepp.h"
 #include <algorithm>
+#include <chrono>
 
 
 // struct NonholonomicPos {
@@ -27,6 +28,33 @@
 //     //     return p && t;
 //     // }
 // };
+
+
+struct AvgTimer {
+    std::chrono::steady_clock::duration total{};
+    std::size_t n = 0;
+    std::chrono::_V2::steady_clock::time_point start_point;
+
+    void start() {
+        start_point = std::chrono::steady_clock::now();
+    }
+
+    void end() {
+        auto end_point = std::chrono::steady_clock::now();
+
+        add(end_point - start_point);
+
+        start_point = std::chrono::_V2::steady_clock::time_point();
+    }
+
+    void add(std::chrono::steady_clock::duration d) { total += d; ++n; }
+
+    double average_ms() const {
+        return n
+            ? std::chrono::duration<double, std::milli>(total).count() / n
+            : 0.0;
+    }
+};
 
 struct NonholonomicAStarCell {
     float g;
@@ -129,10 +157,12 @@ public:
     PlainAstarData state_plain_astar_path;
     float state_plain_astar_path_length = 999999;
     std::vector<NonholonomicPos> unimpended_astar_positions;
+    std::vector<float> dubins_segment_lengths;
     std::vector<float> dubins_distance_to_end;
 
     float wheel_base = 2.5f;
     float max_steer = 0.6;
+    float min_radius = 0.0f;
     float integration_steps = 8;
     // float motion_simulation_dist = 0.2f;
     float motion_simulation_dist = 1.5f;
@@ -148,6 +178,12 @@ public:
     int iteration_limit = 10000;
     bool track_explored_paths = true;
     bool TEMPPPPPTESTTTT = false;
+
+    AvgTimer motion_simulation_time;
+    AvgTimer adjust_to_ground_time;
+    AvgTimer get_ground_positions_time;
+    AvgTimer crosses_extreme_curvature_time;
+    AvgTimer get_nonholonomic_f_time;
 
     NonholonomicAStar(VoxelGrid* voxel_grid);
 
@@ -196,6 +232,7 @@ public:
     bool try_reeds_shepp_shot(NonholonomicPos& start, NonholonomicPos& end, std::vector<NonholonomicPos>& out_path);
     bool try_finish_with_reeds_shepp(NonholonomicPos& from, NonholonomicPos& to);
     bool find_nonholomic_path_step();
+    void find_nonholomic_path();
     // std::vector<NonholonomicPos> find_nonholomic_path(NonholonomicPos start_pos, NonholonomicPos end_pos);
     
 };
