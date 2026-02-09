@@ -10,7 +10,7 @@ uniform mat4 uProjView;
 out vec3 vNormal;
 out vec3 vFragPos;
 out vec3 vColor;
-flat out uint vFace;
+out float vAO;
 
 vec3 face_normal(uint f) {
     // face: 0=+X,1=-X,2=+Y,3=-Y,4=+Z,5=-Z
@@ -37,7 +37,7 @@ void main() {
     vNormal = normalize(normalMat * face_normal(aFace));
 
     vColor = unpack_rgb(aColor);
-    vFace = aFace;
+    vAO = float((aColor >> 24) & 0xFFu) / 255.0;
 
     gl_Position = uProjView * worldPos4;
 }
