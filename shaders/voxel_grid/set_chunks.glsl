@@ -13,6 +13,7 @@ uniform uint u_set_with_replace;
 
 #define SLOT_EMPTY  0xFFFFFFFFu
 #define SLOT_LOCKED 0xFFFFFFFEu
+#define SLOT_TOMB   0xFFFFFFFDu
 #define COUNT_RETRIES 5u
 
 uint hash_uvec2(uvec2 v) {

@@ -39,6 +39,12 @@ public:
     ComputeShader cmdcount_reset_cs;
     ComputeShader build_indirect_cmds_cs;
     ComputeShader reset_dirty_count_cs;
+    ComputeShader bucket_reset_cs;
+    ComputeShader bucket_build_cs;
+    ComputeShader evict_lowprio_cs;
+    ComputeShader stream_select_chunks_cs;
+    ComputeShader stream_generate_terrain_cs;
+    ComputeShader mark_all_user_chunks_as_dirty_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

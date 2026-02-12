@@ -7,6 +7,10 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t max_quads, 
     float chunk_hash_table_size_factor,
     uint32_t max_count_probing,
+    uint32_t count_evict_buckets,
+    uint32_t min_free_chunks,
+    uint32_t max_evict_chunks,
+    uint32_t bucket_step,
     ShaderManager& shader_manager
 ) {
     assert(chunk_hash_table_size_factor >= 1.0f);
@@ -15,6 +19,10 @@ VoxelGridGPU::VoxelGridGPU(
     this->voxel_size = voxel_size;
     this->count_active_chunks = count_active_chunks;
     this->max_count_probing = max_count_probing;
+    this->count_evict_buckets = count_evict_buckets;
+    this->min_free_chunks = min_free_chunks;
+    this->max_evict_chunks = max_evict_chunks;
+    this->bucket_step = bucket_step;
 
     uint64_t raw = (uint64_t)std::ceil((double)chunk_hash_table_size_factor * (double)count_active_chunks);
     uint32_t base = (raw > UINT32_MAX) ? UINT32_MAX : (uint32_t)raw;
@@ -48,6 +56,9 @@ VoxelGridGPU::VoxelGridGPU(
     emit_counter_     = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     mesh_counters_    = SSBO(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW); // uvec2
 
+    bucket_heads_ = SSBO(sizeof(uint32_t) * count_evict_buckets, GL_DYNAMIC_DRAW);
+    bucket_next_  = SSBO(sizeof(uint32_t) * count_active_chunks, GL_DYNAMIC_DRAW);
+
     // ChunkMeshMeta (лучше 16 байт структура uint32 x4)
     chunk_mesh_meta_  = SSBO(sizeof(ChunkMeshMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
@@ -70,6 +81,9 @@ VoxelGridGPU::VoxelGridGPU(
     global_index_buffer_  = SSBO(sizeof(uint32_t) * (size_t)max_mesh_indices_,  GL_DYNAMIC_DRAW);
 
     voxel_prifab_ = SSBO(sizeof(VoxelDataGPU), GL_DYNAMIC_DRAW);
+
+    stream_counters_ = SSBO(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW);
+    load_list_       = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
     VoxelDataGPU init_chunk_voxel_prifab = {0};
     init_chunk_voxel_prifab.type_vis_flags |= (0u & 0xFFu) << 16; // Тип 0
@@ -117,14 +131,19 @@ void VoxelGridGPU::draw(RenderState state) {
     // std::cout << "count_visible: " << count_visible << std::endl;
 }
 
-void VoxelGridGPU::print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count) {
+void VoxelGridGPU::print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count, uint32_t load_list_count) {
     uint32_t counters[4] = {0};
     frame_counters_.read_subdata(0, counters, sizeof(uint32_t) * 4);
+
+    uint32_t stream_counters[2] = {0};
+    stream_counters_.read_subdata(0, stream_counters, sizeof(uint32_t) * 2);
 
     if (write_count != 0) std::cout << "write_count: " << counters[0] << std::endl;
     if (dirty_count != 0) std::cout << "dirty_count: " << counters[1] << std::endl;
     if (cmd_count != 0) std::cout << "cmd_count: " << counters[2] << std::endl;
     if (free_count != 0) std::cout << "free_count: " << counters[3] << std::endl;
+    if (load_list_count != 0) std::cout << "load_list_count: " << stream_counters[0] << std::endl;
+
 }
 
 void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
@@ -142,6 +161,12 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_cmdcount_reset_ = ComputeProgram(&shader_manager.cmdcount_reset_cs);
     prog_build_indirect_ = ComputeProgram(&shader_manager.build_indirect_cmds_cs);
     prog_reset_dirty_count_ = ComputeProgram(&shader_manager.reset_dirty_count_cs);
+    prog_bucket_reset_ = ComputeProgram(&shader_manager.bucket_reset_cs);
+    prog_bucket_build_ = ComputeProgram(&shader_manager.bucket_build_cs);
+    prog_evict_lowprio_ = ComputeProgram(&shader_manager.evict_lowprio_cs);
+    prog_stream_select_chunks_ = ComputeProgram(&shader_manager.stream_select_chunks_cs);
+    prog_stream_generate_terrain_ = ComputeProgram(&shader_manager.stream_generate_terrain_cs);
+    prog_mark_all_user_chunks_as_dirty_ = ComputeProgram(&shader_manager.mark_all_user_chunks_as_dirty_cs);
     prog_vf_voxel_mesh_diffusion_spec_ = VfProgram(&shader_manager.voxel_mesh_vs, &shader_manager.voxel_mesh_fs);
 }
 
@@ -226,20 +251,6 @@ void VoxelGridGPU::init_chunks_hash_table() {
     chunk_hash_vals_ = SSBO(sizeof(uint32_t) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
 }
 
-void VoxelGridGPU::ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys) {
-    size_t need_ids_cap = sizeof(uint32_t) * chunk_ids.size();
-    if (need_ids_cap > chunk_indices_to_set_cap_bytes_) {
-        chunk_indices_to_set_ = SSBO(need_ids_cap, GL_DYNAMIC_DRAW);
-        chunk_indices_to_set_cap_bytes_ = need_ids_cap;
-    }
-
-    size_t need_coord_keys_cap = sizeof(uint64_t) * coord_keys.size();
-    if (need_coord_keys_cap > coord_keys_to_set_cap_bytes_) {
-        coord_keys_to_set_ = SSBO(need_coord_keys_cap, GL_DYNAMIC_DRAW);
-        coord_keys_to_set_cap_bytes_ = need_coord_keys_cap;
-    }
-}
-
 void VoxelGridGPU::set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace) {
     std::vector<uint64_t> coord_keys(chunk_coords.size());
     for (uint32_t i = 0; i < chunk_coords.size(); i++) 
@@ -286,6 +297,77 @@ void VoxelGridGPU::set_chunks(const std::vector<uint32_t>& chunk_ids,
     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_max_count_probing"), max_count_probing);
     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_set_with_replace"), set_with_replace ? 1u : 0u);
     prog_set_chunks_.dispatch_compute(groups_x, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys) {
+    size_t need_ids_cap = sizeof(uint32_t) * chunk_ids.size();
+    if (need_ids_cap > chunk_indices_to_set_cap_bytes_) {
+        chunk_indices_to_set_ = SSBO(need_ids_cap, GL_DYNAMIC_DRAW);
+        chunk_indices_to_set_cap_bytes_ = need_ids_cap;
+    }
+
+    size_t need_coord_keys_cap = sizeof(uint64_t) * coord_keys.size();
+    if (need_coord_keys_cap > coord_keys_to_set_cap_bytes_) {
+        coord_keys_to_set_ = SSBO(need_coord_keys_cap, GL_DYNAMIC_DRAW);
+        coord_keys_to_set_cap_bytes_ = need_coord_keys_cap;
+    }
+}
+
+void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& camPos) {
+    // 1) reset heads
+    bucket_heads_.bind_base(16);
+
+    prog_bucket_reset_.use();
+    glUniform1ui(glGetUniformLocation(prog_bucket_reset_.id, "u_bucket_count"), this->count_evict_buckets);
+
+    uint32_t gx = math_utils::div_up_u32(this->count_evict_buckets, 256u);
+    prog_bucket_reset_.dispatch_compute(gx, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // 2) build bucket lists
+    chunk_meta_.bind_base(6);
+    bucket_heads_.bind_base(16);
+    bucket_next_.bind_base(17);
+
+    prog_bucket_build_.use();
+    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_max_chunks"), count_active_chunks);
+    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_bucket_count"), this->count_evict_buckets);
+    glUniform3f(glGetUniformLocation(prog_bucket_build_.id, "u_cam_pos"), camPos.x, camPos.y, camPos.z);
+    glUniform3i(glGetUniformLocation(prog_bucket_build_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    glUniform3f(glGetUniformLocation(prog_bucket_build_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+
+    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform1i (glGetUniformLocation(prog_bucket_build_.id, "u_pack_offset"), math_utils::OFFSET);
+
+    // scale: dist2 * scale -> bucket
+    // step (м) — размер “полосы” расстояний на бакет
+    float scale = 1.0f / (this->bucket_step * this->bucket_step);
+    glUniform1f(glGetUniformLocation(prog_bucket_build_.id, "u_bucket_scale"), scale);
+
+    gx = math_utils::div_up_u32(count_active_chunks, 256u);
+    prog_bucket_build_.dispatch_compute(gx, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // 3) evict if needed (shader сам проверит freeCount)
+    chunk_hash_keys_.bind_base(0);
+    chunk_hash_vals_.bind_base(1);
+    free_list_.bind_base(4);
+    frame_counters_.bind_base(5);
+    chunk_meta_.bind_base(6);
+    equeued_.bind_base(7);
+    chunk_mesh_meta_.bind_base(9);
+
+    bucket_heads_.bind_base(16);
+    bucket_next_.bind_base(17);
+
+    prog_evict_lowprio_.use();
+    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_bucket_count"), count_evict_buckets);
+    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_min_free"), min_free_chunks);
+    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_max_evict"), max_evict_chunks);
+
+    prog_evict_lowprio_.dispatch_compute(1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -344,6 +426,99 @@ void VoxelGridGPU::apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>&
     voxel_write_list_.update_discard(voxel_writes.data(), sizeof(VoxelWriteGPU) * voxel_writes.size());
 
     apply_writes_to_world_gpu(voxel_writes.size());
+}
+
+void VoxelGridGPU::apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos) {
+    ensure_free_chunks_gpu(cam_pos);
+    apply_writes_to_world_gpu(write_count);
+}
+
+void VoxelGridGPU::apply_writes_to_world_from_cpu_with_evict(
+    const std::vector<glm::ivec3>& positions, 
+    const std::vector<VoxelDataGPU>& voxels,
+    const glm::vec3& cam_pos) {
+    ensure_free_chunks_gpu(cam_pos);
+    apply_writes_to_world_from_cpu(positions, voxels);
+}
+
+void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks)
+{
+    // камера в локальные координаты грида (важно, если VoxelGridGPU трансформируется)
+    glm::mat4 invM = glm::inverse(get_model_matrix());
+    glm::vec3 cam_local = glm::vec3(invM * glm::vec4(cam_world_pos, 1.0f));
+
+    // reset loadCount = 0
+    uint32_t zero2[2] = {0, 0};
+    stream_counters_.update_subdata(0, zero2, sizeof(zero2));
+
+    // ---- pass 1: select/create ----
+    chunk_hash_keys_.bind_base(0);
+    chunk_hash_vals_.bind_base(1);
+    free_list_.bind_base(4);
+    frame_counters_.bind_base(5);
+    chunk_meta_.bind_base(6);
+    equeued_.bind_base(7);
+
+    stream_counters_.bind_base(16);
+    load_list_.bind_base(17);
+
+    prog_stream_select_chunks_.use();
+    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_max_load_entries"), count_active_chunks);
+    glUniform3i(glGetUniformLocation(prog_stream_select_chunks_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    glUniform3f(glGetUniformLocation(prog_stream_select_chunks_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+    glUniform3f(glGetUniformLocation(prog_stream_select_chunks_.id, "u_cam_pos_local"), cam_local.x, cam_local.y, cam_local.z);
+    glUniform1i(glGetUniformLocation(prog_stream_select_chunks_.id, "u_radius_chunks"), radius_chunks);
+    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform1i(glGetUniformLocation(prog_stream_select_chunks_.id, "u_pack_offset"), math_utils::OFFSET);
+
+    const uint32_t side = (uint32_t)(2 * radius_chunks + 1);
+    const uint32_t gx = math_utils::div_up_u32(side, 8u);
+    const uint32_t gy = math_utils::div_up_u32(side, 8u);
+    const uint32_t gz = math_utils::div_up_u32(side, 8u);
+
+    prog_stream_select_chunks_.dispatch_compute(gx, gy, gz);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::generate_terrain(uint32_t seed, uint32_t load_count) {
+    if (load_count > count_active_chunks) load_count = count_active_chunks;
+
+    // ---- pass 2: generate voxels for new chunks ----
+    stream_counters_.bind_base(16);
+    load_list_.bind_base(17);
+
+    voxels_.bind_base(3);
+    chunk_meta_.bind_base(6);
+    equeued_.bind_base(7);
+    dirty_list_.bind_base(8);
+    frame_counters_.bind_base(5);
+
+    prog_stream_generate_terrain_.use();
+    glUniform3i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    uint32_t vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
+    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_voxels_per_chunk"), vox_per_chunk);
+    glUniform3f(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform1i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_offset"), math_utils::OFFSET);
+    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_set_dirty_flag_bits"), 1u);
+    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_seed"), seed);
+
+    uint32_t groups_x = math_utils::div_up_u32(vox_per_chunk, 256u);
+    prog_stream_generate_terrain_.dispatch_compute(groups_x, load_count, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {
+    mark_chunk_to_generate(cam_world_pos, radius_chunks);
+
+    uint32_t load_count = 0;
+    stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
+    if (load_count == 0) return;
+
+    // world generation
+    generate_terrain(seed, load_count);
+    mark_all_used_chunks_as_dirty();
 }
 
 void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
@@ -584,4 +759,21 @@ void VoxelGridGPU::init_draw_buffers() {
     }
 
     vao.setup(vbo, ebo, vertex_layout);
+}
+
+void VoxelGridGPU::mark_all_used_chunks_as_dirty() {
+    chunk_meta_.bind_base(6);
+    equeued_.bind_base(7);
+    dirty_list_.bind_base(8);
+    frame_counters_.bind_base(5);
+
+    prog_mark_all_user_chunks_as_dirty_.use();
+
+    glUniform1ui(glGetUniformLocation(prog_mark_all_user_chunks_as_dirty_.id, "u_max_chunks"), count_active_chunks);
+    glUniform1ui(glGetUniformLocation(prog_mark_all_user_chunks_as_dirty_.id, "u_set_dirty_flag_bits"), 1u);
+
+    uint32_t groups_x = math_utils::div_up_u32(count_active_chunks, 256u);
+    prog_mark_all_user_chunks_as_dirty_.dispatch_compute(groups_x, 1, 1);
+
+    glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
 }

@@ -4,6 +4,7 @@ layout(local_size_x = 256) in;
 #define SLOT_EMPTY   0xFFFFFFFFu
 #define SLOT_LOCKED  0xFFFFFFFEu
 #define INVALID_ID   0xFFFFFFFFu
+#define SLOT_TOMB    0xFFFFFFFDu
 
 #define TYPE_SHIFT 16u
 #define VIS_SHIFT  8u
@@ -57,6 +58,7 @@ uniform uint  u_set_dirty_flag_bits;   // e.g. 1u
 const uint  BITS   = 21u;
 const int   OFFSET = 1 << 20;
 const uint  MASK   = (1u << BITS) - 1u;
+uint firstTomb = 0xFFFFFFFFu;
 
 // ---------- helpers ----------
 uint hash_uvec2(uvec2 v) {
@@ -139,17 +141,18 @@ uint lookup_chunk(uvec2 key) {
     for (uint visited = 0u; visited < MAX_PROBES; ++visited) {
         uint v = read_hash_val(idx);
 
-        if (v == SLOT_EMPTY) return INVALID_ID;
-
         if (v == SLOT_LOCKED) {
-            // ждём и перепроверяем тот же idx, visited НЕ увеличиваем
             uint spins = 0u;
-            while (spins++ < 1024u) { // можно поменьше/побольше; 5 реально мало при большом контеншне
-                v = read_hash_val(idx);
+            while (spins++ < 1024u) {
+                v = atomicAdd(hash_vals[idx], 0u);
                 if (v != SLOT_LOCKED) break;
             }
-            continue;
+            if (v == SLOT_LOCKED) return INVALID_ID; 
         }
+
+        if (v == SLOT_EMPTY) return INVALID_ID;
+
+        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; continue; }
 
         // v = chunkId, гарантируем видимость hash_keys
         memoryBarrierBuffer();
@@ -166,42 +169,43 @@ uint get_or_create_chunk(uvec2 key) {
     uint idx  = hash_uvec2(key) & mask;
 
     for (uint visited = 0u; visited < MAX_PROBES; /* visited++ делаем только когда реально двигаем idx */) {
-
         uint v = read_hash_val(idx);
 
+        if (v == SLOT_LOCKED) {
+            uint spins = 0u;
+            while (spins++ < 1024u) {
+                v = atomicAdd(hash_vals[idx], 0u);
+                if (v != SLOT_LOCKED) break;
+            }
+            if (v == SLOT_LOCKED) return INVALID_ID; 
+        }
+
+        if (v == SLOT_TOMB && firstTomb == 0xFFFFFFFFu) {
+            firstTomb = idx;
+            idx = (idx + 1u) & mask;
+            visited++;
+            continue;
+        }
+
         if (v == SLOT_EMPTY) {
-            // пробуем залочить
-            if (atomicCompSwap(hash_vals[idx], SLOT_EMPTY, SLOT_LOCKED) == SLOT_EMPTY) {
+            uint useIdx = (firstTomb != 0xFFFFFFFFu) ? firstTomb : idx;
 
+            uint prev = atomicCompSwap(hash_vals[useIdx],
+                                    (firstTomb != 0xFFFFFFFFu) ? SLOT_TOMB : SLOT_EMPTY,
+                                    SLOT_LOCKED);
+            if (prev == ((firstTomb != 0xFFFFFFFFu) ? SLOT_TOMB : SLOT_EMPTY)) {
                 uint id = pop_free_chunk_id();
-                if (id == INVALID_ID) {
-                    atomicExchange(hash_vals[idx], SLOT_EMPTY);
-                    return INVALID_ID;
-                }
+                if (id == INVALID_ID) { atomicExchange(hash_vals[useIdx], prev); return INVALID_ID; }
 
-                // publish key -> barrier -> publish id
-                hash_keys[idx] = key;
+                hash_keys[useIdx] = key;
                 memoryBarrierBuffer();
-                atomicExchange(hash_vals[idx], id);
+                atomicExchange(hash_vals[useIdx], id);
 
                 meta[id].used = 1u;
                 meta[id].key_lo = key.x;
                 meta[id].key_hi = key.y;
                 meta[id].dirty_flags = u_set_dirty_flag_bits;
-
                 return id;
-            }
-
-            // кто-то другой поменял слот — перепроверяем тот же idx
-            continue;
-        }
-
-        if (v == SLOT_LOCKED) {
-            // ждём, но не "съедаем" visited
-            uint spins = 0u;
-            while (spins++ < 1024u) {
-                v = read_hash_val(idx);
-                if (v != SLOT_LOCKED) break;
             }
             continue;
         }

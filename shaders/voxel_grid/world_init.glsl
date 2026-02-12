@@ -2,6 +2,7 @@
 layout(local_size_x = 256) in;
 
 #define SLOT_EMPTY 0xFFFFFFFFu
+#define SLOT_TOMB  0xFFFFFFFDu
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };

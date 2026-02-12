@@ -4,6 +4,7 @@ layout(local_size_x = 256) in;
 #define SLOT_EMPTY  0xFFFFFFFFu
 #define SLOT_LOCKED 0xFFFFFFFEu
 #define INVALID_ID  0xFFFFFFFFu
+#define SLOT_TOMB   0xFFFFFFFDu
 #define MAX_PROBES  128u
 #define LOCK_SPINS  5u
 
@@ -19,6 +20,7 @@ struct VoxelData {
     uint type_vis_flags;
     uint color;
 };
+
 layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
 layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
@@ -58,17 +60,18 @@ uint lookup_chunk(uvec2 key) {
     for (uint visited = 0u; visited < MAX_PROBES; ++visited) {
         uint v = read_hash_val(idx);
 
-        if (v == SLOT_EMPTY) return INVALID_ID;
-
         if (v == SLOT_LOCKED) {
-            // ждём и перепроверяем тот же idx, visited НЕ увеличиваем
             uint spins = 0u;
-            while (spins++ < 1024u) { // можно поменьше/побольше; 5 реально мало при большом контеншне
-                v = read_hash_val(idx);
+            while (spins++ < 1024u) {
+                v = atomicAdd(hash_vals[idx], 0u);
                 if (v != SLOT_LOCKED) break;
             }
-            continue;
+            if (v == SLOT_LOCKED) return INVALID_ID; 
         }
+
+        if (v == SLOT_EMPTY) return INVALID_ID;
+
+        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; continue; }
 
         // v = chunkId, гарантируем видимость hash_keys
         memoryBarrierBuffer();

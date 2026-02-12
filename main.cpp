@@ -204,7 +204,7 @@ int main() {
     window.set_camera(&camera);
 
     FPSCameraController camera_controller = FPSCameraController(&camera);
-    camera_controller.speed = 20;
+    camera_controller.speed = 50;
 
     // VoxelGrid voxel_grid = VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
     // float chunk_render_size = voxel_grid.chunk_size.x * voxel_grid.voxel_size;
@@ -221,17 +221,21 @@ int main() {
     VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
         {16, 16, 16}, // chunk_size
         {1.0f, 1.0f, 1.0f}, // voxel_size
-        10'000, // count_active_chunks
+        100'000, // count_active_chunks
         30'000'000, // max_quads
-        4, //chunk_hash_table_size_factor
-        512, //max_count_probing
+        4, // chunk_hash_table_size_factor
+        512, // max_count_probing
+        64, // count_evict_buckets
+        4'000, // min_free_chunks
+        10'000, // max_evict_chunks
+        32, // bucket_step
         shader_manager
     );
 
-    std::vector<glm::ivec3> positions;
-    std::vector<VoxelGridGPU::VoxelDataGPU> voxels;
-    create_occlusion_test_box({0, 0, 0}, positions, voxels);
-    voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
+    // std::vector<glm::ivec3> positions;
+    // std::vector<VoxelGridGPU::VoxelDataGPU> voxels;
+    // create_occlusion_test_box({0, 0, 0}, positions, voxels);
+    // voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
 
@@ -254,7 +258,9 @@ int main() {
         // window.draw(&voxel_grid, &camera);
         // window.draw(&model, &camera);
         
-         window.draw(&voxel_grid_gpu, &camera);
+        
+        voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, 5, 45345345);
+        window.draw(&voxel_grid_gpu, &camera);
 
         ImGui::Begin("Debug");
 
@@ -272,24 +278,29 @@ int main() {
         ImGui::Text("z: %.3f", camera_controller.camera->position.z);
         ImGui::PopStyleColor();
 
-        if (ImGui::Button("Rasterize the triangle")) {
-            // MeshData mesh_data = cube->create_mesh_data(cube->get_color());
-
-            // auto voxel_generator = [&](glm::vec3 point) -> Voxel {
-            //     Voxel voxel;
-            //     voxel.color = glm::vec3(1.0f, 0.0f, 0.0f);
-            //     voxel.visible = rand() % 10000 > 5000;
-            //     return voxel;
-            // };
-
-            // voxel_rastorizator.rasterize(model, voxel_grid.voxel_size, voxel_grid.chunk_size.x);
-
-            // voxel_grid_gpu.print_counters(1, 1, 1, 1);
-            // std::cout << std::endl;
-            // window.draw(&voxel_grid_gpu, &camera);
-            // voxel_grid_gpu.print_counters(1, 1, 1, 1);
-            // std::cout << "-----------------------" << std::endl << std::endl;
+        if (ImGui::Button("Print counters")) {
+            voxel_grid_gpu.print_counters(1, 1, 1, 1, 1);
+            std::cout << "-----------------------" << std::endl << std::endl;
         }
+
+        if (ImGui::Button("mark_chunk_to_generate()")) {
+            voxel_grid_gpu.mark_chunk_to_generate(camera_controller.camera->position, 2);
+            std::cout << "mark_chunk_to_generate()" << std::endl;
+        }
+
+        if (ImGui::Button("generate_terrain()")) {
+            uint32_t load_count = 0;
+            voxel_grid_gpu.stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
+            if (load_count != 0) {
+                voxel_grid_gpu.generate_terrain(45345345, load_count);
+                voxel_grid_gpu.mark_all_used_chunks_as_dirty();
+                std::cout << "generate_terrain()" << std::endl;
+            } else {
+                std::cout << "load_count == 0" << std::endl;
+            }
+            
+        }
+
 
 
         ImGui::End();

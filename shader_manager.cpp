@@ -32,7 +32,14 @@ void ShaderManager::init_shaders(std::string& root_path) {
     add_shader(cmdcount_reset_cs, ComputeShader((p / "shaders" / "voxel_grid" / "cmdcount_reset.glsl").string()));
     add_shader(build_indirect_cmds_cs, ComputeShader((p / "shaders" / "voxel_grid" / "build_indirect_cmds.glsl").string()));
     add_shader(reset_dirty_count_cs, ComputeShader((p / "shaders" / "voxel_grid" / "reset_dirty_count.glsl").string()));
+    add_shader(bucket_reset_cs, ComputeShader((p / "shaders" / "voxel_grid" / "evict_buckets_reset.glsl").string()));
+    add_shader(bucket_build_cs, ComputeShader((p / "shaders" / "voxel_grid" / "evict_buckets_build.glsl").string()));
+    add_shader(evict_lowprio_cs, ComputeShader((p / "shaders" / "voxel_grid" / "evict_low_priority.glsl").string()));
+    add_shader(stream_select_chunks_cs, ComputeShader((p / "shaders" / "voxel_grid" / "stream_select_chunks.glsl").string()));
+    add_shader(stream_generate_terrain_cs, ComputeShader((p / "shaders" / "voxel_grid" / "stream_generate_terrain.glsl").string()));
+    add_shader(mark_all_user_chunks_as_dirty_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mark_all_user_chunks_as_dirty.glsl").string()));
     add_shader(voxel_mesh_vs, VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string()));
     add_shader(voxel_mesh_fs, FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string()));
+    
 }
 

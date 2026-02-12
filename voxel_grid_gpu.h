@@ -29,6 +29,10 @@ public:
     glm::vec3 voxel_size;
     uint32_t chunk_hash_table_size;
     uint32_t max_count_probing;
+    uint32_t count_evict_buckets;
+    uint32_t min_free_chunks;
+    uint32_t max_evict_chunks;
+    uint32_t bucket_step;
 
     struct ChunkMetaGPU {
         uint32_t used;
@@ -88,17 +92,27 @@ public:
         uint32_t max_quads,
         float chunk_hash_table_size_factor, 
         uint32_t max_count_probing,
+        uint32_t count_evict_buckets,
+        uint32_t min_free_chunks,
+        uint32_t max_evict_chunks,
+        uint32_t bucket_step,
         ShaderManager& shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
     void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
 
+    void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
+    void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
+                                                    const glm::vec3& cam_pos);
+    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
+    void generate_terrain(uint32_t seed, uint32_t load_count);
+    void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
+
     virtual void draw(RenderState state) override;
 
     //debug
-    void print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count);
+    void print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count, uint32_t load_list_count);
 
-private:
     ComputeProgram prog_clear_chunks_;
     ComputeProgram prog_set_chunks_;
     ComputeProgram prog_world_init_;
@@ -112,6 +126,13 @@ private:
     ComputeProgram prog_cmdcount_reset_;
     ComputeProgram prog_build_indirect_;
     ComputeProgram prog_reset_dirty_count_;
+    ComputeProgram prog_bucket_reset_;
+    ComputeProgram prog_bucket_build_;
+    ComputeProgram prog_evict_lowprio_;
+    ComputeProgram prog_stream_select_chunks_;
+    ComputeProgram prog_stream_generate_terrain_;
+    ComputeProgram prog_mark_all_user_chunks_as_dirty_;
+
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO voxels_;
@@ -127,17 +148,18 @@ private:
     SSBO chunk_mesh_meta_;
     SSBO global_vertex_buffer_;
     SSBO global_index_buffer_;
-    
     SSBO chunk_indices_to_clear_;
     SSBO voxel_prifab_;
-
     SSBO chunk_indices_to_set_;
     SSBO coord_keys_to_set_;
-
-    SSBO dirty_quad_count_;   // uint[ count_active_chunks ] indexed by dirtyIdx
-    SSBO emit_counter_;       // uint[ count_active_chunks ] indexed by chunkId
-    SSBO mesh_counters_;      // uvec2 {vertexCounter, indexCounter}
+    SSBO dirty_quad_count_;
+    SSBO emit_counter_;
+    SSBO mesh_counters_;
     SSBO indirect_cmds_;
+    SSBO bucket_heads_;
+    SSBO bucket_next_;
+    SSBO stream_counters_;
+    SSBO load_list_;
     
     size_t chunk_indices_to_clear_cap_bytes_ = 0;
     size_t chunk_indices_to_set_cap_bytes_ = 0;
@@ -169,10 +191,11 @@ private:
     void init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab);
 
     void init_chunks_hash_table();
-    void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
 
+    void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
+    void ensure_free_chunks_gpu(const glm::vec3& camPos);
     void ensure_voxel_write_list(size_t count);
 
     void build_mesh_from_dirty(uint32_t pack_bits, int pack_offset);
@@ -180,4 +203,6 @@ private:
     void draw_indirect(const GLuint vao, const glm::mat4& world, const glm::mat4& proj_view, const glm::vec3& cam_pos);
 
     void init_draw_buffers();
+
+    void mark_all_used_chunks_as_dirty(); // Говно медленное
 };
