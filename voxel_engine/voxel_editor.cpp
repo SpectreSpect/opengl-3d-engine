@@ -4,7 +4,7 @@
 void VoxelEditor::update_and_schedule() {
     for (auto chunk_map_it = edited_voxels.begin(); chunk_map_it != edited_voxels.end();) {
         uint64_t chunk_key = chunk_map_it->first;
-        glm::ivec3 chunk_pos = VoxelGrid::unpack_key(chunk_key);
+        glm::ivec3 chunk_pos = math_utils::unpack_key(chunk_key);
 
         auto chunk_it = voxel_grid->chunks.find(chunk_key);
         if (chunk_it == voxel_grid->chunks.end()) {
@@ -31,12 +31,12 @@ void VoxelEditor::update_and_schedule() {
         });
 
         voxel_grid->chunks_to_update.insert(chunk_key);
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x-1, chunk_pos.y, chunk_pos.z)); // left
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z-1)); // back
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x+1, chunk_pos.y, chunk_pos.z)); // right
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z+1)); // front
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y+1, chunk_pos.z)); // top
-        voxel_grid->chunks_to_update.insert(VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y-1, chunk_pos.z)); // bottom
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x-1, chunk_pos.y, chunk_pos.z)); // left
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z-1)); // back
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x+1, chunk_pos.y, chunk_pos.z)); // right
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z+1)); // front
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x, chunk_pos.y+1, chunk_pos.z)); // top
+        voxel_grid->chunks_to_update.insert(math_utils::pack_key(chunk_pos.x, chunk_pos.y-1, chunk_pos.z)); // bottom
 
         chunk_map_it = edited_voxels.erase(chunk_map_it);
     }
@@ -44,11 +44,20 @@ void VoxelEditor::update_and_schedule() {
 
 void VoxelEditor::set(glm::ivec3 pos, const Voxel& voxel) {
     glm::ivec3 chunk_pos = VoxelGrid::get_chunk_pos(pos, voxel_grid->chunk_size);
-    uint64_t chunk_key = VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+    uint64_t chunk_key = math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
 
     int lx = pos.x - chunk_pos.x * voxel_grid->chunk_size.x;
     int ly = pos.y - chunk_pos.y * voxel_grid->chunk_size.y;
     int lz = pos.z - chunk_pos.z * voxel_grid->chunk_size.z;
+
+    if (lx < 0 || lx >= voxel_grid->chunk_size.x ||
+    ly < 0 || ly >= voxel_grid->chunk_size.y ||
+    lz < 0 || lz >= voxel_grid->chunk_size.z) {
+        std::cout << "BAD LOCAL: pos=("<<pos.x<<","<<pos.y<<","<<pos.z<<") "
+                << "chunk=("<<chunk_pos.x<<","<<chunk_pos.y<<","<<chunk_pos.z<<") "
+                << "local=("<<lx<<","<<ly<<","<<lz<<")\n";
+        std::abort();
+    }
 
     glm::ivec3 local_voxel_pos = glm::ivec3(lx, ly, lz);
     // uint64_t local_voxel_key = VoxelGrid::pack_key(lx, ly, lz);
@@ -64,7 +73,7 @@ void VoxelEditor::set(glm::ivec3 pos, const Voxel& voxel) {
 
 Voxel VoxelEditor::get(glm::ivec3 pos) const{
     glm::ivec3 chunk_pos = VoxelGrid::get_chunk_pos(pos, voxel_grid->chunk_size);
-    uint64_t chunk_key = VoxelGrid::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+    uint64_t chunk_key = math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
 
     int lx = pos.x - chunk_pos.x * voxel_grid->chunk_size.x;
     int ly = pos.y - chunk_pos.y * voxel_grid->chunk_size.y;

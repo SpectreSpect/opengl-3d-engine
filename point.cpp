@@ -1,9 +1,8 @@
 #include "point.h"
 #include "engine3d.h"
-#include <filesystem>
 
 Point::Point() {
-    // Quad corners in "local sprite space"
+    // Quad corners in "local sprite space" (for billboard)
     // corner.x, corner.y in [-1..+1]
     const float quadCorners[] = {
         -1.0f, -1.0f,  // v0
@@ -17,18 +16,26 @@ Point::Point() {
         2, 1, 3
     };
 
+    // Dummy instance so VBO(data,size) is valid
     PointInstance dummy{};
-    dummy.pos = {0,0,0};
+    dummy.pos   = {0, 0, 0};
+    dummy.color = {1, 1, 1}; // white
 
     vao = new VAO();
     quad_vbo = new VBO(quadCorners, sizeof(quadCorners));
     quad_ebo = new EBO(quadIndices, sizeof(quadIndices));
-    instance_vbo = new VBO(&dummy, sizeof(PointInstance));
+    instance_vbo = new VBO(&dummy, sizeof(PointInstance)); // dynamic updates later
 
+    // Your VAO wrapper seems to require init_vao()
+    vao->init_vao();
+
+    // --- VAO wiring (manual, because we have 2 VBOs + instancing) ---
     vao->bind();
+
+    // EBO binding is stored in VAO
     quad_ebo->bind();
 
-    // Per-vertex corner attribute (location = 1)
+    // Per-vertex attribute: corner (location = 1)
     quad_vbo->bind();
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(
@@ -36,17 +43,28 @@ Point::Point() {
         2 * sizeof(float),
         (void*)0
     );
-    glVertexAttribDivisor(1, 0);
+    glVertexAttribDivisor(1, 0); // per-vertex
 
-    // Per-instance position attribute (location = 0)
+    // Per-instance attributes: pos (loc=0), color (loc=2)
     instance_vbo->bind();
+
+    // aPos (location = 0)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(
         0, 3, GL_FLOAT, GL_FALSE,
         sizeof(PointInstance),
         (void*)offsetof(PointInstance, pos)
     );
-    glVertexAttribDivisor(0, 1);
+    glVertexAttribDivisor(0, 1); // per-instance
+
+    // aColor (location = 2)
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(
+        2, 3, GL_FLOAT, GL_FALSE,
+        sizeof(PointInstance),
+        (void*)offsetof(PointInstance, color)
+    );
+    glVertexAttribDivisor(2, 1); // per-instance
 
     vao->unbind();
 
@@ -72,8 +90,6 @@ void Point::set_points(const std::vector<PointInstance>& points) {
 void Point::draw(RenderState state) {
     if (instance_count <= 0) return;
 
-    // You can reuse your line program if you want,
-    // but typically you'd have a separate point shader program:
     Program* program = state.engine->default_point_program;
     program->use();
 
@@ -82,13 +98,20 @@ void Point::draw(RenderState state) {
         program->set_mat4("uView", state.camera->get_view_matrix());
     }
 
-    // TODO: replace with your real window size (grab from engine if you have it)
-    float window_width = 1280;
-    float window_height = 720;
+    // TODO: replace with your real framebuffer size.
+    // Best is to pass it via RenderState (viewport_px) or query from your Window.
+    float window_width  = 1280.0f;
+    float window_height = 720.0f;
 
     program->set_vec2("uViewport", glm::vec2(window_width, window_height));
-    program->set_float("uPointSizePx", size);
-    program->set_vec4("uColor", glm::vec4(color, 1.0f));
+    program->set_int("uScreenSpaceSize", constant_screen_size ? 1 : 0);
+    program->set_float("uPointSizePx", size_px);
+    program->set_float("uPointSizeWorld", size_world);
+
+
+    // // Optional global tint multiplier (leave at white if you don't want tint)
+    // program->set_vec4("uColor", glm::vec4(color, 1.0f));
+
     program->set_int("uRound", round ? 1 : 0);
 
     vao->bind();

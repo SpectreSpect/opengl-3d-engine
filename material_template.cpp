@@ -1,13 +1,13 @@
 #include "material_template.h"
 
-MaterialTemplate::MaterialTemplate(Program* program)
+MaterialTemplate::MaterialTemplate(VfProgram* program)
     : program(program) {}
 
 MaterialTemplate::MaterialTemplate(std::string vs_path, std::string fs_path) {
-    VertexShader* vertex_shader = new VertexShader(vs_path);
-    FragmentShader* fragment_shader = new FragmentShader(fs_path);
+    // VertexShader* vertex_shader = new VertexShader(vs_path);
+    // FragmentShader* fragment_shader = new FragmentShader(fs_path);
 
-    program = new Program(vertex_shader, fragment_shader);
+    // program = new Program(vertex_shader, fragment_shader);
 }
 
 void MaterialTemplate::bind() const {

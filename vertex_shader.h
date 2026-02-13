@@ -13,5 +13,11 @@
 
 class VertexShader : public Shader {
 public:
+    VertexShader() = default;
     VertexShader(std::string path);
+    
+    VertexShader(const VertexShader&) = delete;
+    VertexShader& operator=(const VertexShader&) = delete;
+    VertexShader(VertexShader&& o) noexcept;
+    VertexShader& operator=(VertexShader&& o) noexcept;
 };

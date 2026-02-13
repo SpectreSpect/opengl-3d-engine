@@ -54,23 +54,28 @@ add_executable(app
   a_star/curvature_a_star.cpp
   grid_3d.cpp
   a_star/reeds_shepp.cpp
-
+  vtk_mesh_loader.cpp
+  compute_shader.cpp
+  vf_program.cpp
+  compute_program.cpp
+  ssbo.cpp
+  voxel_rasterizator_gpu.cpp
+  voxel_grid_gpu.cpp
+  shader_manager.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
 
-# Works for:
-# - Make/Ninja (single-config): $<CONFIG> expands to empty -> build/shaders
-# - Visual Studio (multi-config): -> build/Debug/shaders, build/Release/shaders, etc.
-set(SHADERS_DST "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/shaders")
-
 add_custom_target(copy_shaders ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DST}"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory "${SHADERS_SRC}" "${SHADERS_DST}"
-  COMMENT "Copying shaders -> build folder"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${SHADERS_SRC}"
+          "$<TARGET_FILE_DIR:app>/shaders"
+  COMMENT "Copying shaders next to app"
 )
 
-add_dependencies(app copy_shaders)
+# Make sure the executable dir exists first (and avoid cycles)
+add_dependencies(copy_shaders app)
+
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
 include(FetchContent)

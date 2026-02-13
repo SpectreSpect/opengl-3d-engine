@@ -28,6 +28,8 @@ Line::Line() {
     quad_ebo = new EBO(quadIndices, sizeof(quadIndices));
     instance_vbo = new VBO(&dummy, sizeof(LineInstance)); // dynamic updates later
 
+    vao->init_vao();
+
     // --- VAO wiring (manual, because we have 2 VBOs + instancing) ---
     vao->bind();
 

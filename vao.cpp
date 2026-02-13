@@ -1,22 +1,47 @@
 #include "vao.h"
 
-VAO::VAO() {
+VAO::~VAO() {
+    if (id != 0)
+        glDeleteVertexArrays(1, &id);
+}
+
+VAO::VAO(VAO&& o) noexcept {
+    id = o.id;
+    o.id = 0;
+}
+
+VAO& VAO::operator=(VAO&& o) noexcept {
+    if (this != &o) {
+        if (id != 0)
+            glDeleteVertexArrays(1, &id);
+
+        id = o.id;
+        o.id = 0;
+    }
+    
+    return *this;
+}
+
+VAO& VAO::init_vao() & {
     glGenVertexArrays(1, &this->id);
     if (this->id == 0)
         throw std::runtime_error("Failed to create VAO");
     
+    return *this;
 }
 
-VAO::~VAO() {
-    glDeleteVertexArrays(1, &id);
+VAO&& VAO::init_vao() && {
+    static_cast<VAO&>(*this).init_vao();
+    return std::move(*this);
 }
 
-void VAO::setup(VBO* vbo, EBO* ebo, VertexLayout* vertex_layout) {
+
+void VAO::setup(const VBO& vbo, const EBO& ebo, const VertexLayout& vertex_layout) {
     this->bind();
 
-    vbo->bind();
-    ebo->bind();
-    vertex_layout->apply();
+    vbo.bind();
+    ebo.bind();
+    vertex_layout.apply();
 
     this->unbind();
 }

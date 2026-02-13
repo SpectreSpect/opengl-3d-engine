@@ -10,12 +10,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "nonholonomic_pos.h"
+#include "transformable.h"
 
 constexpr int BITS = 21;
 constexpr uint64_t MASK = (1ull << BITS) - 1; // 0x1FFFFF
 constexpr int OFFSET = (1 << (BITS-1)); // offset to encode signed -> unsigned
 
-class Grid3D {
+class Grid3D : public Transformable {
 public:
     static glm::ivec3 floor_pos(const glm::vec3& p);
     static std::vector<glm::ivec3> line_intersects(glm::vec3 pos1, glm::vec3 pos2);    

@@ -9,6 +9,7 @@
 
 struct PointInstance {
     glm::vec3 pos;
+    glm::vec3 color;  // per-point color (RGB 0..1)
 };
 
 class Point : public Drawable {
@@ -16,9 +17,15 @@ public:
     Point();
     ~Point();
 
-    glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
-    float size = 6.0f;        // diameter in pixels
-    bool round = true;        // circle vs square
+    float size_px = 6.0f;
+
+    // world-space (your scene units, e.g. meters)
+    float size_world = 0.05f;
+
+    // true = constant pixel size, false = world-space size
+    bool constant_screen_size = true;
+
+    bool round = true;
 
     void set_points(const std::vector<PointInstance>& points);
     void draw(RenderState state) override;

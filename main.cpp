@@ -26,7 +26,6 @@
 #include "voxel_engine/voxel_grid.h"
 #include "imgui_layer.h"
 #include "voxel_rastorizator.h"
-#include "math_utils.h"
 #include "ui_elements/triangle_controller.h"
 #include "triangle.h"
 #include "a_star/a_star.h"
@@ -92,6 +91,16 @@ static Frame read_frame_bin(const std::filesystem::path& path)
         std::memcpy(&f.points[i].x, p, 4); p += 4;
         std::memcpy(&f.points[i].y, p, 4); p += 4;
         std::memcpy(&f.points[i].z, p, 4); p += 4;
+        
+        float y = f.points[i].y;
+        float z = f.points[i].z;
+
+        f.points[i].x = -f.points[i].x;
+        f.points[i].y = z;
+        f.points[i].z = y;
+
+
+        //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
 
         f.points[i].r = f.points[i].g = f.points[i].b = 255;
         f.points[i].intensity = 0.0f;
@@ -152,9 +161,38 @@ static std::vector<IndexEntry> read_index_csv(const std::filesystem::path& index
     return entries;
 }
 
+static glm::vec3 hsv_to_rgb(float h, float s, float v) {
+    h = std::fmod(h, 1.0f);
+    if (h < 0.0f) h += 1.0f;
+
+    float c = v * s;
+    float x = c * (1.0f - std::fabs(std::fmod(h * 6.0f, 2.0f) - 1.0f));
+    float m = v - c;
+
+    float r=0,g=0,b=0;
+    float hp = h * 6.0f;
+
+    if      (hp < 1.0f) { r=c; g=x; b=0; }
+    else if (hp < 2.0f) { r=x; g=c; b=0; }
+    else if (hp < 3.0f) { r=0; g=c; b=x; }
+    else if (hp < 4.0f) { r=0; g=x; b=c; }
+    else if (hp < 5.0f) { r=x; g=0; b=c; }
+    else                { r=c; g=0; b=x; }
+
+    return {r + m, g + m, b + m};
+}
+
+static float clamp01(float x) {
+    return std::max(0.0f, std::min(1.0f, x));
+}
 
 
-float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+
+
+// float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+float clear_col[4] = {0.1f, 0.1f, 0.1f, 1.0f};
+// float clear_col[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
 
 std::vector<LineInstance> get_arrow(glm::vec3 p0, glm::vec3 p1) {
     LineInstance middle{p0, p1};
@@ -191,6 +229,192 @@ std::vector<LineInstance> get_arrow(glm::vec3 p0, glm::vec3 p1) {
     // return { left, middle, right };
     return { left, middle, right };
 }
+
+int xy_id(int x, int y, int ring_width, int cloud_size){
+    int idx = x + y * ring_width;
+
+    if (idx < 0 || idx >= cloud_size) {
+        throw "Bad index";
+        return -1;
+    }
+
+    return idx;
+}
+
+    float get_color_float(int color_id, int num_colors){ 
+    return (float)color_id / (float)(num_colors - 1); 
+}
+
+bool is_point_valid(const PointXYZRGBI &p) {
+    return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+}
+
+float radial_distance(const PointXYZRGBI &p) {
+    return std::hypot(static_cast<double>(p.x),
+                    static_cast<double>(p.y),
+                    static_cast<double>(p.z));
+}
+
+float euclid_distance(const PointXYZRGBI &a, const PointXYZRGBI &b) {
+    return std::hypot(static_cast<double>(a.x - b.x),
+                    static_cast<double>(a.y - b.y),
+                    static_cast<double>(a.z - b.z));
+}
+
+bool is_same_object(const PointXYZRGBI &p0,
+                            const PointXYZRGBI &p1,
+                            float rel_thresh = 1.5f,  
+                            bool more_permissive_with_distance = true,
+                            float abs_thresh = 0.12f)
+{
+    if (!is_point_valid(p0) || !is_point_valid(p1))
+        return false;
+
+    float r0 = radial_distance(p0);
+    float r1 = radial_distance(p1);
+
+    if (!std::isfinite(r0) || !std::isfinite(r1))
+        return false;
+
+    float allowed = 0;
+    float dr = std::fabs(r0 - r1);
+
+
+    if (more_permissive_with_distance) {
+        float thresh = std::max(0.2f - p0.y, 0.0f);
+        allowed = std::max(thresh * std::min(r0, r1), abs_thresh);
+    }
+        // allowed = rel_thresh * pow((std::min(r0, r1) / std::pow(permission_factor, 1.5)), permission_factor);
+    else {
+        float thresh = std::max(0.2f - p0.y, 0.0f);
+        allowed = std::max(thresh, abs_thresh);
+        // allowed = std::max(rel_thresh, abs_thresh);
+    }
+        
+    
+
+    return dr <= allowed;
+}
+
+
+glm::vec3 triangle_normal(const PointXYZRGBI& a, const PointXYZRGBI& b, const PointXYZRGBI& c) {
+    glm::vec3 av = {a.x, a.y, a.z};
+    glm::vec3 bv = {b.x, b.y, b.z};
+    glm::vec3 cv = {c.x, c.y, c.z};
+
+    glm::vec3 u = bv - av;
+    glm::vec3 v = cv - av;
+    glm::vec3 n = glm::cross(u, v);           // unnormalized normal (also proportional to triangle area)
+    return glm::normalize(n);       // returns {0,0,0} if degenerate
+}
+
+
+void push_point(std::vector<float>& vertices, const PointXYZRGBI& point, const glm::vec3& color, const glm::vec3& normal) {
+        vertices.push_back(point.x);
+        vertices.push_back(point.y);
+        vertices.push_back(point.z);
+        vertices.push_back(normal.x);
+        vertices.push_back(normal.y);
+        vertices.push_back(normal.z);
+        vertices.push_back(color.x);
+        vertices.push_back(color.y);
+        vertices.push_back(color.z);
+}
+
+
+Mesh* get_mesh_from_point_cloud(std::vector<PointXYZRGBI> points, float rel_thresh = 1.5f) {
+    
+    VertexLayout* vertex_layout = new VertexLayout();
+    vertex_layout->add("position", 0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0, 0, {0.0f, 0.0f, 0.0f});
+    vertex_layout->add("normal", 1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float), 0, {0.0f, 1.0f, 0.0f});
+    vertex_layout->add("color", 2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 6 * sizeof(float), 0, {1.0f, 1.0f, 1.0f});
+
+    std::vector<float> vertices;
+    std::vector<unsigned int> indices;
+
+    
+    int rings_count = 16;
+    int ring_width = points.size() / rings_count;
+    int cloud_size = points.size();
+    
+    for (int y = 0; y < rings_count - 1; y++){
+        bool top_jump = false;
+        bool bottom_jump = false;
+        for (int x = 0; x < ring_width - 1; x++){
+
+
+
+            int id1 = xy_id(x, y, ring_width, cloud_size);
+            int id2 = xy_id(x, y + 1, ring_width, cloud_size);
+            int id3 = xy_id(x + 1, y + 1, ring_width, cloud_size);
+
+            int id4 = xy_id(x + 1, y + 1, ring_width, cloud_size);
+            int id5 = xy_id(x + 1, y, ring_width, cloud_size);
+            int id6 = xy_id(x, y, ring_width, cloud_size);
+
+
+            // float top_color = get_color_float(WHITE_ID, num_colors);
+            // float bottom_color = get_color_float(WHITE_ID, num_colors);
+
+            //Point positions:
+            //1 2
+            //0 3
+
+            PointXYZRGBI p0 = points[id1]; // lower-left
+            PointXYZRGBI p1 = points[id2]; // upper-left
+            PointXYZRGBI p2 = points[id3]; // upper-right
+            PointXYZRGBI p3 = points[id5]; // lower-right
+
+            bool tri1_ok = false;
+            bool tri2_ok = false;
+
+            if (is_point_valid(p0) && is_point_valid(p1) && is_point_valid(p2)) {
+                if (is_same_object(p0, p1, rel_thresh) && is_same_object(p1, p2, 1.5, false))
+                    tri1_ok = true;
+            }
+
+            if (is_point_valid(p2) && is_point_valid(p3) && is_point_valid(p0)) {
+                if (is_same_object(p3, p2, rel_thresh) && is_same_object(p3, p0, 1.5, false))
+                    tri2_ok = true;
+            }
+
+            glm::vec3 surface_normal = triangle_normal(p2, p0, p1);
+            glm::vec3 upward_normal = glm::vec3(0.0f, 1.0f, 0.0f);
+
+            // std::cout << surface_normal.x << " " << surface_normal.y << " " << surface_normal.z << " " << std::endl;
+
+            float normal_cos = glm::dot(surface_normal, upward_normal);
+
+            if (tri1_ok && tri2_ok) {
+                // glm::vec3 red = {1.0f, 0.0f, 0.0f};
+                glm::vec3 white = {1.0f, 1.0f, 1.0f};
+                // float t = glm::clamp(std::abs(normal_cos), 0.0f, 1.0f);
+                // glm::vec3 color = red + (white - red) * t;
+                glm::vec3 color = white;
+                
+                int last_id = static_cast<unsigned int>(vertices.size() / 9);
+                push_point(vertices, p0, color, surface_normal);
+                push_point(vertices, p1, color, surface_normal);
+                push_point(vertices, p2, color, surface_normal);
+                push_point(vertices, p3, color, surface_normal);
+
+                indices.push_back(last_id);
+                indices.push_back(last_id+1);
+                indices.push_back(last_id+2);
+
+                indices.push_back(last_id+2);
+                indices.push_back(last_id+3);
+                indices.push_back(last_id);
+
+            }
+        }
+    }
+
+    Mesh* mesh = new Mesh(vertices, indices, vertex_layout);
+
+    return mesh;
+}
+
 
 void draw_f(Window* window, 
     Camera* camera, 
@@ -238,24 +462,59 @@ void draw_f(Window* window,
 
 
 int main() {
-    Engine3D* engine = new Engine3D();
-    Window* window = new Window(engine, 1280, 720, "3D visualization");
-    engine->set_window(window);
-    ui::init(window->window);
+    Engine3D engine = Engine3D();
+    Window window = Window(&engine, 1280, 720, "3D visualization");
+    engine.set_window(&window);
+    ui::init(window.window);
     
     
 
-    Camera* camera = new Camera();
-    window->set_camera(camera);
+    // ShaderManager shader_manager = ShaderManager(executable_dir_str());
 
-    FPSCameraController* camera_controller = new FPSCameraController(camera);
-    camera_controller->speed = 20;
+    Camera camera;
+    window.set_camera(&camera);
+
+    FPSCameraController camera_controller = FPSCameraController(&camera);
+    camera_controller.speed = 50;
+
+    // VoxelGrid voxel_grid = VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
+    // float chunk_render_size = voxel_grid.chunk_size.x * voxel_grid.voxel_size;
+
+    // VoxelRasterizatorGPU voxel_rastorizator(&voxel_grid, shader_manager);
+
+    // VtkMeshLoader vtk_mesh_loader = VtkMeshLoader(vertex_layout);
+
+    // MeshData model_mesh_data = vtk_mesh_loader.load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
+    // Mesh model = Mesh(model_mesh_data.vertices, model_mesh_data.indices, &vertex_layout); 
+    // model.position = {chunk_render_size * 0, chunk_render_size * 5, chunk_render_size * 0};
+    // model.scale = glm::vec3(5.0f);
+
+    // VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
+    //     {16, 16, 16}, // chunk_size
+    //     {1.0f, 1.0f, 1.0f}, // voxel_size
+    //     100'000, // count_active_chunks
+    //     30'000'000, // max_quads
+    //     4, // chunk_hash_table_size_factor
+    //     512, // max_count_probing
+    //     64, // count_evict_buckets
+    //     4'000, // min_free_chunks
+    //     10'000, // max_evict_chunks
+    //     32, // bucket_step
+    //     shader_manager
+    // );
+
+    // std::vector<glm::ivec3> positions;
+    // std::vector<VoxelGridGPU::VoxelDataGPU> voxels;
+    // create_occlusion_test_box({0, 0, 0}, positions, voxels);
+    // voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
+
+    glm::vec3 prev_cam_pos = camera_controller.camera->position;
 
     float timer = 0;
     float lastFrame = 0;
 
-    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, {24, 6, 24});
-    voxel_grid->update(window, camera);
+    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
+    voxel_grid->update(&window, &camera);
     // sleep(1);
 
     NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(-0.388, 1.2f, -1.719), 0};
@@ -337,34 +596,51 @@ int main() {
 
     std::vector<Line*> point_cloud_video_lines;
     std::vector<Point*> point_cloud_video_points;
+    std::vector<Mesh*> lidar_meshes;
 
     for (int i = 0; i < point_cloud_entries.size(); i++) {
         std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[i].filename;
         Frame frame = read_frame_bin(file_path);
 
 
-        std::vector<PointInstance> point_clound_point_instance;
+        float minZ = std::numeric_limits<float>::infinity();
+        float maxZ = -std::numeric_limits<float>::infinity();
+
+        for (size_t i = 0; i < frame.points.size(); ++i) {
+            const auto& p = frame.points[i];
+            glm::vec3 pos(-p.x, p.z, p.y);
+            minZ = std::min(minZ, pos.y); // using pos.y as "up" in your convention
+            maxZ = std::max(maxZ, pos.y);
+        }
+
+        float inv = (maxZ > minZ) ? (1.0f / (maxZ - minZ)) : 0.0f;
+
+        std::vector<PointInstance> point_cloud_point_instance;
+        point_cloud_point_instance.reserve(frame.points.size());
+        
         for (int i = 0; i < frame.points.size(); i++) {
             PointXYZRGBI point = frame.points[i - 1];
             glm::vec3 pos = glm::vec3(-point.x, point.z, point.y);
 
+            float t = (pos.y - minZ) * inv;        // 0..1
+            t = clamp01(t);
+
+            float hue = (1.0f - t) * 0.66f;
+            
             PointInstance point_instance;
             point_instance.pos = pos;
+            
+            
+            point_instance.color = hsv_to_rgb(hue, 1.0f, 1.0f);
 
-            point_clound_point_instance.push_back(point_instance);
+            point_cloud_point_instance.push_back(point_instance);
 
-            // glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
-
-            // LineInstance line_instance;
-            // line_instance.p0 = pos_0;
-            // line_instance.p1 = pos_1;
-
-            // point_clound_line_instance.push_back(line_instance);
         }
 
         Point* point = new Point();
-        point->set_points(point_clound_point_instance);
-        point->color = {1.0f, 0.0f, 0.0f};
+        point->set_points(point_cloud_point_instance);
+        point->size_px = 2.0f;
+
         point_cloud_video_points.push_back(point);
 
         std::vector<LineInstance> point_clound_line_instance;
@@ -388,56 +664,45 @@ int main() {
         point_clound_line->set_lines(point_clound_line_instance);
 
         point_cloud_video_lines.push_back(point_clound_line);
+
+
+        Mesh* mesh = get_mesh_from_point_cloud(frame.points);
+        lidar_meshes.push_back(mesh);
     }
+
+    std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[0].filename;
+    Frame frame = read_frame_bin(file_path);
     
+    // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points);
     
-    // std::vector<LineInstance> point_clound_line_instance;
-    // for (int i = 1; i < frame.points.size(); i++) {
-
-    //     PointXYZRGBI point_0 = frame.points[i - 1];
-    //     PointXYZRGBI point_1 = frame.points[i];
-
-    //     glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
-    //     glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
-
-    //     LineInstance line_instance;
-    //     line_instance.p0 = pos_0;
-    //     line_instance.p1 = pos_1;
-
-    //     point_clound_line_instance.push_back(line_instance);
-    // }
-    
-    // Line* point_clound_line = new Line();
-    // point_clound_line->color = {1.0f, 0.0f, 0.0f};
-    // point_clound_line->set_lines(point_clound_line_instance);
-
+    float rel_thresh = 1.5f;
     float video_timer = 0.0f;
     // window->disable_cursor();
-    while(window->is_open()) {
+    while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
         lastFrame = currentFrame;   
 
         ui::begin_frame();
-        ui::update_mouse_mode(window);
+        ui::update_mouse_mode(&window);
 
-        camera_controller->update(window, delta_time);
+        camera_controller.update(&window, delta_time);
 
-        window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
+        window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        voxel_grid->update(window, camera);
-        // window->draw(voxel_grid, camera);
+        // voxel_grid->update(&window, &camera);
+        // window.draw(voxel_grid, &camera);
 
-        if (glfwGetKey(window->window, GLFW_KEY_R) == GLFW_PRESS) {
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+        if (glfwGetKey(window.window, GLFW_KEY_R) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-                start_pos.pos = camera->position;
+                start_pos.pos = camera.position;
                 voxel_grid->adjust_to_ground(start_pos.pos);
                 start_pos.pos.y += 0.2f;
 
-                start_pos.theta = glm::radians(camera_controller->yaw);
+                start_pos.theta = glm::radians(camera_controller.yaw);
 
                 float angle = start_pos.theta;
                 glm::vec3 dir(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
@@ -445,7 +710,7 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_J) == GLFW_PRESS) {
+        if (glfwGetKey(window.window, GLFW_KEY_J) == GLFW_PRESS) {
             std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.get_optimal_dubins_path(start_pos, end_pos, min_radius);
             std::vector<NonholonomicPos> discretized_path = reeds_shepp.discretize_path(start_pos, reeds_shepp_test_path, 8, min_radius);
             // std::vector<NonholonomicPos> discretized_path = reeds_shepp.get_optimal_path_discretized(start_pos, end_pos, 8, min_radius);
@@ -463,7 +728,7 @@ int main() {
             }
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_H) == GLFW_PRESS) {
+        if (glfwGetKey(window.window, GLFW_KEY_H) == GLFW_PRESS) {
             // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
             //     Voxel new_voxel = Voxel();
             //     new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
@@ -513,27 +778,27 @@ int main() {
             // });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_M) == GLFW_PRESS) {  
+        if (glfwGetKey(window.window, GLFW_KEY_M) == GLFW_PRESS) {  
             force_stop = true;
         }
 
 
 
 
-        if (glfwGetKey(window->window, GLFW_KEY_F) == GLFW_PRESS) {
+        if (glfwGetKey(window.window, GLFW_KEY_F) == GLFW_PRESS) {
 
 
 
 
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
 
-                end_pos.pos = camera->position;
+                end_pos.pos = camera.position;
                 voxel_grid->adjust_to_ground(end_pos.pos);
                 end_pos.pos.y += 0.2f;
 
-                end_pos.theta = glm::radians(camera_controller->yaw);
+                end_pos.theta = glm::radians(camera_controller.yaw);
 
                 float angle = end_pos.theta; // or + 3.14159265f
                 glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
@@ -541,8 +806,8 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_V) == GLFW_PRESS) {
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
+        if (glfwGetKey(window.window, GLFW_KEY_V) == GLFW_PRESS) {
+            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
 
             voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
                 Voxel new_voxel = Voxel();
@@ -557,10 +822,10 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_Q) == GLFW_PRESS) {   
-            glm::vec3 camera_dir = glm::normalize(camera->front);
-            glm::vec3 start_pos = camera->position;
-            glm::vec3 end_pos = camera->position + camera_dir * 100.0f;
+        if (glfwGetKey(window.window, GLFW_KEY_Q) == GLFW_PRESS) {   
+            glm::vec3 camera_dir = glm::normalize(camera.front);
+            glm::vec3 start_pos = camera.position;
+            glm::vec3 end_pos = camera.position + camera_dir * 100.0f;
             
             std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
 
@@ -576,22 +841,22 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_U) == GLFW_PRESS) {  
+        if (glfwGetKey(window.window, GLFW_KEY_U) == GLFW_PRESS) {  
             nonholonomic_astar->TEMPPPPPTESTTTT = false;
             std::cout << "FALSE" << std::endl;
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_Y) == GLFW_PRESS) {  
+        if (glfwGetKey(window.window, GLFW_KEY_Y) == GLFW_PRESS) {  
             nonholonomic_astar->TEMPPPPPTESTTTT = true;
             std::cout << "TRUE" << std::endl;
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_E) == GLFW_PRESS) {  
+        if (glfwGetKey(window.window, GLFW_KEY_E) == GLFW_PRESS) {  
             std::vector<glm::ivec3> output;
             std::vector<glm::vec3> polyline;
 
             polyline.push_back(start_pos.pos);
-            polyline.push_back(camera->position);
+            polyline.push_back(camera.position);
             polyline.push_back(end_pos.pos);
 
             voxel_grid->get_ground_positions(polyline, output);
@@ -608,7 +873,7 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_I) == GLFW_PRESS) {      
+        if (glfwGetKey(window.window, GLFW_KEY_I) == GLFW_PRESS) {      
             TEMP_block_start_pathfinnding = false;      
             nonholonomic_astar->initialize(start_pos, end_pos);
 
@@ -641,7 +906,7 @@ int main() {
             });
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_O) == GLFW_PRESS && !TEMP_block_start_pathfinnding) {
+        if (glfwGetKey(window.window, GLFW_KEY_O) == GLFW_PRESS && !TEMP_block_start_pathfinnding) {
             simulation_running = true;
             // TEMP_block_start_pathfinnding = true;
 
@@ -694,7 +959,7 @@ int main() {
             }
         }
 
-        if (glfwGetKey(window->window, GLFW_KEY_T) == GLFW_PRESS) {
+        if (glfwGetKey(window.window, GLFW_KEY_T) == GLFW_PRESS) {
             std::vector<NonholonomicPos>& path = nonholonomic_astar->state_path;
 
             path_lines.clear();
@@ -732,13 +997,16 @@ int main() {
                 flush(cur_dir);
             }
         }
+        
         ImGui::Begin("Debug");
 
-        glm::vec3 p = camera->position; // or any vec3
+        glm::vec3 p = camera.position; // or any vec3
 
         ImGui::TextColored(ImVec4(1,0.5,0.5,1), "x: %.3f", p.x);
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
+
+        ImGui::SliderFloat("Relative threshold", &rel_thresh, 0.0f, 10.0f);
 
         ImGui::End();
 
@@ -748,13 +1016,13 @@ int main() {
         //     window->draw(path_lines[i], camera);
         
         // explored_path_lines->set_lines(nonholonomic_astar->state_explored_paths);
-        // window->draw(explored_path_lines, camera);
+        // window.draw(explored_path_lines, &camera);
             
-        // window->draw(start_dir_line, camera);
-        // window->draw(end_dir_line, camera);
-        // window->draw(unimpended_line, camera);
+        // window.draw(start_dir_line, &camera);
+        // window.draw(end_dir_line, &camera);
+        // window.draw(unimpended_line, &camera);
 
-        // window->draw(reeds_shepp_test_path_lines, camera);
+        // window.draw(reeds_shepp_test_path_lines, &camera);
 
         int cur_frame_id = 0;
         for (int i = 0; i < point_cloud_entries.size(); i++) {
@@ -766,13 +1034,21 @@ int main() {
                 cur_frame_id = i;
         }
 
-        std::cout << cur_frame_id << std::endl;
+        // std::cout << cur_frame_id << std::endl;
 
 
-        window->draw(point_cloud_video_points[cur_frame_id], camera);
+        // window.draw(point_cloud_video_points[cur_frame_id], &camera);
+        window.draw(lidar_meshes[cur_frame_id], &camera);
 
-        window->swap_buffers();
-        engine->poll_events();
+        // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points, rel_thresh);
+        // window.draw(lidar_mesh, &camera);
+        // delete lidar_mesh;
+
+
+
+
+        window.swap_buffers();
+        engine.poll_events();
 
         video_timer += delta_time;
 

@@ -8,15 +8,23 @@
 #include "ebo.h"
 #include "vertex_layout.h"
 
-class VAO{
+class VAO {
 public:
-    GLuint id;
+    GLuint id = 0;
     // VBO* vbo;
     // EBO* ebo;
 
-    VAO();
+    VAO() = default;
     ~VAO();
-    void setup(VBO* vbo, EBO* ebo, VertexLayout* vertex_layout);
+
+    VAO(const VBO&) = delete;
+    VAO& operator=(const VAO&) = delete;
+    VAO(VAO&& o) noexcept;
+    VAO& operator=(VAO&& o) noexcept;
+
+    VAO& init_vao() &;
+    VAO&& init_vao() &&;
+    void setup(const VBO& vbo, const EBO& ebo, const VertexLayout& vertex_layout);
 
     void bind() const;
     static void unbind();

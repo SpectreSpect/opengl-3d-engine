@@ -19,10 +19,12 @@
 #include "camera.h"
 #include "vertex_shader.h"
 #include "fragment_shader.h"
-#include "program.h"
+#include "vf_program.h"
 
 #include "mesh_manager.h"
 #include "material_manager.h"
+#include "path_utils.h"
+#include "shader_manager.h"
 #include "path_utils.h"
 
 class Window;
@@ -35,29 +37,43 @@ public:
 
     MeshManager* mesh_manager;
     MaterialManager* material_manager;
+    ShaderManager* shader_manager;
+
+
+    // VfProgram* default_program;
+    VfProgram* default_line_program;
+    VfProgram* default_point_program;
 
     std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
     std::string default_fragment_shader_path = (executable_dir() / "shaders" / "deafult_fragment.glsl").string();
 
     VertexShader* default_vertex_shader;
     FragmentShader* default_fragment_shader;
-    Program* default_program;
+    VfProgram* default_program;
 
 
-    std::string default_line_vertex_shader_path = (executable_dir() / "shaders" / "line_vs.glsl").string();
-    std::string default_line_fragment_shader_path = (executable_dir() / "shaders" / "line_fs.glsl").string();
+    // std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
+    // std::string default_fragment_shader_path = (executable_dir() / "shaders" / "deafult_fragment.glsl").string();
 
-    VertexShader* default_line_vertex_shader;
-    FragmentShader* default_line_fragment_shader;
-    Program* default_line_program;
+    // VertexShader* default_vertex_shader;
+    // FragmentShader* default_fragment_shader;
+    // VfProgram* default_program;
 
 
-    std::string default_point_vertex_shader_path = (executable_dir() / "shaders" / "point_vs.glsl").string();
-    std::string default_point_fragment_shader_path = (executable_dir() / "shaders" / "point_fs.glsl").string();
+    // std::string default_line_vertex_shader_path = (executable_dir() / "shaders" / "line_vs.glsl").string();
+    // std::string default_line_fragment_shader_path = (executable_dir() / "shaders" / "line_fs.glsl").string();
 
-    VertexShader* default_point_vertex_shader;
-    FragmentShader* default_point_fragment_shader;
-    Program* default_point_program;
+    // VertexShader* default_line_vertex_shader;
+    // FragmentShader* default_line_fragment_shader;
+    // Program* default_line_program;
+
+
+    // std::string default_point_vertex_shader_path = (executable_dir() / "shaders" / "point_vs.glsl").string();
+    // std::string default_point_fragment_shader_path = (executable_dir() / "shaders" / "point_fs.glsl").string();
+
+    // VertexShader* default_point_vertex_shader;
+    // FragmentShader* default_point_fragment_shader;
+    // Program* default_point_program;
 
 
     // Camera* camera;
