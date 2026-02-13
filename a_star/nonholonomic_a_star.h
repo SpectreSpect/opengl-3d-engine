@@ -162,6 +162,7 @@ public:
 
     float wheel_base = 2.5f;
     float max_steer = 0.6;
+    // float wheel_base = 1.0f;
     float min_radius = 0.0f;
     float integration_steps = 8;
     // float motion_simulation_dist = 0.2f;

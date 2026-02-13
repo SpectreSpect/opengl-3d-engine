@@ -86,10 +86,10 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 if (dx == 0 && dz == 0)
                     continue;
                  
-                // if (!allow_diagonal_moves) {
-                //     if (dx != 0 && dz != 0)
-                //         continue;
-                // }
+                if (!allow_diagonal_moves) {
+                    if (dx != 0 && dz != 0)
+                        continue;
+                }
 
                 int nx = dx + cur_cell.pos.x;
                 int ny = cur_cell.pos.y;
@@ -117,38 +117,40 @@ PlainAstarData CurvatureAStar::find_path(glm::ivec3 start_pos, glm::ivec3 end_po
                 //         intermediate_pos = intermediate_pos_2;
                 //     }
                 //     has_intermediate_pos = true;
+                // }
 
 
                 //     OccupancyCell intermediate_ground_occupancy_cell = grid->get_cell(intermediate_pos - glm::vec3(0, 1, 0));
                 //     if (intermediate_ground_occupancy_cell.curvature >= curvature_limit)
                 //         continue; 
                 // }
-                bool should_continue = false;
-                float radius = 5.0f;
-                for (int circle_x = new_pos.x - radius; circle_x <= new_pos.x + radius; circle_x++) {
-                    for (int circle_z = new_pos.z - radius; circle_z <= new_pos.z + radius; circle_z++) {
-                        glm::vec3 cicle_point = glm::vec3(circle_x, ny, circle_z);
 
-                        if (glm::distance(cicle_point, new_pos) > radius)
-                            continue;
+                // bool should_continue = false;
+                // float radius = 2.5f;
+                // for (int circle_x = new_pos.x - radius; circle_x <= new_pos.x + radius; circle_x++) {
+                //     for (int circle_z = new_pos.z - radius; circle_z <= new_pos.z + radius; circle_z++) {
+                //         glm::vec3 cicle_point = glm::vec3(circle_x, ny, circle_z);
 
-                        if (!grid->adjust_to_ground(cicle_point, max_step_up, max_drop, max_y_diff)) {
-                            should_continue = true;
-                            break;
-                        }
+                //         if (glm::distance(cicle_point, new_pos) > radius)
+                //             continue;
 
-                        OccupancyCell circle_ground_occupancy_cell = grid->get_cell(cicle_point - glm::vec3(0, 1, 0));
-                        if (circle_ground_occupancy_cell.curvature >= curvature_limit) {
-                            should_continue = true;
-                            break;
-                        }
-                    }
-                    if (should_continue)
-                        break;
-                }
+                //         if (!grid->adjust_to_ground(cicle_point, max_step_up, max_drop, max_y_diff)) {
+                //             should_continue = true;
+                //             break;
+                //         }
 
-                if (should_continue)
-                    continue;
+                //         OccupancyCell circle_ground_occupancy_cell = grid->get_cell(cicle_point - glm::vec3(0, 1, 0));
+                //         if (circle_ground_occupancy_cell.curvature >= curvature_limit) {
+                //             should_continue = true;
+                //             break;
+                //         }
+                //     }
+                //     if (should_continue)
+                //         break;
+                // }
+
+                // if (should_continue)
+                //     continue;
 
 
                 OccupancyCell ground_occupancy_cell = grid->get_cell(new_pos - glm::vec3(0, 1, 0));
