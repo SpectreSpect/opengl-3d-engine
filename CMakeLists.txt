@@ -54,22 +54,17 @@ add_executable(app
   shader_manager.cpp
 )
 
-function(add_copy_dir_target tgt src_dir dst_dir)
-  add_custom_target(${tgt} ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${dst_dir}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${src_dir}" "${dst_dir}"
-    COMMENT "Copying ${tgt}"
-  )
-endfunction()
 
-set(ASSETS_DST "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
-
-add_copy_dir_target(copy_shaders  "${CMAKE_SOURCE_DIR}/shaders"  "${ASSETS_DST}/shaders")
-add_copy_dir_target(copy_models   "${CMAKE_SOURCE_DIR}/models"   "${ASSETS_DST}/models")
-
-add_custom_target(copy_assets ALL)
-add_dependencies(copy_assets copy_shaders copy_models)
-add_dependencies(app copy_assets)
+# Copy assets next to the built executable (works for Debug/Release and all generators)
+add_custom_command(TARGET app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/shaders"
+          "$<TARGET_FILE_DIR:app>/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/models"
+          "$<TARGET_FILE_DIR:app>/models"
+  COMMENT "Copying shaders/models next to app"
+)
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
 include(FetchContent)

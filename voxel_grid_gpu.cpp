@@ -703,7 +703,7 @@ void VoxelGridGPU::draw_indirect(const GLuint vao, const glm::mat4& world, const
         glMultiDrawElementsIndirectCountARB(
             GL_TRIANGLES,
             GL_UNSIGNED_INT,
-            indirectOffset,
+            reinterpret_cast<const void*>(static_cast<std::uintptr_t>(indirectOffset)),
             countOffset,
             maxDraws,
             stride

@@ -6,6 +6,7 @@
 #include "compute_shader.h"
 #include "vertex_shader.h"
 #include "fragment_shader.h"
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -50,7 +51,7 @@ public:
 
     std::vector<Shader*> shaders;
 
-    ShaderManager(std::string& root_path);
+    ShaderManager(const std::string& root_path);
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
     ShaderManager(ShaderManager&&) = delete;
@@ -62,5 +63,5 @@ public:
         shaders.push_back(&dst);
     }
 
-    void init_shaders(std::string& root_path);
+    void init_shaders(const std::string& root_path);
 };
