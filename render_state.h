@@ -13,4 +13,6 @@ struct RenderState {
     Program* program;   // shader program to use (optional)
     Camera* camera;
     Engine3D* engine;
+
+    glm::ivec2 viewport_px;
 };

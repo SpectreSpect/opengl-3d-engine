@@ -51,6 +51,15 @@ public:
     FragmentShader* default_line_fragment_shader;
     Program* default_line_program;
 
+
+    std::string default_point_vertex_shader_path = (executable_dir() / "shaders" / "point_vs.glsl").string();
+    std::string default_point_fragment_shader_path = (executable_dir() / "shaders" / "point_fs.glsl").string();
+
+    VertexShader* default_point_vertex_shader;
+    FragmentShader* default_point_fragment_shader;
+    Program* default_point_program;
+
+
     // Camera* camera;
 
     int init();

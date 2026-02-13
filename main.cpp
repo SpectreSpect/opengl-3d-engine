@@ -34,6 +34,125 @@
 #include "a_star/nonholonomic_a_star.h"
 #include "a_star/reeds_shepp.h"
 
+#include <cstdint>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <stdexcept>
+#include "point.h"
+
+struct PointXYZRGBI {
+    float x, y, z;
+    uint8_t r, g, b;
+    float intensity;
+};
+
+struct Frame {
+    uint64_t timestamp_ns = 0;
+    uint32_t flags = 0;        // 1=rgb, 2=intensity
+    std::vector<PointXYZRGBI> points;
+};
+
+struct IndexEntry {
+    uint64_t frame_id = 0;
+    uint64_t timestamp_ns = 0;
+    std::filesystem::path filename;
+    uint32_t point_count = 0;
+};
+
+
+static Frame read_frame_bin(const std::filesystem::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("Failed to open: " + path.string());
+
+    Frame f{};
+    uint32_t count = 0;
+
+    in.read(reinterpret_cast<char*>(&f.timestamp_ns), sizeof(uint64_t));
+    in.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
+    in.read(reinterpret_cast<char*>(&f.flags), sizeof(uint32_t));
+    if (!in) throw std::runtime_error("Bad header in: " + path.string());
+
+    const bool has_rgb = (f.flags & 1u) != 0;
+    const bool has_intensity = (f.flags & 2u) != 0;
+
+    size_t bpp = 3 * sizeof(float);
+    if (has_rgb) bpp += 3 * sizeof(uint8_t);
+    if (has_intensity) bpp += sizeof(float);
+
+    std::vector<uint8_t> buf(size_t(count) * bpp);
+    in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+    if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
+
+    f.points.resize(count);
+
+    const uint8_t* p = buf.data();
+    for (uint32_t i = 0; i < count; ++i) {
+        std::memcpy(&f.points[i].x, p, 4); p += 4;
+        std::memcpy(&f.points[i].y, p, 4); p += 4;
+        std::memcpy(&f.points[i].z, p, 4); p += 4;
+
+        f.points[i].r = f.points[i].g = f.points[i].b = 255;
+        f.points[i].intensity = 0.0f;
+
+        if (has_rgb) {
+            f.points[i].r = *p++;
+            f.points[i].g = *p++;
+            f.points[i].b = *p++;
+        }
+        if (has_intensity) {
+            std::memcpy(&f.points[i].intensity, p, 4); p += 4;
+        }
+    }
+
+    return f;
+}
+
+// Very small CSV parser for: frame_id,timestamp_ns,filename,point_count
+// Skips empty/bad lines. Supports optional header row.
+static std::vector<IndexEntry> read_index_csv(const std::filesystem::path& index_path)
+{
+    std::ifstream in(index_path);
+    if (!in) throw std::runtime_error("Failed to open: " + index_path.string());
+
+    std::vector<IndexEntry> entries;
+    std::string line;
+
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+
+        std::stringstream ss(line);
+        std::string a, b, c, d;
+
+        if (!std::getline(ss, a, ',')) continue;
+        if (!std::getline(ss, b, ',')) continue;
+        if (!std::getline(ss, c, ',')) continue;
+        if (!std::getline(ss, d, ',')) continue;
+
+        // If it's a header (non-numeric first field), skip it
+        auto is_uint = [](const std::string& s) {
+            if (s.empty()) return false;
+            for (char ch : s) if (ch < '0' || ch > '9') return false;
+            return true;
+        };
+        if (!is_uint(a) || !is_uint(b) || !is_uint(d)) continue;
+
+        IndexEntry e;
+        e.frame_id = std::stoull(a);
+        e.timestamp_ns = std::stoull(b);
+        e.filename = c;
+        e.point_count = static_cast<uint32_t>(std::stoul(d));
+        entries.push_back(std::move(e));
+    }
+
+    std::sort(entries.begin(), entries.end(),
+              [](const IndexEntry& x, const IndexEntry& y) { return x.timestamp_ns < y.timestamp_ns; });
+
+    return entries;
+}
+
+
 
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 
@@ -208,7 +327,92 @@ int main() {
     bool force_stop = false;
     bool TEMP_block_start_pathfinnding = false;
 
-    window->disable_cursor();
+
+    // Frame frame = read_frame_bin("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000067.bin");
+
+    std::vector<IndexEntry> point_cloud_entries = read_index_csv("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+
+
+    glm::vec3 origin = glm::vec3(0.0f, 10.0f, 0.0f);
+
+    std::vector<Line*> point_cloud_video_lines;
+    std::vector<Point*> point_cloud_video_points;
+
+    for (int i = 0; i < point_cloud_entries.size(); i++) {
+        std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[i].filename;
+        Frame frame = read_frame_bin(file_path);
+
+
+        std::vector<PointInstance> point_clound_point_instance;
+        for (int i = 0; i < frame.points.size(); i++) {
+            PointXYZRGBI point = frame.points[i - 1];
+            glm::vec3 pos = glm::vec3(-point.x, point.z, point.y);
+
+            PointInstance point_instance;
+            point_instance.pos = pos;
+
+            point_clound_point_instance.push_back(point_instance);
+
+            // glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
+
+            // LineInstance line_instance;
+            // line_instance.p0 = pos_0;
+            // line_instance.p1 = pos_1;
+
+            // point_clound_line_instance.push_back(line_instance);
+        }
+
+        Point* point = new Point();
+        point->set_points(point_clound_point_instance);
+        point->color = {1.0f, 0.0f, 0.0f};
+        point_cloud_video_points.push_back(point);
+
+        std::vector<LineInstance> point_clound_line_instance;
+        for (int i = 1; i < frame.points.size(); i++) {
+
+            PointXYZRGBI point_0 = frame.points[i - 1];
+            PointXYZRGBI point_1 = frame.points[i];
+
+            glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+            glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
+
+            LineInstance line_instance;
+            line_instance.p0 = pos_0;
+            line_instance.p1 = pos_1;
+
+            point_clound_line_instance.push_back(line_instance);
+        }
+        
+        Line* point_clound_line = new Line();
+        point_clound_line->color = {1.0f, 0.0f, 0.0f};
+        point_clound_line->set_lines(point_clound_line_instance);
+
+        point_cloud_video_lines.push_back(point_clound_line);
+    }
+    
+    
+    // std::vector<LineInstance> point_clound_line_instance;
+    // for (int i = 1; i < frame.points.size(); i++) {
+
+    //     PointXYZRGBI point_0 = frame.points[i - 1];
+    //     PointXYZRGBI point_1 = frame.points[i];
+
+    //     glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+    //     glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
+
+    //     LineInstance line_instance;
+    //     line_instance.p0 = pos_0;
+    //     line_instance.p1 = pos_1;
+
+    //     point_clound_line_instance.push_back(line_instance);
+    // }
+    
+    // Line* point_clound_line = new Line();
+    // point_clound_line->color = {1.0f, 0.0f, 0.0f};
+    // point_clound_line->set_lines(point_clound_line_instance);
+
+    float video_timer = 0.0f;
+    // window->disable_cursor();
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
@@ -223,7 +427,7 @@ int main() {
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         voxel_grid->update(window, camera);
-        window->draw(voxel_grid, camera);
+        // window->draw(voxel_grid, camera);
 
         if (glfwGetKey(window->window, GLFW_KEY_R) == GLFW_PRESS) {
             glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera->position));
@@ -540,20 +744,43 @@ int main() {
 
         ui::end_frame();
 
-        for (int i = 0; i < path_lines.size(); i++)
-            window->draw(path_lines[i], camera);
+        // for (int i = 0; i < path_lines.size(); i++)
+        //     window->draw(path_lines[i], camera);
         
-        explored_path_lines->set_lines(nonholonomic_astar->state_explored_paths);
-        window->draw(explored_path_lines, camera);
+        // explored_path_lines->set_lines(nonholonomic_astar->state_explored_paths);
+        // window->draw(explored_path_lines, camera);
             
-        window->draw(start_dir_line, camera);
-        window->draw(end_dir_line, camera);
-        window->draw(unimpended_line, camera);
+        // window->draw(start_dir_line, camera);
+        // window->draw(end_dir_line, camera);
+        // window->draw(unimpended_line, camera);
 
-        window->draw(reeds_shepp_test_path_lines, camera);
-        
+        // window->draw(reeds_shepp_test_path_lines, camera);
+
+        int cur_frame_id = 0;
+        for (int i = 0; i < point_cloud_entries.size(); i++) {
+            double time_seconds = (double)point_cloud_entries[i].timestamp_ns / 1000000000.0f;
+
+            if (time_seconds > video_timer)
+                break;
+            else
+                cur_frame_id = i;
+        }
+
+        std::cout << cur_frame_id << std::endl;
+
+
+        window->draw(point_cloud_video_points[cur_frame_id], camera);
+
         window->swap_buffers();
         engine->poll_events();
+
+        video_timer += delta_time;
+
+
+        if (cur_frame_id == point_cloud_entries.size() - 1) {
+            cur_frame_id = 0;
+            video_timer = 0;
+        }
     }
     
     ui::shutdown();

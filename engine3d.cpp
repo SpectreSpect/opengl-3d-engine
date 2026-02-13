@@ -47,6 +47,10 @@ int Engine3D::init_glew() {
     default_line_fragment_shader = new FragmentShader(default_line_fragment_shader_path);
     default_line_program = new Program(default_line_vertex_shader, default_line_fragment_shader);
 
+    default_point_vertex_shader = new VertexShader(default_point_vertex_shader_path);
+    default_point_fragment_shader = new FragmentShader(default_point_fragment_shader_path);
+    default_point_program = new Program(default_point_vertex_shader, default_point_fragment_shader);
+
     return 1;
 }
 

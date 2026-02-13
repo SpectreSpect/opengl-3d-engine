@@ -107,9 +107,12 @@ void Line::draw(RenderState state) {
         program->set_mat4("uView", state.camera->get_view_matrix());
     }
 
-    float window_width = 1280;
-    float window_height = 720;
-    program->set_vec2("uViewport", glm::vec2(window_width, window_height));
+    // float window_width = 1280;
+    // float window_height = 720;
+    
+
+
+    program->set_vec2("uViewport", state.viewport_px);
     program->set_float("uLineWidthPx", width);                 // pick width
     program->set_vec4("uColor", glm::vec4(color.x, color.y, color.z, 1));        // pick color
 

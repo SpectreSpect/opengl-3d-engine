@@ -32,7 +32,8 @@ bool Window::is_open(){
 }
 
 float Window::get_aspect_ratio() {
-    return width / height;
+    if (height == 0) return 1.0f;
+    return (float)width / (float)height;
 }
 
 float Window::get_fbuffer_aspect_ratio() {
@@ -42,11 +43,17 @@ float Window::get_fbuffer_aspect_ratio() {
     if (fbHeight == 0) 
         fbHeight = 1;
 
-    return (float)fbWidth / float(fbHeight);
+    return (float)fbWidth / (float)fbHeight;
 }
 
 void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
+
+    Window* self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    if (!self) return;
+
+    self->width = width;
+    self->height = height;
 }
 
 void Window::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -138,6 +145,11 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     states.camera = camera;
     states.camera->update_frustum_planes(states.vp);
     states.engine = engine;
+
+    int fbW, fbH;
+    glfwGetFramebufferSize(window, &fbW, &fbH);
+
+    states.viewport_px = {fbW, fbH};
 
     drawable->draw(states);
 
