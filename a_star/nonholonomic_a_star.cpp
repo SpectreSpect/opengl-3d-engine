@@ -663,9 +663,15 @@ void NonholonomicAStar::initialize(NonholonomicPos start_pos, NonholonomicPos en
             NonholonomicPos prev_pos = unimpended_astar_positions[unimpended_astar_positions.size() - 1];
 
             float ratio = 0.7;
+            glm::vec3 mid_pos_vec = prev_pos.pos * (1 - ratio) + end_pos.pos * ratio;
+            grid->adjust_to_ground(mid_pos_vec, max_step_up, max_drop, max_y_diff);
+
+            
             NonholonomicPos mid_pos;
-            mid_pos.pos = prev_pos.pos * (1 - ratio) + end_pos.pos * ratio;
+            mid_pos.pos = mid_pos_vec;
             mid_pos.theta = prev_pos.theta;
+
+            // grid->adjust_to_ground(mid_pos, max_step_up, max_drop, max_y_diff);
 
             unimpended_astar_positions.push_back(mid_pos);
             // float dist = glm::distance(prev_pos.pos, mid_pos.pos);
@@ -932,8 +938,8 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
     if (track_explored_paths)
         if (!cur_cell.no_parent) {
             LineInstance line_instance;
-            line_instance.p0 = cur_cell.pos.pos;
-            line_instance.p1 = cur_cell.came_from.pos;
+            line_instance.p0 = cur_cell.pos.pos + glm::vec3(0.0f, 0.2f, 0.0f);
+            line_instance.p1 = cur_cell.came_from.pos + glm::vec3(0.0f, 0.2f, 0.0f);
 
             state_explored_paths.push_back(line_instance);
         }
@@ -1013,7 +1019,8 @@ bool NonholonomicAStar::find_nonholomic_path_step() {
                 motion_dist += glm::distance(motion[i].pos, motion[i+1].pos);
             }
             
-            NonholonomicPos new_pos = motion[motion.size() - 1];
+            // NonholonomicPos new_pos = motion[motion.size() - 1];
+            NonholonomicPos new_pos = simplified_motion[simplified_motion.size() - 1];
 
             uint64_t new_key = state_key(new_pos);
             auto heap_it = state_closed_heap.find(new_key);
