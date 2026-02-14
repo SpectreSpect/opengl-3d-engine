@@ -740,7 +740,7 @@ int main() {
 
         point_cloud_video.update(delta_time);
         window.draw(&point_cloud_video, &camera);
-        point_cloud_video.rotation.x += delta_time * 30.0f;
+        // point_cloud_video.rotation.x += delta_time;
 
         // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points, rel_thresh);
         // window.draw(lidar_mesh, &camera);

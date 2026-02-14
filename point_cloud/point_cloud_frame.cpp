@@ -46,7 +46,9 @@ void PointCloudFrame::load_from_file(const std::filesystem::path& path) {
 
 
         //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
-        local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = 1.0f;
+        // local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = 1.0f;
+        
+        local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = local_points[i].pos.y / 3.0f;
 
         if (has_rgb) {
             local_points[i].color.r = *p++;
