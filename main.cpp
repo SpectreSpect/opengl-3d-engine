@@ -39,6 +39,8 @@
 #include <string>
 #include <stdexcept>
 #include "point.h"
+#include "point_cloud/point_cloud_frame.h"
+#include "point_cloud/point_cloud_video.h"
 
 struct PointXYZRGBI {
     float x, y, z;
@@ -46,120 +48,112 @@ struct PointXYZRGBI {
     float intensity;
 };
 
-struct Frame {
-    uint64_t timestamp_ns = 0;
-    uint32_t flags = 0;        // 1=rgb, 2=intensity
-    std::vector<PointXYZRGBI> points;
-};
+// struct Frame {
+//     uint64_t timestamp_ns = 0;
+//     uint32_t flags = 0;        // 1=rgb, 2=intensity
+//     std::vector<PointXYZRGBI> points;
+// };
 
-struct IndexEntry {
-    uint64_t frame_id = 0;
-    uint64_t timestamp_ns = 0;
-    std::filesystem::path filename;
-    uint32_t point_count = 0;
-};
+// static Frame read_frame_bin(const std::filesystem::path& path)
+// {
+//     std::ifstream in(path, std::ios::binary);
+//     if (!in) throw std::runtime_error("Failed to open: " + path.string());
 
+//     Frame f{};
+//     uint32_t count = 0;
 
-static Frame read_frame_bin(const std::filesystem::path& path)
-{
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("Failed to open: " + path.string());
+//     in.read(reinterpret_cast<char*>(&f.timestamp_ns), sizeof(uint64_t));
+//     in.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
+//     in.read(reinterpret_cast<char*>(&f.flags), sizeof(uint32_t));
+//     if (!in) throw std::runtime_error("Bad header in: " + path.string());
 
-    Frame f{};
-    uint32_t count = 0;
+//     const bool has_rgb = (f.flags & 1u) != 0;
+//     const bool has_intensity = (f.flags & 2u) != 0;
 
-    in.read(reinterpret_cast<char*>(&f.timestamp_ns), sizeof(uint64_t));
-    in.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
-    in.read(reinterpret_cast<char*>(&f.flags), sizeof(uint32_t));
-    if (!in) throw std::runtime_error("Bad header in: " + path.string());
+//     size_t bpp = 3 * sizeof(float);
+//     if (has_rgb) bpp += 3 * sizeof(uint8_t);
+//     if (has_intensity) bpp += sizeof(float);
 
-    const bool has_rgb = (f.flags & 1u) != 0;
-    const bool has_intensity = (f.flags & 2u) != 0;
+//     std::vector<uint8_t> buf(size_t(count) * bpp);
+//     in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+//     if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
 
-    size_t bpp = 3 * sizeof(float);
-    if (has_rgb) bpp += 3 * sizeof(uint8_t);
-    if (has_intensity) bpp += sizeof(float);
+//     f.points.resize(count);
 
-    std::vector<uint8_t> buf(size_t(count) * bpp);
-    in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
-    if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
-
-    f.points.resize(count);
-
-    const uint8_t* p = buf.data();
-    for (uint32_t i = 0; i < count; ++i) {
-        std::memcpy(&f.points[i].x, p, 4); p += 4;
-        std::memcpy(&f.points[i].y, p, 4); p += 4;
-        std::memcpy(&f.points[i].z, p, 4); p += 4;
+//     const uint8_t* p = buf.data();
+//     for (uint32_t i = 0; i < count; ++i) {
+//         std::memcpy(&f.points[i].x, p, 4); p += 4;
+//         std::memcpy(&f.points[i].y, p, 4); p += 4;
+//         std::memcpy(&f.points[i].z, p, 4); p += 4;
         
-        float y = f.points[i].y;
-        float z = f.points[i].z;
+//         float y = f.points[i].y;
+//         float z = f.points[i].z;
 
-        f.points[i].x = -f.points[i].x;
-        f.points[i].y = z;
-        f.points[i].z = y;
+//         f.points[i].x = -f.points[i].x;
+//         f.points[i].y = z;
+//         f.points[i].z = y;
 
 
-        //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+//         //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
 
-        f.points[i].r = f.points[i].g = f.points[i].b = 255;
-        f.points[i].intensity = 0.0f;
+//         f.points[i].r = f.points[i].g = f.points[i].b = 255;
+//         f.points[i].intensity = 0.0f;
 
-        if (has_rgb) {
-            f.points[i].r = *p++;
-            f.points[i].g = *p++;
-            f.points[i].b = *p++;
-        }
-        if (has_intensity) {
-            std::memcpy(&f.points[i].intensity, p, 4); p += 4;
-        }
-    }
+//         if (has_rgb) {
+//             f.points[i].r = *p++;
+//             f.points[i].g = *p++;
+//             f.points[i].b = *p++;
+//         }
+//         if (has_intensity) {
+//             std::memcpy(&f.points[i].intensity, p, 4); p += 4;
+//         }
+//     }
 
-    return f;
-}
+//     return f;
+// }
 
 // Very small CSV parser for: frame_id,timestamp_ns,filename,point_count
 // Skips empty/bad lines. Supports optional header row.
-static std::vector<IndexEntry> read_index_csv(const std::filesystem::path& index_path)
-{
-    std::ifstream in(index_path);
-    if (!in) throw std::runtime_error("Failed to open: " + index_path.string());
+// static std::vector<IndexEntry> read_index_csv(const std::filesystem::path& index_path)
+// {
+//     std::ifstream in(index_path);
+//     if (!in) throw std::runtime_error("Failed to open: " + index_path.string());
 
-    std::vector<IndexEntry> entries;
-    std::string line;
+//     std::vector<IndexEntry> entries;
+//     std::string line;
 
-    while (std::getline(in, line)) {
-        if (line.empty()) continue;
+//     while (std::getline(in, line)) {
+//         if (line.empty()) continue;
 
-        std::stringstream ss(line);
-        std::string a, b, c, d;
+//         std::stringstream ss(line);
+//         std::string a, b, c, d;
 
-        if (!std::getline(ss, a, ',')) continue;
-        if (!std::getline(ss, b, ',')) continue;
-        if (!std::getline(ss, c, ',')) continue;
-        if (!std::getline(ss, d, ',')) continue;
+//         if (!std::getline(ss, a, ',')) continue;
+//         if (!std::getline(ss, b, ',')) continue;
+//         if (!std::getline(ss, c, ',')) continue;
+//         if (!std::getline(ss, d, ',')) continue;
 
-        // If it's a header (non-numeric first field), skip it
-        auto is_uint = [](const std::string& s) {
-            if (s.empty()) return false;
-            for (char ch : s) if (ch < '0' || ch > '9') return false;
-            return true;
-        };
-        if (!is_uint(a) || !is_uint(b) || !is_uint(d)) continue;
+//         // If it's a header (non-numeric first field), skip it
+//         auto is_uint = [](const std::string& s) {
+//             if (s.empty()) return false;
+//             for (char ch : s) if (ch < '0' || ch > '9') return false;
+//             return true;
+//         };
+//         if (!is_uint(a) || !is_uint(b) || !is_uint(d)) continue;
 
-        IndexEntry e;
-        e.frame_id = std::stoull(a);
-        e.timestamp_ns = std::stoull(b);
-        e.filename = c;
-        e.point_count = static_cast<uint32_t>(std::stoul(d));
-        entries.push_back(std::move(e));
-    }
+//         IndexEntry e;
+//         e.frame_id = std::stoull(a);
+//         e.timestamp_ns = std::stoull(b);
+//         e.filename = c;
+//         e.point_count = static_cast<uint32_t>(std::stoul(d));
+//         entries.push_back(std::move(e));
+//     }
 
-    std::sort(entries.begin(), entries.end(),
-              [](const IndexEntry& x, const IndexEntry& y) { return x.timestamp_ns < y.timestamp_ns; });
+//     std::sort(entries.begin(), entries.end(),
+//               [](const IndexEntry& x, const IndexEntry& y) { return x.timestamp_ns < y.timestamp_ns; });
 
-    return entries;
-}
+//     return entries;
+// }
 
 static glm::vec3 hsv_to_rgb(float h, float s, float v) {
     h = std::fmod(h, 1.0f);
@@ -589,7 +583,7 @@ int main() {
 
     // Frame frame = read_frame_bin("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000067.bin");
 
-    std::vector<IndexEntry> point_cloud_entries = read_index_csv("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+    // std::vector<IndexEntry> point_cloud_entries = read_index_csv("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
 
 
     glm::vec3 origin = glm::vec3(0.0f, 10.0f, 0.0f);
@@ -598,85 +592,89 @@ int main() {
     std::vector<Point*> point_cloud_video_points;
     std::vector<Mesh*> lidar_meshes;
 
-    for (int i = 0; i < point_cloud_entries.size(); i++) {
-        std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[i].filename;
-        Frame frame = read_frame_bin(file_path);
+    PointCloudFrame point_cloud_frame = PointCloudFrame("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
+    PointCloudVideo point_cloud_video = PointCloudVideo();
+    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+    // point_cloud_frame.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
+
+    // for (int i = 0; i < point_cloud_entries.size(); i++) {
+    //     std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[i].filename;
+    //     Frame frame = read_frame_bin(file_path);
 
 
-        float minZ = std::numeric_limits<float>::infinity();
-        float maxZ = -std::numeric_limits<float>::infinity();
+    //     float minZ = std::numeric_limits<float>::infinity();
+    //     float maxZ = -std::numeric_limits<float>::infinity();
 
-        for (size_t i = 0; i < frame.points.size(); ++i) {
-            const auto& p = frame.points[i];
-            glm::vec3 pos(-p.x, p.z, p.y);
-            minZ = std::min(minZ, pos.y); // using pos.y as "up" in your convention
-            maxZ = std::max(maxZ, pos.y);
-        }
+    //     for (size_t i = 0; i < frame.points.size(); ++i) {
+    //         const auto& p = frame.points[i];
+    //         glm::vec3 pos(-p.x, p.z, p.y);
+    //         minZ = std::min(minZ, pos.y); // using pos.y as "up" in your convention
+    //         maxZ = std::max(maxZ, pos.y);
+    //     }
 
-        float inv = (maxZ > minZ) ? (1.0f / (maxZ - minZ)) : 0.0f;
+    //     float inv = (maxZ > minZ) ? (1.0f / (maxZ - minZ)) : 0.0f;
 
-        std::vector<PointInstance> point_cloud_point_instance;
-        point_cloud_point_instance.reserve(frame.points.size());
+    //     std::vector<PointInstance> point_cloud_point_instance;
+    //     point_cloud_point_instance.reserve(frame.points.size());
         
-        for (int i = 0; i < frame.points.size(); i++) {
-            PointXYZRGBI point = frame.points[i - 1];
-            glm::vec3 pos = glm::vec3(-point.x, point.z, point.y);
+    //     for (int i = 0; i < frame.points.size(); i++) {
+    //         PointXYZRGBI point = frame.points[i - 1];
+    //         glm::vec3 pos = glm::vec3(-point.x, point.z, point.y);
 
-            float t = (pos.y - minZ) * inv;        // 0..1
-            t = clamp01(t);
+    //         float t = (pos.y - minZ) * inv;        // 0..1
+    //         t = clamp01(t);
 
-            float hue = (1.0f - t) * 0.66f;
+    //         float hue = (1.0f - t) * 0.66f;
             
-            PointInstance point_instance;
-            point_instance.pos = pos;
+    //         PointInstance point_instance;
+    //         point_instance.pos = pos;
             
             
-            point_instance.color = hsv_to_rgb(hue, 1.0f, 1.0f);
+    //         point_instance.color = hsv_to_rgb(hue, 1.0f, 1.0f);
 
-            point_cloud_point_instance.push_back(point_instance);
+    //         point_cloud_point_instance.push_back(point_instance);
 
-        }
+    //     }
 
-        Point* point = new Point();
-        point->set_points(point_cloud_point_instance);
-        point->size_px = 2.0f;
+    //     Point* point = new Point();
+    //     point->set_points(point_cloud_point_instance);
+    //     point->size_px = 2.0f;
 
-        point_cloud_video_points.push_back(point);
+    //     point_cloud_video_points.push_back(point);
 
-        std::vector<LineInstance> point_clound_line_instance;
-        for (int i = 1; i < frame.points.size(); i++) {
+    //     std::vector<LineInstance> point_clound_line_instance;
+    //     for (int i = 1; i < frame.points.size(); i++) {
 
-            PointXYZRGBI point_0 = frame.points[i - 1];
-            PointXYZRGBI point_1 = frame.points[i];
+    //         PointXYZRGBI point_0 = frame.points[i - 1];
+    //         PointXYZRGBI point_1 = frame.points[i];
 
-            glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
-            glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
+    //         glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+    //         glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
 
-            LineInstance line_instance;
-            line_instance.p0 = pos_0;
-            line_instance.p1 = pos_1;
+    //         LineInstance line_instance;
+    //         line_instance.p0 = pos_0;
+    //         line_instance.p1 = pos_1;
 
-            point_clound_line_instance.push_back(line_instance);
-        }
+    //         point_clound_line_instance.push_back(line_instance);
+    //     }
         
-        Line* point_clound_line = new Line();
-        point_clound_line->color = {1.0f, 0.0f, 0.0f};
-        point_clound_line->set_lines(point_clound_line_instance);
+    //     Line* point_clound_line = new Line();
+    //     point_clound_line->color = {1.0f, 0.0f, 0.0f};
+    //     point_clound_line->set_lines(point_clound_line_instance);
 
-        point_cloud_video_lines.push_back(point_clound_line);
+    //     point_cloud_video_lines.push_back(point_clound_line);
 
 
-        Mesh* mesh = get_mesh_from_point_cloud(frame.points);
-        lidar_meshes.push_back(mesh);
-    }
+    //     Mesh* mesh = get_mesh_from_point_cloud(frame.points);
+    //     lidar_meshes.push_back(mesh);
+    // }
 
-    std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[0].filename;
-    Frame frame = read_frame_bin(file_path);
+    // std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[0].filename;
+    // Frame frame = read_frame_bin(file_path);
     
     // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points);
     
     float rel_thresh = 1.5f;
-    float video_timer = 0.0f;
     // window->disable_cursor();
     while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -693,310 +691,6 @@ int main() {
 
         // voxel_grid->update(&window, &camera);
         // window.draw(voxel_grid, &camera);
-
-        if (glfwGetKey(window.window, GLFW_KEY_R) == GLFW_PRESS) {
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-                start_pos.pos = camera.position;
-                voxel_grid->adjust_to_ground(start_pos.pos);
-                start_pos.pos.y += 0.2f;
-
-                start_pos.theta = glm::radians(camera_controller.yaw);
-
-                float angle = start_pos.theta;
-                glm::vec3 dir(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
-                start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir * 1.0f));
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_J) == GLFW_PRESS) {
-            std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.get_optimal_dubins_path(start_pos, end_pos, min_radius);
-            std::vector<NonholonomicPos> discretized_path = reeds_shepp.discretize_path(start_pos, reeds_shepp_test_path, 8, min_radius);
-            // std::vector<NonholonomicPos> discretized_path = reeds_shepp.get_optimal_path_discretized(start_pos, end_pos, 8, min_radius);
-
-            std::vector<LineInstance> reeds_shepp_test_line_instances;
-            if (discretized_path.size() >= 2)
-            for (int i = 0; i < discretized_path.size() - 1; i++) {
-                LineInstance line_instance;
-                line_instance.p0 = discretized_path[i].pos;
-                line_instance.p1 = discretized_path[i+1].pos;
-
-                reeds_shepp_test_line_instances.push_back(line_instance);
-
-                reeds_shepp_test_path_lines->set_lines(reeds_shepp_test_line_instances);
-            }
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_H) == GLFW_PRESS) {
-            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-            //     Voxel new_voxel = Voxel();
-            //     new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-            //     new_voxel.visible = true;
-
-            //     for (int z = 0; z < 5; z++) {
-            //         for (int y = 0; y < 5; y++) {
-            //             glm::ivec3 pos = glm::ivec3(-3, y, -z);
-            //             voxel_editor.set(pos, new_voxel);
-            //         }
-            //     }
-
-            //     for (int x = -3; x < 5; x++) {
-            //         for (int y = 0; y < 5; y++) {
-            //             glm::ivec3 pos = glm::ivec3(x, y, -5);
-            //             voxel_editor.set(pos, new_voxel);
-            //         }
-            //     }
-            // });
-
-            std::vector<LineInstance> unimpended_line_instances;
-
-            if(nonholonomic_astar->unimpended_astar_positions.size() >= 2)
-            for (int i = 0; i < nonholonomic_astar->unimpended_astar_positions.size()-1; i++) {
-                LineInstance unimpended_line_instance;
-                unimpended_line_instance.p0 = nonholonomic_astar->unimpended_astar_positions[i].pos + glm::vec3(0.0f, 0.2f, 0.f);
-                unimpended_line_instance.p1 = nonholonomic_astar->unimpended_astar_positions[i+1].pos + glm::vec3(0.0f, 0.2f, 0.f);
-
-                unimpended_line_instances.push_back(unimpended_line_instance);
-            }
-
-            unimpended_line->set_lines(unimpended_line_instances);
-
-
-
-            // voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-
-            //     end_pos.pos = camera->position;
-            //     voxel_grid->adjust_to_ground(end_pos.pos);
-            //     end_pos.pos.y += 0.2f;
-
-            //     end_pos.theta = glm::radians(camera_controller->yaw);
-
-            //     float angle = end_pos.theta; // or + 3.14159265f
-            //     glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
-            //     end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + dir * 1.0f));
-            // });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_M) == GLFW_PRESS) {  
-            force_stop = true;
-        }
-
-
-
-
-        if (glfwGetKey(window.window, GLFW_KEY_F) == GLFW_PRESS) {
-
-
-
-
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-
-                end_pos.pos = camera.position;
-                voxel_grid->adjust_to_ground(end_pos.pos);
-                end_pos.pos.y += 0.2f;
-
-                end_pos.theta = glm::radians(camera_controller.yaw);
-
-                float angle = end_pos.theta; // or + 3.14159265f
-                glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
-                end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + dir * 1.0f));
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_V) == GLFW_PRESS) {
-            glm::ivec3 voxel_pos = glm::ivec3(glm::floor(camera.position));
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){
-                Voxel new_voxel = Voxel();
-
-                for (int i = 0; i < 10; i++) {
-                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-                    new_voxel.visible = true;
-                    
-                    voxel_editor.set(voxel_pos, new_voxel);
-                    voxel_pos.y += 1;
-                }
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_Q) == GLFW_PRESS) {   
-            glm::vec3 camera_dir = glm::normalize(camera.front);
-            glm::vec3 start_pos = camera.position;
-            glm::vec3 end_pos = camera.position + camera_dir * 100.0f;
-            
-            std::vector<glm::ivec3> intersected_voxel_poses = voxel_grid->line_intersects(start_pos, end_pos);
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
-                Voxel new_voxel = Voxel();
-
-                for (int i = 0; i < intersected_voxel_poses.size(); i++) {
-                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-                    new_voxel.visible = true;
-                    
-                    voxel_editor.set(intersected_voxel_poses[i], new_voxel);
-                }
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_U) == GLFW_PRESS) {  
-            nonholonomic_astar->TEMPPPPPTESTTTT = false;
-            std::cout << "FALSE" << std::endl;
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_Y) == GLFW_PRESS) {  
-            nonholonomic_astar->TEMPPPPPTESTTTT = true;
-            std::cout << "TRUE" << std::endl;
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_E) == GLFW_PRESS) {  
-            std::vector<glm::ivec3> output;
-            std::vector<glm::vec3> polyline;
-
-            polyline.push_back(start_pos.pos);
-            polyline.push_back(camera.position);
-            polyline.push_back(end_pos.pos);
-
-            voxel_grid->get_ground_positions(polyline, output);
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor){          
-                Voxel new_voxel = Voxel();
-
-                for (int i = 0; i < output.size(); i++) {
-                    new_voxel.color = glm::vec3(1.0, 1.0, 1.0);
-                    new_voxel.visible = true;
-                    
-                    voxel_editor.set(output[i], new_voxel);
-                }
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_I) == GLFW_PRESS) {      
-            TEMP_block_start_pathfinnding = false;      
-            nonholonomic_astar->initialize(start_pos, end_pos);
-
-            simulation_running = false;
-
-            voxel_grid->edit_voxels([&](VoxelEditor& voxel_editor) {
-                for (int i = 0; i < old_voxels.size(); i++) {
-                    glm::ivec3 pos = old_voxels[i].first;
-                    Voxel voxel = old_voxels[i].second;
-                    voxel_editor.set(pos, voxel);
-                }
-
-                old_voxels.clear();
-
-                for (int i = 0; i < nonholonomic_astar->state_plain_astar_path.path.size(); i++) {
-                    // nonholonomic_astar->state_plain_astar_path[i]
-                    glm::ivec3 pos = nonholonomic_astar->state_plain_astar_path.path[i];
-                    glm::ivec3 ground_voxel_pos = pos + glm::ivec3(0, -1, 0);
-
-                    Voxel old_voxel = voxel_editor.get(ground_voxel_pos);
-                    old_voxels.push_back(std::pair<glm::ivec3, Voxel>(ground_voxel_pos, old_voxel));
-
-                    Voxel voxel;
-                    voxel.color = {0.0, 1.0, 0.0};
-                    voxel.visible = true;
-                    voxel.curvature = old_voxel.curvature;
-
-                    voxel_editor.set(ground_voxel_pos, voxel);
-                }
-            });
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_O) == GLFW_PRESS && !TEMP_block_start_pathfinnding) {
-            simulation_running = true;
-            // TEMP_block_start_pathfinnding = true;
-
-            // auto start_point = std::chrono::steady_clock::now();
-            // nonholonomic_astar->initialize(start_pos, end_pos);
-            // nonholonomic_astar->find_nonholomic_path();
-            // auto end_point = std::chrono::steady_clock::now();
-
-            // double ms = std::chrono::duration<double, std::milli>(end_point - start_point).count();
-
-            // std::cout << "Nonholonomic path finding time: " << ms << " ms,   " << 1000.0 / ms << " fps" << std::endl;
-        }
-
-
-        if (simulation_running) {
-            if (nonholonomic_astar->find_nonholomic_path_step() || force_stop) {
-                force_stop = false;
-                simulation_running = false;
-                // std::cout << "Simulation ended" << std::endl;
-                std::cout << std::endl;
-                std::cout << std::endl;
-                std::cout << std::endl;
-
-                double motion_simulation_time = nonholonomic_astar->motion_simulation_time.average_ms();
-                double adjust_to_ground_time = nonholonomic_astar->adjust_to_ground_time.average_ms();
-                double get_ground_positions_time = nonholonomic_astar->get_ground_positions_time.average_ms();
-                double crosses_extreme_curvature_time = nonholonomic_astar->crosses_extreme_curvature_time.average_ms();
-                double get_nonholonomic_f_time = nonholonomic_astar->get_nonholonomic_f_time.average_ms();
-
-                double total_time = 0;
-
-                total_time += motion_simulation_time;
-                total_time += adjust_to_ground_time;
-                total_time += get_ground_positions_time;
-                total_time += crosses_extreme_curvature_time;
-                total_time += get_nonholonomic_f_time;
-
-                std::cout << "motion_simulation_time: " << motion_simulation_time << " ms   " << (motion_simulation_time / total_time) * 100.0 << " %" << std::endl;
-                std::cout << "adjust_to_ground_time: " << adjust_to_ground_time << " ms     " << (adjust_to_ground_time / total_time) * 100.0 << " %" << std::endl;
-                std::cout << "get_ground_positions_time: " << get_ground_positions_time << " ms     " << (get_ground_positions_time / total_time) * 100.0 << " %" << std::endl;
-                std::cout << "crosses_extreme_curvature_time: " << crosses_extreme_curvature_time << " ms   " << (crosses_extreme_curvature_time / total_time) * 100.0 << " %" << std::endl;
-                std::cout << "get_nonholonomic_f_time: " << get_nonholonomic_f_time << " ms     " << (get_nonholonomic_f_time / total_time) * 100.0 << " %" << std::endl;
-                std::cout << "total: " << total_time << " ms" << std::endl;
-
-                // AvgTimer motion_simulation_time;
-                // AvgTimer adjust_to_ground_time;
-                // AvgTimer get_ground_positions_time;
-                // AvgTimer crosses_extreme_curvature_time;
-                // AvgTimer get_nonholonomic_f_time;
-            }
-        }
-
-        if (glfwGetKey(window.window, GLFW_KEY_T) == GLFW_PRESS) {
-            std::vector<NonholonomicPos>& path = nonholonomic_astar->state_path;
-
-            path_lines.clear();
-
-            std::vector<LineInstance> cur;
-            cur.reserve(256);
-
-            auto flush = [&](int dir) {
-                if (cur.empty()) return;
-                Line* line = new Line();
-                line->color = (dir == 1) ? glm::vec3(1,0,0) : glm::vec3(0,0,1); // red forward, blue reverse
-                line->width = path_lines_width;
-                line->set_lines(cur);
-                path_lines.push_back(line);
-                cur.clear();
-            };
-
-            if (path.size() > 1) {
-                int cur_dir = path[1].dir; // dir for the first segment (0 -> 1)
-
-                for (int i = 0; i < (int)path.size() - 1; ++i) {
-                    int seg_dir = path[i + 1].dir; // direction of motion from i to i+1
-
-                    if (seg_dir != cur_dir) {
-                        flush(cur_dir);     // flush previous group with its own color
-                        cur_dir = seg_dir;  // start new group
-                    }
-
-                    glm::vec3 a = path[i].pos   + glm::vec3(0, 0.2f, 0);
-                    glm::vec3 b = path[i+1].pos + glm::vec3(0, 0.2f, 0);
-
-                    cur.push_back(LineInstance{a, b});
-                }
-
-                flush(cur_dir);
-            }
-        }
         
         ImGui::Begin("Debug");
 
@@ -1024,39 +718,35 @@ int main() {
 
         // window.draw(reeds_shepp_test_path_lines, &camera);
 
-        int cur_frame_id = 0;
-        for (int i = 0; i < point_cloud_entries.size(); i++) {
-            double time_seconds = (double)point_cloud_entries[i].timestamp_ns / 1000000000.0f;
+        // int cur_frame_id = 0;
+        // for (int i = 0; i < point_cloud_entries.size(); i++) {
+        //     double time_seconds = (double)point_cloud_entries[i].timestamp_ns / 1000000000.0f;
 
-            if (time_seconds > video_timer)
-                break;
-            else
-                cur_frame_id = i;
-        }
+        //     if (time_seconds > video_timer)
+        //         break;
+        //     else
+        //         cur_frame_id = i;
+        // }
 
         // std::cout << cur_frame_id << std::endl;
 
 
         // window.draw(point_cloud_video_points[cur_frame_id], &camera);
-        window.draw(lidar_meshes[cur_frame_id], &camera);
+        // window.draw(lidar_meshes[cur_frame_id], &camera);
+        // window.draw(&point_cloud_frame, &camera);
+        // point_cloud_frame.point_cloud.position.x += delta_time * 0.2f;
+        // point_cloud_frame.point_cloud.rotation.x += delta_time * 180.0f;
+        // point_cloud_frame.rotation.y += delta_time * 30.0f;
+
+        point_cloud_video.update(delta_time);
+        window.draw(&point_cloud_video, &camera);
+        point_cloud_video.rotation.x += delta_time * 30.0f;
 
         // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points, rel_thresh);
         // window.draw(lidar_mesh, &camera);
         // delete lidar_mesh;
-
-
-
-
         window.swap_buffers();
         engine.poll_events();
-
-        video_timer += delta_time;
-
-
-        if (cur_frame_id == point_cloud_entries.size() - 1) {
-            cur_frame_id = 0;
-            video_timer = 0;
-        }
     }
     
     ui::shutdown();

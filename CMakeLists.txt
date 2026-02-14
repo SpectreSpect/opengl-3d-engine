@@ -62,6 +62,9 @@ add_executable(app
   voxel_rasterizator_gpu.cpp
   voxel_grid_gpu.cpp
   shader_manager.cpp
+  point_cloud/point_cloud_frame.cpp
+  point_cloud/point_cloud.cpp
+  point_cloud/point_cloud_video.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
