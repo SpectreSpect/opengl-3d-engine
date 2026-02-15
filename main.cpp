@@ -190,6 +190,7 @@ void create_occlusion_test_box(glm::ivec3 origin, std::vector<glm::ivec3>& posit
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 // float clear_col[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
+
 int main() {
     Engine3D engine = Engine3D();
     Window window = Window(&engine, 1280, 720, "3D visualization");

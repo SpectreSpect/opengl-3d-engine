@@ -6,6 +6,7 @@
 #include "compute_shader.h"
 #include "vertex_shader.h"
 #include "fragment_shader.h"
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -51,12 +52,11 @@ public:
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
-public:
-    ShaderManager(std::string& root_path);
+    ShaderManager(const std::string& root_path);
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
     ShaderManager(ShaderManager&&) noexcept = default;
     ShaderManager& operator=(ShaderManager&&) noexcept = default;
 
-    void init_shaders(std::string& root_path);
+    void init_shaders(const std::string& root_path);
 };

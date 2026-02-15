@@ -11,6 +11,9 @@
 #include <chrono>
 #include <type_traits>
 #include <initializer_list>
+#include <vector>
+#include <cstddef>   // std::byte
+#include <cstring>   // std::memcpy
 
 struct VertexAttribute {
     std::string name;

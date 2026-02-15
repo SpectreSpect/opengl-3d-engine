@@ -1,10 +1,10 @@
 #include "shader_manager.h"
 
-ShaderManager::ShaderManager(std::string& root_path) {
+ShaderManager::ShaderManager(const std::string& root_path) {
     init_shaders(root_path);
 }
 
-void ShaderManager::init_shaders(std::string& root_path) {
+void ShaderManager::init_shaders(const std::string& root_path) {
     fs::path p(root_path);
     count_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "count_cs.glsl").string()); 
     scan_blocks_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "scan_blocks_cs.glsl").string());
