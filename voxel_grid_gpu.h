@@ -85,6 +85,13 @@ public:
     static_assert(sizeof(VertexGPU) == 32);
     static_assert(alignof(VertexGPU) == 16);
 
+    struct ChunkMeshAlloc {
+        uint32_t v_start_page;
+        uint32_t v_order;
+        uint32_t i_startPage;
+        uint32_t i_order;
+    };
+
     VoxelGridGPU(
         glm::ivec3 chunk_size, 
         glm::vec3 voxel_size, 
@@ -96,6 +103,8 @@ public:
         uint32_t min_free_chunks,
         uint32_t max_evict_chunks,
         uint32_t bucket_step,
+        uint32_t vb_page_size_order_of_two,
+        uint32_t ib_page_size_order_of_two,
         ShaderManager& shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
@@ -106,12 +115,15 @@ public:
                                                     const glm::vec3& cam_pos);
     void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
     void generate_terrain(uint32_t seed, uint32_t load_count);
+    void reset_load_list_counter();
     void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
+    
 
     virtual void draw(RenderState state) override;
 
     //debug
     void print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count, uint32_t load_list_count);
+    void print_count_free_mesh_alloc();
 
     ComputeProgram prog_clear_chunks_;
     ComputeProgram prog_set_chunks_;
@@ -132,6 +144,9 @@ public:
     ComputeProgram prog_stream_select_chunks_;
     ComputeProgram prog_stream_generate_terrain_;
     ComputeProgram prog_mark_all_user_chunks_as_dirty_;
+    ComputeProgram prog_mesh_pool_clear_;
+    ComputeProgram prog_mesh_pool_seed_;
+    ComputeProgram prog_reset_load_list_counter_;
 
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
@@ -160,14 +175,31 @@ public:
     SSBO bucket_next_;
     SSBO stream_counters_;
     SSBO load_list_;
+
+    SSBO vb_heads_;
+    SSBO vb_next_;
+    SSBO vb_state_;
+
+    SSBO ib_heads_;
+    SSBO ib_next_;
+    SSBO ib_state_;
+
+    SSBO chunk_mesh_alloc_;
     
     size_t chunk_indices_to_clear_cap_bytes_ = 0;
     size_t chunk_indices_to_set_cap_bytes_ = 0;
     size_t coord_keys_to_set_cap_bytes_ = 0;
     size_t voxel_write_list_cap_bytes_ = 0;
 
+    uint32_t vb_page_size_ = 0;
+    uint32_t count_vb_pages_ = 0;
+    uint32_t vb_order_ = 0;
     uint32_t max_mesh_vertices_ = 0;
-    uint32_t max_mesh_indices_  = 0;
+    
+    uint32_t ib_page_size_ = 0;
+    uint32_t count_ib_pages_ = 0;
+    uint32_t ib_order_ = 0;
+    uint32_t max_mesh_indices_ = 0;
 
     VBO vbo;
     EBO ebo;
@@ -186,6 +218,8 @@ public:
 
 
     void world_init_gpu();
+
+    void init_mesh_pool();
 
     void clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDataGPU& init_voxel_prifab);
     void init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab);

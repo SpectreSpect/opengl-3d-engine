@@ -11,6 +11,20 @@
 #include <vector>
 #include <array>
 
+#include <cstdint>
+#include <type_traits>
+
+#if __has_include(<bit>) && (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
+  #include <bit>
+  #define MATHUTILS_HAS_STD_BIT 1
+#else
+  #define MATHUTILS_HAS_STD_BIT 0
+#endif
+
+#if defined(_MSC_VER)
+  #include <intrin.h>
+#endif
+
 namespace math_utils {
     static constexpr uint32_t BITS = 21;
     static constexpr uint64_t MASK = (uint64_t(1) << BITS) - 1;
@@ -97,16 +111,38 @@ namespace math_utils {
     }
 
     static uint32_t next_pow2_u32(uint32_t x) {
-        if (x <= 1) return 1;
-        x--;
-        x |= x >> 1;
-        x |= x >> 2;
-        x |= x >> 4;
-        x |= x >> 8;
-        x |= x >> 16;
-        return x + 1;
+    if (x <= 1u) return 1u;
+#if MATHUTILS_HAS_STD_BIT
+    return static_cast<uint32_t>(std::bit_ceil(x));
+#else
+    // classic bit-hack
+    x--;
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x++;
+    return x;
+#endif
     }
 
+    static inline uint32_t log2_floor_u32(uint32_t x) {
+    #if MATHUTILS_HAS_STD_BIT
+        return std::bit_width(x) - 1u;
+    #elif defined(_MSC_VER)
+        unsigned long idx = 0;
+        _BitScanReverse(&idx, x);
+        return static_cast<uint32_t>(idx);
+    #else
+        return 31u - static_cast<uint32_t>(__builtin_clz(x));
+    #endif
+    }
+
+    static inline uint32_t log2_pow2_u32(uint32_t x) {
+        return log2_floor_u32(x);
+    }
+    
     static glm::uvec2 split_u64(uint64_t k) {
         return glm::uvec2(uint32_t(k & 0xFFFFFFFFull), uint32_t(k >> 32));
     }

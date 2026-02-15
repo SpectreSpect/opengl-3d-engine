@@ -222,13 +222,15 @@ int main() {
         {16, 16, 16}, // chunk_size
         {1.0f, 1.0f, 1.0f}, // voxel_size
         100'000, // count_active_chunks
-        30'000'000, // max_quads
+        3'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         512, // max_count_probing
         64, // count_evict_buckets
         4'000, // min_free_chunks
         10'000, // max_evict_chunks
         32, // bucket_step
+        8, // vb_page_size_order_of_two
+        10, // ib_page_size_order_of_two
         shader_manager
     );
 
@@ -259,7 +261,7 @@ int main() {
         // window.draw(&model, &camera);
         
         
-        voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, 5, 45345345);
+        voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, 25, 45345345);
         window.draw(&voxel_grid_gpu, &camera);
 
         ImGui::Begin("Debug");
@@ -293,12 +295,18 @@ int main() {
             voxel_grid_gpu.stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
             if (load_count != 0) {
                 voxel_grid_gpu.generate_terrain(45345345, load_count);
-                voxel_grid_gpu.mark_all_used_chunks_as_dirty();
+                voxel_grid_gpu.reset_load_list_counter();
+                // voxel_grid_gpu.mark_all_used_chunks_as_dirty();
                 std::cout << "generate_terrain()" << std::endl;
             } else {
                 std::cout << "load_count == 0" << std::endl;
             }
             
+        }
+
+        if (ImGui::Button("draw()")) {
+            std::cout << "draw()" << std::endl;
+            window.draw(&voxel_grid_gpu, &camera);
         }
 
 

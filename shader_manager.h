@@ -45,22 +45,18 @@ public:
     ComputeShader stream_select_chunks_cs;
     ComputeShader stream_generate_terrain_cs;
     ComputeShader mark_all_user_chunks_as_dirty_cs;
+    ComputeShader mesh_pool_clear_cs;
+    ComputeShader mesh_pool_seed_cs;
+    ComputeShader reset_load_list_counter_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
-    std::vector<Shader*> shaders;
-
+public:
     ShaderManager(std::string& root_path);
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
-    ShaderManager(ShaderManager&&) = delete;
-    ShaderManager& operator=(ShaderManager&&) = delete;
-
-    template<class T, class U>
-    inline void add_shader(T& dst, U&& shader) {
-        dst = T(std::forward<U>(shader));
-        shaders.push_back(&dst);
-    }
+    ShaderManager(ShaderManager&&) noexcept = default;
+    ShaderManager& operator=(ShaderManager&&) noexcept = default;
 
     void init_shaders(std::string& root_path);
 };
