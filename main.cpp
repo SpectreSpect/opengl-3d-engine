@@ -41,6 +41,12 @@
 #include "point.h"
 #include "point_cloud/point_cloud_frame.h"
 #include "point_cloud/point_cloud_video.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <vector>
+#include <cmath>
+#include <cstdint>
 
 struct PointXYZRGBI {
     float x, y, z;
@@ -454,6 +460,163 @@ void draw_f(Window* window,
     });
 }
 
+// // pack two int32 into one u64 key
+// static inline uint64_t pack2(int32_t a, int32_t b) {
+//   return (uint64_t(uint32_t(a)) << 32) | uint32_t(b);
+// }
+
+// static inline bool finite3(const glm::vec3& p){
+//   return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+// }
+
+// void build_map_column_overwrite(PointCloudVideo& video,
+//                                 std::vector<PointInstance>& map_points,
+//                                 float cell = 0.10f,          // column size (meters)
+//                                 int cover_radius_cells = 0)  // 0 = only the cell; 1 = also neighbors
+// {
+//   map_points.clear();
+
+//   std::unordered_set<uint64_t> occupied;
+//   occupied.reserve(5'000'000);
+
+//   // Newest -> oldest so newer frames "claim" columns first
+//   for (int f = int(video.frames.size()) - 1; f >= 0; --f) {
+//     auto& frame = video.frames[size_t(f)];
+
+//     for (int i = 0; i < frame.point_cloud.size(); ++i) {
+//       PointInstance p = frame.point_cloud.get_point(i);
+//       if (!finite3(p.pos)) continue;
+
+//       // horizontal key: X-Z plane (Y is up)
+//       const int32_t ix = (int32_t)std::floor(p.pos.x / cell);
+//       const int32_t iz = (int32_t)std::floor(p.pos.z / cell);
+
+//       bool is_claimed = false;
+
+//       // Optional radius: if any nearby column is already claimed, treat it as overlap
+//       for (int dx = -cover_radius_cells; dx <= cover_radius_cells && !is_claimed; ++dx) {
+//         for (int dz = -cover_radius_cells; dz <= cover_radius_cells; ++dz) {
+//           if (occupied.find(pack2(ix + dx, iz + dz)) != occupied.end()) {
+//             is_claimed = true;
+//             break;
+//           }
+//         }
+//       }
+
+//       if (!is_claimed) {
+//         // keep the point (newer wins)
+//         map_points.push_back(p);
+
+//         // mark this column (and optionally neighbors) as claimed
+//         for (int dx = -cover_radius_cells; dx <= cover_radius_cells; ++dx) {
+//           for (int dz = -cover_radius_cells; dz <= cover_radius_cells; ++dz) {
+//             occupied.insert(pack2(ix + dx, iz + dz));
+//           }
+//         }
+//       }
+//     }
+//   }
+// }
+
+struct VKey { int32_t x,y,z; };
+static inline bool operator==(const VKey& a, const VKey& b){
+    return a.x==b.x && a.y==b.y && a.z==b.z;
+}
+struct VKeyHash {
+    size_t operator()(const VKey& k) const noexcept {
+        uint64_t h = 1469598103934665603ull;
+        auto mix = [&](uint32_t v){ h ^= v; h *= 1099511628211ull; };
+        mix((uint32_t)k.x); mix((uint32_t)k.y); mix((uint32_t)k.z);
+        return (size_t)h;
+    }
+};
+struct OwnerInfo { uint32_t count = 0; uint32_t frame = 0; };
+
+static inline VKey key_from_pos(const glm::vec3& p, float voxel){
+    return VKey{
+        (int32_t)std::floor(p.x / voxel),
+        (int32_t)std::floor(p.y / voxel),
+        (int32_t)std::floor(p.z / voxel)
+    };
+}
+static inline bool finite3(const glm::vec3& p){
+    return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);
+}
+
+
+struct MotionInfo {
+  double lin_speed_mps = 0.0;
+  double ang_speed_rps = 0.0;
+  bool   ok = false; // ok only if we computed at least one valid dt
+};
+
+static inline double ns_to_s(uint64_t ns) { return double(ns) * 1e-9; }
+
+static inline glm::quat quat_from_rpy(const glm::vec3& rpy_rad)
+{
+  glm::quat qx = glm::angleAxis(rpy_rad.x, glm::vec3(1,0,0));
+  glm::quat qy = glm::angleAxis(rpy_rad.y, glm::vec3(0,1,0));
+  glm::quat qz = glm::angleAxis(rpy_rad.z, glm::vec3(0,0,1));
+  return glm::normalize(qz * qy * qx); // Rz*Ry*Rx
+}
+
+static inline double quat_angle_rad(glm::quat a, glm::quat b)
+{
+  a = glm::normalize(a);
+  b = glm::normalize(b);
+  if (glm::dot(a, b) < 0.0f) b = -b; // shortest path
+  glm::quat dq = glm::normalize(glm::inverse(a) * b);
+  double w = std::clamp((double)dq.w, -1.0, 1.0);
+  return 2.0 * std::acos(w); // [0..pi]
+}
+
+template <class FrameT>
+std::vector<MotionInfo> compute_motion_window(const std::vector<FrameT>& frames, int W)
+{
+  const size_t n = frames.size();
+  std::vector<MotionInfo> m(n);
+  if (n < 2) return m;
+
+  std::vector<double> t(n);
+  std::vector<glm::quat> q(n);
+  for (size_t i = 0; i < n; ++i) {
+    t[i] = ns_to_s(frames[i].timestamp_ns);
+    q[i] = quat_from_rpy(frames[i].car_rotation); // MUST be radians
+  }
+
+  for (size_t i = 0; i < n; ++i) {
+    double vmax = 0.0, wmax = 0.0;
+    bool any = false;
+
+    for (int k = 1; k <= W; ++k) {
+      size_t iL = (i >= (size_t)k) ? (i - k) : 0;
+      size_t iR = std::min(n - 1, i + (size_t)k);
+      if (iL == iR) continue;
+
+      double dt = t[iR] - t[iL];
+      if (!(dt > 1e-6)) continue; // skip zero/negative/NaN dt
+
+      glm::vec3 dp = frames[iR].car_pos - frames[iL].car_pos;
+      double dist = std::sqrt(double(dp.x*dp.x + dp.y*dp.y + dp.z*dp.z));
+      double v = dist / dt;
+
+      double ang = quat_angle_rad(q[iL], q[iR]);
+      double w = ang / dt;
+
+      vmax = std::max(vmax, v);
+      wmax = std::max(wmax, w);
+      any = true;
+    }
+
+    m[i].ok = any;
+    m[i].lin_speed_mps = vmax;
+    m[i].ang_speed_rps = wmax;
+  }
+
+  return m;
+}
+
+
 
 int main() {
     Engine3D engine = Engine3D();
@@ -595,6 +758,175 @@ int main() {
     PointCloudFrame point_cloud_frame = PointCloudFrame("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
     PointCloudVideo point_cloud_video = PointCloudVideo();
     point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+
+
+
+    PointCloud map_point_cloud;
+    std::vector<PointInstance> map_points;
+    int W = 5;
+    float max_v = 1.0f;
+    float max_w = 0.2f;
+    auto motion = compute_motion_window(point_cloud_video.frames, 5);
+
+
+    auto frame_ok = [&](size_t f)->bool {
+    return motion[f].ok &&
+           motion[f].lin_speed_mps <= max_v &&
+           motion[f].ang_speed_rps <= max_w;
+    };
+
+    float voxel = 1.0f;
+
+    // PASS 1: choose owner frame per voxel (skip bad frames)
+    std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
+
+    for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+        if (!frame_ok(f)) continue;
+
+        auto& frame = point_cloud_video.frames[f];
+
+        std::unordered_map<VKey, uint32_t, VKeyHash> counts;
+        for (int i = 0; i < frame.point_cloud.size(); ++i) {
+            PointInstance p = frame.point_cloud.get_point(i);
+            if (!finite3(p.pos)) continue;
+            ++counts[key_from_pos(p.pos, voxel)];
+        }
+
+        for (auto& kv : counts) {
+            auto& best = owner[kv.first];
+            uint32_t c = kv.second;
+            if (c > best.count || (c == best.count && f > best.frame)) {
+                best.count = c;
+                best.frame = f;
+            }
+        }
+    }
+
+    for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+        if (!frame_ok(f)) continue;
+
+        auto& frame = point_cloud_video.frames[f];
+
+        for (int i = 0; i < frame.point_cloud.size(); ++i) {
+            PointInstance p = frame.point_cloud.get_point(i);
+            if (!finite3(p.pos)) continue;
+
+            VKey k = key_from_pos(p.pos, voxel);
+            auto it = owner.find(k);
+            if (it != owner.end() && it->second.frame == f) {
+                map_points.push_back(std::move(p));
+            }
+        }
+    }
+
+    // thresholds (tune)
+    // double max_v = 0.20; // m/s
+    // double max_w = 0.30; // rad/s
+        // map_points.clear();
+
+    // build_map_column_overwrite(point_cloud_video, map_points, 0.10f, 1);
+
+
+    // std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
+    // owner.reserve(200000); // guess; big voxels => not too many keys
+
+    // float voxel = 4.0f; // try 1m first; 2m may be too coarse
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    // auto& frame = point_cloud_video.frames[f];
+
+    // // counts just for this frame
+    // std::unordered_map<VKey, uint32_t, VKeyHash> counts;
+    // counts.reserve(20000);
+
+    // for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //     PointInstance p = frame.point_cloud.get_point(i);
+    //     if (!finite3(p.pos)) continue;
+    //     ++counts[key_from_pos(p.pos, voxel)];
+    // }
+
+    // // update global owner
+    // for (const auto& kv : counts) {
+    //     const VKey& k = kv.first;
+    //     uint32_t c = kv.second;
+
+    //     auto& best = owner[k];
+    //     if (c > best.count || (c == best.count && f > best.frame)) {
+    //     best.count = c;
+    //     best.frame = f; // tie-break: newer wins
+    //     }
+    // }
+    // }
+
+
+    // std::vector<PointInstance> map_points;
+    // map_points.clear();
+    // map_points.reserve(5'000'000);
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    // auto& frame = point_cloud_video.frames[f];
+
+    // for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //     PointInstance p = frame.point_cloud.get_point(i);
+    //     if (!finite3(p.pos)) continue;
+
+    //     VKey k = key_from_pos(p.pos, voxel);
+    //     auto it = owner.find(k);
+    //     if (it == owner.end()) continue;
+
+    //     if (it->second.frame == f) {
+    //     map_points.push_back(std::move(p));
+    //     }
+    // }
+    // }
+
+
+
+
+
+
+    // glm::vec3 prev_min_pos = glm::vec3(0.0f, 0.0f, 0.0f);
+    // glm::vec3 prev_max_pos = glm::vec3(99999.0f, 99999.0f, 99999.0f);
+    // for (int frame_id = point_cloud_video.frames.size() - 1; frame_id >= 0; frame_id--) {
+    //     PointCloudFrame& point_cloud_frame =  point_cloud_video.frames[frame_id];
+
+    //     glm::vec3 new_min_pos = glm::vec3(0.0f, 0.0f, 0.0f);
+    //     glm::vec3 new_max_pos = glm::vec3(99999.0f, 99999.0f, 99999.0f);
+
+    //     for (int i = 0; i < point_cloud_frame.point_cloud.size(); i++) {
+    //         PointInstance point = point_cloud_frame.point_cloud.get_point(i);
+
+    //         if (frame_id == point_cloud_video.frames.size() - 1) {
+    //             map_points.push_back(point);
+    //         }
+    //         else if (!inside(point.pos, prev_min_pos, prev_max_pos)) {
+    //             map_points.push_back(point);
+    //         }
+                
+
+    //         if (point.pos.x <= new_min_pos.x)
+    //             new_min_pos.x = point.pos.x;
+    //         if (point.pos.y <= new_min_pos.y)
+    //             new_min_pos.y = point.pos.y;
+    //         if (point.pos.z <= new_min_pos.z)
+    //             new_min_pos.z = point.pos.z;
+            
+    //         if (point.pos.x >= new_max_pos.x)
+    //             new_max_pos.x = point.pos.x;
+    //         if (point.pos.y >= new_max_pos.y)
+    //             new_max_pos.y = point.pos.y;
+    //         if (point.pos.z >= new_max_pos.z)
+    //             new_max_pos.z = point.pos.z;
+    //     }
+
+    //     prev_min_pos = new_min_pos;
+    //     prev_max_pos = new_max_pos;
+    // }
+
+
+    map_point_cloud.update_points(std::move(map_points));
+
+
     // point_cloud_frame.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
 
     // for (int i = 0; i < point_cloud_entries.size(); i++) {
@@ -738,8 +1070,13 @@ int main() {
         // point_cloud_frame.point_cloud.rotation.x += delta_time * 180.0f;
         // point_cloud_frame.rotation.y += delta_time * 30.0f;
 
-        point_cloud_video.update(delta_time);
-        window.draw(&point_cloud_video, &camera);
+        
+        
+        // point_cloud_video.update(delta_time);
+        // window.draw(&point_cloud_video, &camera);
+
+        window.draw(&map_point_cloud, &camera);
+
         // point_cloud_video.rotation.x += delta_time;
 
         // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points, rel_thresh);

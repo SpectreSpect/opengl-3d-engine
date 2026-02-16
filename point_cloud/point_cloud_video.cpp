@@ -58,8 +58,10 @@ void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path) {
         frames.back().load_from_file(video_dir_path / e.filename);
 
         // Apply SAME basis remap as points:
-        frames.back().position = ros_pos_to_engine(e.position);
-        frames.back().rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
+        // frames.back().position = ros_pos_to_engine(e.position);
+        // frames.back().rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
+        frames.back().car_pos = ros_pos_to_engine(e.position);
+        frames.back().car_rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
     }
 }
 
@@ -109,7 +111,13 @@ void PointCloudVideo::draw(RenderState state) {
     if (current_frame > frames.size())
         throw std::out_of_range("PointCloudVideo::draw");
     
-    // frames[current_frame].draw(state);
-    for (int i = 0; i <= current_frame; i++)
-        frames[i].draw(state);
+    frames[current_frame].draw(state);
+
+    // for (int i = 0; i <= current_frame; i++)
+    //     frames[i].draw(state);
+
+    // frames[0].draw(state);
+    // frames[250].draw(state);
+
+
 }
