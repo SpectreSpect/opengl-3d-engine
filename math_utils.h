@@ -139,6 +139,32 @@ namespace math_utils {
     #endif
     }
 
+    static inline uint32_t log2_ceil_u32(uint32_t x) {
+        if (x <= 1u) return 0u;
+
+        uint32_t v = x - 1u; // важно: ceil(log2(x)) = floor(log2(x-1)) + 1
+
+    #if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
+        // C++20: bit_width(n) = floor(log2(n)) + 1 для n>0
+        return std::bit_width(v);
+
+    #elif defined(_MSC_VER)
+        unsigned long idx;
+        _BitScanReverse(&idx, v);      // idx = floor(log2(v))
+        return uint32_t(idx + 1u);
+
+    #elif defined(__GNUC__) || defined(__clang__)
+        // __builtin_clz(0) UB, но v != 0 потому что x>1
+        return 32u - uint32_t(__builtin_clz(v));
+
+    #else
+        // Самый простой fallback (до 31 итерации)
+        uint32_t r = 0u;
+        while (v) { v >>= 1u; ++r; }
+        return r;
+    #endif
+    }
+
     static inline uint32_t log2_pow2_u32(uint32_t x) {
         return log2_floor_u32(x);
     }

@@ -5,11 +5,21 @@ layout(local_size_x = 256) in;
 #define VIS_SHIFT  8u
 #define TYPE_MASK  0xFFu
 
+#define SLOT_EMPTY  0xFFFFFFFFu
+#define SLOT_LOCKED 0xFFFFFFFEu
+#define INVALID_ID  0xFFFFFFFFu
+#define SLOT_TOMB   0xFFFFFFFDu
+#define MAX_PROBES  128u
+#define LOCK_SPINS  5u
+
+layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
+layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
+
 layout(std430, binding=16) buffer StreamCounters { uvec2 stream; }; // x=loadCount
 layout(std430, binding=17) readonly buffer LoadList { uint load_list[]; };
 
 struct VoxelData { uint type_vis_flags; uint color; };
-layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=3) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -17,6 +27,8 @@ layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=8) buffer DirtyListBuf { uint dirty_list[]; };
 layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y=dirtyCount
+
+layout(std430, binding=25) buffer DebugCounters { uint debug_counters[]; };
 
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
@@ -27,6 +39,13 @@ uniform int  u_pack_offset;
 
 uniform uint u_set_dirty_flag_bits; // 1u
 uniform uint u_seed;
+
+uniform uint u_hash_table_size;
+
+uint read_hash_val(uint idx) {
+    // атомарное "чтение" (0 не меняет значение), помогает с порядком/видимостью
+    return atomicAdd(hash_vals[idx], 0u);
+}
 
 // ---- unpack key (без uint64) ----
 uint mask_bits(uint bits) { return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u); }
@@ -56,6 +75,43 @@ ivec3 unpack_key_to_coord(uvec2 key2) {
     return ivec3(int(ux) - u_pack_offset,
                  int(uy) - u_pack_offset,
                  int(uz) - u_pack_offset);
+}
+
+uvec2 pack_key_uvec2(ivec3 c) {
+    uint B = u_pack_bits;
+    uint m = mask_bits(B);
+
+    uint ux = uint(c.x + u_pack_offset) & m;
+    uint uy = uint(c.y + u_pack_offset) & m;
+    uint uz = uint(c.z + u_pack_offset) & m;
+
+    uint lo = 0u;
+    uint hi = 0u;
+
+    lo |= uz;
+
+    if (B < 32u) {
+        lo |= (uy << B);
+        if (B != 0u && (B + B) > 32u) {
+            hi |= (uy >> (32u - B));
+        }
+    } else {
+        hi |= (uy << (B - 32u));
+    }
+
+    uint s = 2u * B;
+    if (s < 32u) {
+        lo |= (ux << s);
+        if (B != 0u && (s + B) > 32u) {
+            hi |= (ux >> (32u - s));
+        }
+    } else if (s == 32u) {
+        hi |= ux;
+    } else {
+        hi |= (ux << (s - 32u));
+    }
+
+    return uvec2(lo, hi);
 }
 
 // ---- helpers ----
@@ -91,6 +147,16 @@ float hash2(ivec2 p) {
     return float(h) * (1.0 / 4294967295.0);
 }
 
+uint hash_uvec2(uvec2 v) {
+    uint x = v.x * 1664525u + 1013904223u;
+    uint y = v.y * 22695477u + 1u;
+    uint h = x ^ (y + (x << 16) + (x >> 16));
+    h ^= h >> 16; h *= 0x7feb352du;
+    h ^= h >> 15; h *= 0x846ca68bu;
+    h ^= h >> 16;
+    return h;
+}
+
 float valueNoise(vec2 x) {
     ivec2 i = ivec2(floor(x));
     vec2  f = fract(x);
@@ -123,6 +189,51 @@ uint pack_color(vec3 rgb) {
     return (r) | (g<<8) | (b<<16) | (0xFFu<<24);
 }
 
+uint lookup_chunk(uvec2 key) {
+    uint mask = u_hash_table_size - 1u;
+    uint idx  = hash_uvec2(key) & mask;
+
+    for (uint visited = 0u; visited < MAX_PROBES; ++visited) {
+        uint v = read_hash_val(idx);
+
+        if (v == SLOT_LOCKED) {
+            uint spins = 0u;
+            while (spins++ < 1024u) {
+                v = atomicAdd(hash_vals[idx], 0u);
+                if (v != SLOT_LOCKED) break;
+            }
+            if (v == SLOT_LOCKED) return INVALID_ID; 
+        }
+
+        if (v == SLOT_EMPTY) return INVALID_ID;
+
+        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; continue; }
+
+        // v = chunkId, гарантируем видимость hash_keys
+        memoryBarrierBuffer();
+        if (all(equal(hash_keys[idx], key))) return v;
+
+        idx = (idx + 1u) & mask;
+    }
+
+    return INVALID_ID;
+}
+
+void try_mark_neighbor(ivec3 ncoord) {
+    uint id = lookup_chunk(pack_key_uvec2(ncoord));
+    if (id == INVALID_ID) {
+        // atomicAdd(debug_counters[0], 1u);
+        return;
+    }
+
+    // (опционально) "атомарное чтение", чтобы избежать странностей кеша
+    uint used = atomicAdd(meta[id].used, 0u);
+    if (used == 1u) {
+        mark_dirty(id);
+        // atomicAdd(debug_counters[1], 1u);
+    }
+}
+
 void main() {
     uint voxelId = gl_GlobalInvocationID.x;
     uint listIdx = gl_GlobalInvocationID.y;
@@ -142,9 +253,10 @@ void main() {
 
     ivec3 worldVoxel = chunkCoord * u_chunk_dim + local;
 
-    // ---- terrain height from fbm(xz) ----
+    // // ---- terrain height from fbm(xz) ----
     vec2 xz = vec2(worldVoxel.x, worldVoxel.z) * 0.03; // частота
     float n = fbm(xz); // 0..~1
+    // float n = 0.5f;
     float height = 20.0 + n * 30.0; // базовый уровень + амплитуда
 
     uint type = (float(worldVoxel.y) <= height) ? 1u : 0u;
@@ -156,10 +268,19 @@ void main() {
     vec3 col = (type != 0u) ? mix(vec3(0.15,0.35,0.10), vec3(0.45,0.30,0.15), n) : vec3(0.0);
     vd.color = pack_color(col);
 
-    voxels[chunkId * u_voxels_per_chunk + voxel_index(local)] = vd;
+    uint base = chunkId * u_voxels_per_chunk;
+    voxels[base + voxelId] = vd;
 
     // один раз на чанк
     if (voxelId == 0u) {
-        mark_dirty(chunkId);
+        mark_dirty(chunkId); // Заставляем перестроить меш у себя
+
+        // А также у всех чанков вокруг
+        try_mark_neighbor(chunkCoord + ivec3( 1, 0, 0));
+        try_mark_neighbor(chunkCoord + ivec3(-1, 0, 0));
+        try_mark_neighbor(chunkCoord + ivec3( 0, 1, 0));
+        try_mark_neighbor(chunkCoord + ivec3( 0,-1, 0));
+        try_mark_neighbor(chunkCoord + ivec3( 0, 0, 1));
+        try_mark_neighbor(chunkCoord + ivec3( 0, 0,-1));
     }
 }

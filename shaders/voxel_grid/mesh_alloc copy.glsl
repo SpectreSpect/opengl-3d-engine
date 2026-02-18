@@ -90,9 +90,9 @@ const uint ST_MERGED  = 2u;
 const uint ST_MERGING = 3u;
 const uint ST_READY = 4u;
 const uint ST_CONCEDED = 5u;
-const uint ST_MASK   = (1u << ST_MASK_BITS) - 1u;
+const uint ST_MASK   = (1 << ST_MASK_BITS) - 1;
 
-const uint HEAD_LOCK = 0xFFFFFFFEu;
+const uint HEAD_LOCK = 0xFFFFFFFFu;
 
 uint pack_state(uint order, uint kind) { return (order << ST_MASK_BITS) | (kind & ST_MASK); }
 
@@ -155,7 +155,7 @@ bool vb_push_free(uint order, uint startPage) {
         //     continue; // Кто-то успел забрать первее - ждём
 
         // Здесь владеем страницей только мы, поэтому можем спокойно записывать значение без атомиков.
-        atomicExchange(vb_next[startPage], old_h);
+        vb_next[startPage] = old_h; 
         
         memoryBarrierBuffer(); // Чтобы сначала было опубликованно vb_next[startPage], а только потом vb_heads[order]
         
@@ -184,7 +184,7 @@ uint vb_pop_free(uint order) {
         
         memoryBarrierBuffer(); // Чтобы vb_next[old_h] успело "доехать" и соответствовало текущему old_h, а не было старым
 
-        uint next = atomicAdd(vb_next[old_h], 0u); // В теории можно без атомика, тк владеем нодой только мы
+        uint next = vb_next[old_h]; // В теории можно без атомика, тк владеем нодой только мы
         atomicExchange(vb_heads[order], next); // Сразу вставляем, чтобы минимизировать время блокировки списка
 
         // Здесь нодой old_h владеем полностью только мы - теперь нужно либо выкинуть её (если stale), либо взять
@@ -214,36 +214,33 @@ uint vb_alloc_pages(uint wantOrder) {
     // этого было невозможно (необходимые страницы для объединения заняты ST_ALLOC).
 
     while (true) {
-        // Показываем, что сейчас идёт аллокация
-        atomicAdd(vb_alloc_maker, 1u);
-
         for (uint order = wantOrder; order <= u_vb_max_order; order++) {
             uint start_page = vb_pop_free(order); // Пытаемся достать страницу минимального размера
             if (start_page == INVALID_ID)
                 continue; // Список страниц размера order пуст. Пытаемся найти страницу на новой итерации цикла.
+
+            // Показываем, что сейчас идёт аллокация
+            atomicAdd(vb_alloc_maker, 1u);
 
             // Состояние страницы start_page сразу самой функций pop_free() назначается как ST_ALLOC.
             // Страницей владеем только мы, поэтому можем делать с ней что захотим без атомиков.
 
             // Теперь нужно поделить страницу до нужного нами размера (2^wantOrder), а остальное освободить.
             for (uint entire_order = order; entire_order > wantOrder; entire_order--) {
-                uint half_page_size = 1u << (entire_order - 1u);
+                uint half_page_size = 1 << (entire_order - 1);
                 uint start_buddy = start_page + half_page_size;
 
-                atomicExchange(vb_state[start_buddy], pack_state(entire_order - 1, ST_MERGED));
-                vb_push_free(entire_order - 1, start_buddy);
-
-                // // Освобождаем страницу start_buddy
-                // if (!vb_push_free(entire_order - 1, start_buddy)) {
-                //     // Страницу вставил кто-то до нас. Но такого в теории быть не должно, потому что страницей 
-                //     // владеем только мы (это обеспечивается функцией pop_free).
-                //     atomicAdd(vb_alloc_maker, 0xFFFFFFFF); // Отнимаем единицу с помощью переполнения
-                //     return INVALID_ID;
-                // }
+                // Освобождаем страницу start_buddy
+                if (!vb_push_free(entire_order - 1, start_buddy)) {
+                    // Страницу вставил кто-то до нас. Но такого в теории быть не должно, потому что страницей 
+                    // владеем только мы (это обеспечивается функцией pop_free).
+                    atomicAdd(vb_alloc_maker, 0xFFFFFFFE); // Отнимаем единицу с помощью переполнения
+                    return INVALID_ID;
+                }
             }
 
             // Показываем, что аллокация завершена
-            atomicAdd(vb_alloc_maker, 0xFFFFFFFF);
+            atomicAdd(vb_alloc_maker, 0xFFFFFFFE);
             
             // Теперь нужно сделать размер start_page равным wantOrder, так как он до сих пор равен order.
             // За одно поставили ST_ALLOC (тк так проще установить wantOrder), но в теории состояние и так уже 
@@ -251,8 +248,6 @@ uint vb_alloc_pages(uint wantOrder) {
             vb_state[start_page] = pack_state(wantOrder, ST_ALLOC);
             return start_page;
         }
-
-        atomicAdd(vb_alloc_maker, 0xFFFFFFFFu);
 
         if (atomicAdd(vb_alloc_maker, 0u) == 0u) {
             // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
@@ -293,7 +288,7 @@ bool vb_free_pages(uint start, uint order) {
     while (cur_order < u_vb_max_order) {
         memoryBarrierBuffer(); // На всякий случай.
 
-        uint start_buddy = cur_start ^ (1u << cur_order);
+        uint start_buddy = start ^ (1u << cur_order);
         
         uint buddy_state = atomicAdd(vb_state[start_buddy], 0u);
         uint buddy_kind = buddy_state & ST_MASK;
@@ -320,7 +315,7 @@ bool vb_free_pages(uint start, uint order) {
             return true;
         } else if ((buddy_kind == ST_MERGING) && buddy_order == cur_order) {
             // Значит кто-то уже сливает buddy. В этом случае, если 
-            if (((cur_start >> cur_order) & 1u) == 1u) {
+            if (((start_buddy >> cur_order) & 1u) == 1u) {
                 // Мы справа, поэтому уступаем - слияние продолжит buddy вместо нас.
                 
                 // Но не уходим. Нужно убедиться, что buddy готов забирать память, а не решил сам уйти (если он
@@ -354,19 +349,20 @@ bool vb_free_pages(uint start, uint order) {
                 continue; // Значит кто-то начал сливать. Повторяем итерацию для корректной обработки случая.
             }
 
-            if (comp_buddy_state != buddy_state) {
+            if (comp_buddy_kind != buddy_state) {
                 // Значит buddy кто-то успел забрать и он уже не ST_FREE. Дальше мы уже не можем сливать, поэтому выходим.
                 break;
             }
 
             uint new_cur_state = new_cur_start == cur_start ? pack_state(cur_order + 1, ST_MERGING) : pack_state(cur_order, ST_MERGED);
-            atomicExchange(vb_state[cur_start], new_cur_state);
+            if (new_cur_start != cur_start) {
+                // Значит buddy стал новой "головой". Меняем значение обычным exchange, так как
+                // наше состояние сейчас ST_MERGING, а его никто трогать не будет.
+                atomicExchange(vb_state[cur_start], pack_state(cur_order, ST_MERGED));
+            }
 
             cur_start = new_cur_start;
             cur_order++;
-        } else {
-            // buddy не подходит для merge
-            break;
         }
 
         // НЕ ЗАБЫТЬ УЧЕСТЬ, КОГДА МЫ МЕНЬШЕ BUDDY!!! + 
@@ -375,7 +371,7 @@ bool vb_free_pages(uint start, uint order) {
         // НЕ ЗАБЫТЬ ОБРАБОТАТЬ СИТУАЦИЮ, ЕСЛИ НАС СЛИЛ BUDDY, НО МЫ НЕ УСПЕЛИ УВИДЕТЬ, ЧТО ОН ST_MERGING!!! + 
     }
 
-    return vb_push_free(cur_order, cur_start);
+    vb_push_free(cur_order, cur_start);
 }
 
 uint ib_mask() { return (1u << u_ib_index_bits) - 1u; }
@@ -383,7 +379,6 @@ uint ib_mask() { return (1u << u_ib_index_bits) - 1u; }
 uint ib_pack_head(uint idx, uint tag) { return (tag << u_ib_index_bits) | idx; }
 uint ib_head_idx(uint h) { return h & ib_mask(); }
 uint ib_head_tag(uint h) { return h >> u_ib_index_bits; }
-
 
 // При вставке состояние страницы не должно быть ST_FREE!!! Функция сама пометит страницу свободной.
 bool ib_push_free(uint order, uint startPage) {
@@ -429,7 +424,7 @@ bool ib_push_free(uint order, uint startPage) {
         //     continue; // Кто-то успел забрать первее - ждём
 
         // Здесь владеем страницей только мы, поэтому можем спокойно записывать значение без атомиков.
-        atomicExchange(ib_next[startPage], old_h);
+        ib_next[startPage] = old_h; 
         
         memoryBarrierBuffer(); // Чтобы сначала было опубликованно ib_next[startPage], а только потом ib_heads[order]
         
@@ -458,7 +453,7 @@ uint ib_pop_free(uint order) {
         
         memoryBarrierBuffer(); // Чтобы ib_next[old_h] успело "доехать" и соответствовало текущему old_h, а не было старым
 
-        uint next = atomicAdd(ib_next[old_h], 0u); // В теории можно без атомика, тк владеем нодой только мы
+        uint next = ib_next[old_h]; // В теории можно без атомика, тк владеем нодой только мы
         atomicExchange(ib_heads[order], next); // Сразу вставляем, чтобы минимизировать время блокировки списка
 
         // Здесь нодой old_h владеем полностью только мы - теперь нужно либо выкинуть её (если stale), либо взять
@@ -488,36 +483,33 @@ uint ib_alloc_pages(uint wantOrder) {
     // этого было невозможно (необходимые страницы для объединения заняты ST_ALLOC).
 
     while (true) {
-        // Показываем, что сейчас идёт аллокация
-        atomicAdd(ib_alloc_maker, 1u);
-
         for (uint order = wantOrder; order <= u_ib_max_order; order++) {
             uint start_page = ib_pop_free(order); // Пытаемся достать страницу минимального размера
             if (start_page == INVALID_ID)
                 continue; // Список страниц размера order пуст. Пытаемся найти страницу на новой итерации цикла.
+
+            // Показываем, что сейчас идёт аллокация
+            atomicAdd(ib_alloc_maker, 1u);
 
             // Состояние страницы start_page сразу самой функций pop_free() назначается как ST_ALLOC.
             // Страницей владеем только мы, поэтому можем делать с ней что захотим без атомиков.
 
             // Теперь нужно поделить страницу до нужного нами размера (2^wantOrder), а остальное освободить.
             for (uint entire_order = order; entire_order > wantOrder; entire_order--) {
-                uint half_page_size = 1u << (entire_order - 1u);
+                uint half_page_size = 1 << (entire_order - 1);
                 uint start_buddy = start_page + half_page_size;
 
-                atomicExchange(ib_state[start_buddy], pack_state(entire_order - 1, ST_MERGED));
-                ib_push_free(entire_order - 1, start_buddy);
-
-                // // Освобождаем страницу start_buddy
-                // if (!ib_push_free(entire_order - 1, start_buddy)) {
-                //     // Страницу вставил кто-то до нас. Но такого в теории быть не должно, потому что страницей 
-                //     // владеем только мы (это обеспечивается функцией pop_free).
-                //     atomicAdd(ib_alloc_maker, 0xFFFFFFFF); // Отнимаем единицу с помощью переполнения
-                //     return INVALID_ID;
-                // }
+                // Освобождаем страницу start_buddy
+                if (!ib_push_free(entire_order - 1, start_buddy)) {
+                    // Страницу вставил кто-то до нас. Но такого в теории быть не должно, потому что страницей 
+                    // владеем только мы (это обеспечивается функцией pop_free).
+                    atomicAdd(ib_alloc_maker, 0xFFFFFFFE); // Отнимаем единицу с помощью переполнения
+                    return INVALID_ID;
+                }
             }
 
             // Показываем, что аллокация завершена
-            atomicAdd(ib_alloc_maker, 0xFFFFFFFF);
+            atomicAdd(ib_alloc_maker, 0xFFFFFFFE);
             
             // Теперь нужно сделать размер start_page равным wantOrder, так как он до сих пор равен order.
             // За одно поставили ST_ALLOC (тк так проще установить wantOrder), но в теории состояние и так уже 
@@ -525,8 +517,6 @@ uint ib_alloc_pages(uint wantOrder) {
             ib_state[start_page] = pack_state(wantOrder, ST_ALLOC);
             return start_page;
         }
-
-        atomicAdd(ib_alloc_maker, 0xFFFFFFFFu);
 
         if (atomicAdd(ib_alloc_maker, 0u) == 0u) {
             // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
@@ -567,11 +557,12 @@ bool ib_free_pages(uint start, uint order) {
     while (cur_order < u_ib_max_order) {
         memoryBarrierBuffer(); // На всякий случай.
 
-        uint start_buddy = cur_start ^ (1u << cur_order);
+        uint start_buddy = start ^ (1u << cur_order);
         
         uint buddy_state = atomicAdd(ib_state[start_buddy], 0u);
         uint buddy_kind = buddy_state & ST_MASK;
         uint buddy_order = buddy_state >> ST_MASK_BITS;
+
 
         if (buddy_order != cur_order) {
             // В этом случае, даже если buddy свободен (ST_FREE), мы не можем его слить,
@@ -594,7 +585,7 @@ bool ib_free_pages(uint start, uint order) {
             return true;
         } else if ((buddy_kind == ST_MERGING) && buddy_order == cur_order) {
             // Значит кто-то уже сливает buddy. В этом случае, если 
-            if (((cur_start >> cur_order) & 1u) == 1u) {
+            if (((start_buddy >> cur_order) & 1u) == 1u) {
                 // Мы справа, поэтому уступаем - слияние продолжит buddy вместо нас.
                 
                 // Но не уходим. Нужно убедиться, что buddy готов забирать память, а не решил сам уйти (если он
@@ -628,19 +619,20 @@ bool ib_free_pages(uint start, uint order) {
                 continue; // Значит кто-то начал сливать. Повторяем итерацию для корректной обработки случая.
             }
 
-            if (comp_buddy_state != buddy_state) {
+            if (comp_buddy_kind != buddy_state) {
                 // Значит buddy кто-то успел забрать и он уже не ST_FREE. Дальше мы уже не можем сливать, поэтому выходим.
                 break;
             }
 
             uint new_cur_state = new_cur_start == cur_start ? pack_state(cur_order + 1, ST_MERGING) : pack_state(cur_order, ST_MERGED);
-            atomicExchange(ib_state[cur_start], new_cur_state);
+            if (new_cur_start != cur_start) {
+                // Значит buddy стал новой "головой". Меняем значение обычным exchange, так как
+                // наше состояние сейчас ST_MERGING, а его никто трогать не будет.
+                atomicExchange(ib_state[cur_start], pack_state(cur_order, ST_MERGED));
+            }
 
             cur_start = new_cur_start;
             cur_order++;
-        } else {
-            // buddy не подходит для merge
-            break;
         }
 
         // НЕ ЗАБЫТЬ УЧЕСТЬ, КОГДА МЫ МЕНЬШЕ BUDDY!!! + 
@@ -649,7 +641,7 @@ bool ib_free_pages(uint start, uint order) {
         // НЕ ЗАБЫТЬ ОБРАБОТАТЬ СИТУАЦИЮ, ЕСЛИ НАС СЛИЛ BUDDY, НО МЫ НЕ УСПЕЛИ УВИДЕТЬ, ЧТО ОН ST_MERGING!!! + 
     }
 
-    return ib_push_free(cur_order, cur_start);
+    ib_push_free(cur_order, cur_start);
 }
 
 void free_chunk_mesh(uint chunkId) {
@@ -717,10 +709,6 @@ void main() {
 
     uint iStart = ib_alloc_pages(iOrder);
     if (iStart == INVALID_ID) {
-        atomicExchange(stats[5], iOrder);
-        atomicExchange(stats[6], iPages);
-        atomicExchange(stats[7], quads);
-
         // vb_free_pages(vStart, vOrder); // rollback
         mesh_meta[chunkId].mesh_valid  = 0u;
         mesh_meta[chunkId].index_count = 0u;

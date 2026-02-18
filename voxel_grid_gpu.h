@@ -183,8 +183,13 @@ public:
     SSBO ib_heads_;
     SSBO ib_next_;
     SSBO ib_state_;
+    
+    SSBO alloc_markers_;
 
     SSBO chunk_mesh_alloc_;
+
+    SSBO debug_counters_;
+    SSBO stream_generate_debug_counters_;
     
     size_t chunk_indices_to_clear_cap_bytes_ = 0;
     size_t chunk_indices_to_set_cap_bytes_ = 0;
@@ -193,11 +198,13 @@ public:
 
     uint32_t vb_page_size_ = 0;
     uint32_t count_vb_pages_ = 0;
+    uint32_t vb_index_bits_ = 0;
     uint32_t vb_order_ = 0;
     uint32_t max_mesh_vertices_ = 0;
     
     uint32_t ib_page_size_ = 0;
     uint32_t count_ib_pages_ = 0;
+    uint32_t ib_index_bits_ = 0;
     uint32_t ib_order_ = 0;
     uint32_t max_mesh_indices_ = 0;
 
