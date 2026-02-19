@@ -13,7 +13,9 @@ layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 
 // --- allocator ---
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // w = freeCount
+
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // w = freeCount
 
 // --- chunk meta ---
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
@@ -86,9 +88,9 @@ uvec2 pack_key_uvec2(ivec3 c) {
 
 // ---------------- allocator ----------------
 uint pop_free_chunk_id() {
-    uint old = atomicAdd(counters.w, 0xFFFFFFFFu); // -1
+    uint old = atomicAdd(counters.free_count, 0xFFFFFFFFu); // -1
     if (old == 0u) {
-        atomicAdd(counters.w, 1u); // rollback
+        atomicAdd(counters.free_count, 1u); // rollback
         return INVALID_ID;
     }
     return free_list[old - 1u];

@@ -71,7 +71,7 @@ layout(std430, binding=23) coherent buffer IBState { uint ib_state[]; };
 
 layout(std430, binding=27) buffer AllocMarkers { uint vb_alloc_maker; uint ib_alloc_maker; };
 
-layout(std430, binding=25) buffer DebugBuffer { uint stats[]; };
+layout(std430, binding=25) buffer DebugBuffer { uint stats[8]; uint allocator_stack_counter; uint allocator_stack[]; };
 
 uniform uint u_vb_pages;
 uniform uint u_ib_pages;
@@ -469,6 +469,9 @@ uint ib_pop_free(uint order) {
         // Если страница свободна, то помечаем её как "выделенная" (ST_ALLOC).
         if (atomicCompSwap(ib_state[old_h], free_state, alloc_state) == free_state) {
             // Страница оказалась свободной и мы заменили её на состояние ST_ALLOC. Теперь можем возвращать old_h выходить из функции.
+            uint idx = atomicAdd(allocator_stack_counter, 2u);
+            allocator_stack[idx] = old_h;
+            allocator_stack[idx + 1u] = order;
             return old_h; 
         }
 
@@ -660,86 +663,86 @@ void free_chunk_mesh(uint chunkId) {
 }
 
 void main() {
-    // if (gl_GlobalInvocationID.x != 0u) return;
+    if (gl_GlobalInvocationID.x != 0u) return;
     
-    uint dirtyIdx = gl_GlobalInvocationID.x;
+    // uint dirtyIdx = gl_GlobalInvocationID.x;
     uint dirtyCount = counters.y;
-    if (dirtyIdx >= dirtyCount) return;
+    // if (dirtyIdx >= dirtyCount) return;
 
-    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
-    uint chunkId = dirty_list[dirtyIdx];
+    for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
+        uint chunkId = dirty_list[dirtyIdx];
 
-    // мог быть уже выселен
-    if (meta[chunkId].used == 0u) {
+        // мог быть уже выселен
+        if (meta[chunkId].used == 0u) {
+            // free_chunk_mesh(chunkId);
+            mesh_meta[chunkId].mesh_valid  = 0u;
+            mesh_meta[chunkId].index_count = 0u;
+            emit_counter[chunkId] = 0u;
+            enqueued[chunkId] = 0u;
+            atomicAdd(stats[0], 1u);
+            continue;
+        }
+
+        uint quads = dirty_quad_count[dirtyIdx];
+
+        // пустой меш
+        if (quads == 0u) {
+            // free_chunk_mesh(chunkId);
+            mesh_meta[chunkId].mesh_valid  = 0u;
+            mesh_meta[chunkId].index_count = 0u;
+            emit_counter[chunkId] = 0u;
+            enqueued[chunkId] = 0u;
+            atomicAdd(stats[1], 1u);
+            continue;
+        }
+
+        // free старого
         // free_chunk_mesh(chunkId);
+
+        uint needV = quads * 4u;
+        uint needI = quads * 6u;
+
+        uint vPages = div_up_u32(needV, u_vb_page_verts);
+        uint iPages = div_up_u32(needI, u_ib_page_inds);
+
+        uint vOrder = ceil_log2_u32(vPages);
+        uint iOrder = ceil_log2_u32(iPages);
+
+        uint vStart = vb_alloc_pages(vOrder);
+        if (vStart == INVALID_ID) {
+            // mesh_meta[chunkId].mesh_valid  = 0u;
+            // mesh_meta[chunkId].index_count = 0u;
+            emit_counter[chunkId] = 0u;
+            enqueued[chunkId] = 0u;
+            atomicAdd(stats[2], 1u);
+            continue;
+        }
+
+        uint iStart = ib_alloc_pages(iOrder);
+        if (iStart == INVALID_ID) {
+            atomicExchange(stats[5], iOrder);
+            atomicExchange(stats[6], iPages);
+            atomicExchange(stats[7], quads);
+
+            // vb_free_pages(vStart, vOrder); // rollback
+            // mesh_meta[chunkId].mesh_valid  = 0u;
+            // mesh_meta[chunkId].index_count = 0u;
+            emit_counter[chunkId] = 0u;
+            enqueued[chunkId] = 0u;
+            atomicAdd(stats[3], 1u);
+            continue;
+        }
+
+        chunk_alloc[chunkId] = uvec4(vStart, vOrder, iStart, iOrder);
+
+        mesh_meta[chunkId].base_vertex = vStart * u_vb_page_verts;
+        mesh_meta[chunkId].first_index = iStart * u_ib_page_inds;
+        mesh_meta[chunkId].index_count = needI;
         mesh_meta[chunkId].mesh_valid  = 0u;
-        mesh_meta[chunkId].index_count = 0u;
+
         emit_counter[chunkId] = 0u;
         enqueued[chunkId] = 0u;
-        atomicAdd(stats[0], 1u);
-        return;
+
+        atomicAdd(stats[4], 1u);
     }
-
-    uint quads = dirty_quad_count[dirtyIdx];
-
-    // пустой меш
-    if (quads == 0u) {
-        // free_chunk_mesh(chunkId);
-        mesh_meta[chunkId].mesh_valid  = 0u;
-        mesh_meta[chunkId].index_count = 0u;
-        emit_counter[chunkId] = 0u;
-        enqueued[chunkId] = 0u;
-        atomicAdd(stats[1], 1u);
-        return;
-    }
-
-    // free старого
-    // free_chunk_mesh(chunkId);
-
-    uint needV = quads * 4u;
-    uint needI = quads * 6u;
-
-    uint vPages = div_up_u32(needV, u_vb_page_verts);
-    uint iPages = div_up_u32(needI, u_ib_page_inds);
-
-    uint vOrder = ceil_log2_u32(vPages);
-    uint iOrder = ceil_log2_u32(iPages);
-
-    uint vStart = vb_alloc_pages(vOrder);
-    if (vStart == INVALID_ID) {
-        mesh_meta[chunkId].mesh_valid  = 0u;
-        mesh_meta[chunkId].index_count = 0u;
-        emit_counter[chunkId] = 0u;
-        enqueued[chunkId] = 0u;
-        atomicAdd(stats[2], 1u);
-        return;
-    }
-
-    uint iStart = ib_alloc_pages(iOrder);
-    if (iStart == INVALID_ID) {
-        atomicExchange(stats[5], iOrder);
-        atomicExchange(stats[6], iPages);
-        atomicExchange(stats[7], quads);
-
-        // vb_free_pages(vStart, vOrder); // rollback
-        mesh_meta[chunkId].mesh_valid  = 0u;
-        mesh_meta[chunkId].index_count = 0u;
-        emit_counter[chunkId] = 0u;
-        enqueued[chunkId] = 0u;
-        atomicAdd(stats[3], 1u);
-        return;
-    }
-
-    chunk_alloc[chunkId] = uvec4(vStart, vOrder, iStart, iOrder);
-
-    mesh_meta[chunkId].base_vertex = vStart * u_vb_page_verts;
-    mesh_meta[chunkId].first_index = iStart * u_ib_page_inds;
-    mesh_meta[chunkId].index_count = needI;
-    mesh_meta[chunkId].mesh_valid  = 0u;
-
-    emit_counter[chunkId] = 0u;
-    enqueued[chunkId] = 0u;
-
-    atomicAdd(stats[4], 1u);
-    // }
 }

@@ -41,6 +41,7 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     mesh_pool_clear_cs = ComputeShader((p / "shaders" / "voxel_grid" / "mesh_pool_clear.glsl").string());
     mesh_pool_seed_cs = ComputeShader((p / "shaders" / "voxel_grid" / "mesh_pool_seed.glsl").string());
     reset_load_list_counter_cs = ComputeShader((p / "shaders" / "voxel_grid" / "reset_load_list_counter.glsl").string());
+    verify_mesh_allocation_cs = ComputeShader((p / "shaders" / "voxel_grid" / "verify_mesh_allocation.glsl").string());
     voxel_mesh_vs = VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string());
     voxel_mesh_fs = FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string());
 }

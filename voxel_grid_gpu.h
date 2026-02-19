@@ -34,6 +34,8 @@ public:
     uint32_t max_evict_chunks;
     uint32_t bucket_step;
 
+    const uint32_t min_free_pages = 256;
+
     struct ChunkMetaGPU {
         uint32_t used;
         uint32_t key_lo;
@@ -41,14 +43,6 @@ public:
         uint32_t dirty_flags;
     };
     static_assert(sizeof(ChunkMetaGPU) == 16);
-
-    struct ChunkMeshMetaGPU {
-        uint32_t first_index;
-        uint32_t index_count;
-        uint32_t base_vertex;
-        uint32_t mesh_valid;
-    };
-    static_assert(sizeof(ChunkMeshMetaGPU) == 16);
 
     struct alignas(8) VoxelDataGPU {
         uint32_t type_vis_flags;
@@ -86,10 +80,13 @@ public:
     static_assert(alignof(VertexGPU) == 16);
 
     struct ChunkMeshAlloc {
-        uint32_t v_start_page;
-        uint32_t v_order;
-        uint32_t i_startPage;
-        uint32_t i_order;
+        uint32_t v_startPage; 
+        uint32_t v_order; 
+        uint32_t needV; 
+        uint32_t i_startPage; 
+        uint32_t i_order; 
+        uint32_t needI;
+        uint32_t need_rebuild;
     };
 
     VoxelGridGPU(
@@ -147,7 +144,7 @@ public:
     ComputeProgram prog_mesh_pool_clear_;
     ComputeProgram prog_mesh_pool_seed_;
     ComputeProgram prog_reset_load_list_counter_;
-
+    ComputeProgram prog_verify_mesh_allocation_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO voxels_;
@@ -160,7 +157,6 @@ public:
     SSBO voxel_write_list_;
     SSBO equeued_;
     SSBO dirty_list_;
-    SSBO chunk_mesh_meta_;
     SSBO global_vertex_buffer_;
     SSBO global_index_buffer_;
     SSBO chunk_indices_to_clear_;
@@ -175,6 +171,7 @@ public:
     SSBO bucket_next_;
     SSBO stream_counters_;
     SSBO load_list_;
+    SSBO failed_dirty_list_;
 
     SSBO vb_heads_;
     SSBO vb_next_;
@@ -186,7 +183,9 @@ public:
     
     SSBO alloc_markers_;
 
+    SSBO chunk_mesh_alloc_local_;
     SSBO chunk_mesh_alloc_;
+    SSBO count_free_pages_;
 
     SSBO debug_counters_;
     SSBO stream_generate_debug_counters_;

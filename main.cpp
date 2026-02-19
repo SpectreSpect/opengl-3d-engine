@@ -325,6 +325,9 @@ int main() {
             }
         }
 
+        #define ST_MASK_BITS 4
+        #define ST_MASK (1u << ST_MASK_BITS) - 1u
+
         if (ImGui::Button("Print ib free list")) {
             std::vector<uint32_t> ib_next(voxel_grid_gpu.count_ib_pages_);
             voxel_grid_gpu.ib_next_.read_subdata(0, ib_next.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
@@ -332,17 +335,41 @@ int main() {
             std::vector<uint32_t> ib_heads(voxel_grid_gpu.ib_order_ + 1);
             voxel_grid_gpu.ib_heads_.read_subdata(0, ib_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.ib_order_ + 1));
 
+            std::vector<uint32_t> ib_states(voxel_grid_gpu.count_ib_pages_);
+            voxel_grid_gpu.ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
+
             // uint32_t mask = (1 << voxel_grid_gpu.ib_index_bits_) - 1;
             for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_; i++) {
                 uint32_t order = i + 1;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
                 uint32_t cur_node = ib_heads[order];
                 while (cur_node != 0xFFFFFFFFu && cur_node != 0xFFFFFFFEu) {
-                    std::cout << cur_node << std::endl;
+                    uint32_t kind = ib_states[cur_node] & ST_MASK;
+                    std::cout << cur_node << " ";
+                    if (kind == 0u) std::cout << "ST_FREE" << std::endl;
+                    else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
+                    else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
+                    else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
+                    else if (kind == 4u) std::cout << "ST_READY" << std::endl;
+                    else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
                     cur_node = ib_next[cur_node];
                 }
                 
                 std::cout << std::endl;
+            }
+        }
+
+        if (ImGui::Button("Print ib allocator pop stack")) {
+            uint32_t stack_size = voxel_grid_gpu.debug_counters_.read_scalar<uint32_t>(sizeof(uint32_t) * 8);
+            uint32_t count_elements = stack_size / 2;
+            
+            std::vector<uint32_t> allocator_stack(stack_size);
+            voxel_grid_gpu.debug_counters_.read_subdata(sizeof(uint32_t) * 9, allocator_stack.data(), sizeof(uint32_t) * stack_size);
+            for (uint32_t i = 0; i < count_elements; i++) {
+                uint32_t start_idx = allocator_stack[i*2 + 0];
+                uint32_t order = allocator_stack[i*2 + 1];
+
+                std::cout << i << ": " << "idx = " << start_idx << "    " << "order = " << order << std::endl;
             }
         }
 

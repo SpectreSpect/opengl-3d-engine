@@ -23,7 +23,8 @@ struct VoxelData {
 
 layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
 layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
 layout(std430, binding=11) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 
@@ -201,7 +202,7 @@ void main() {
     uint voxelId  = gl_GlobalInvocationID.x; // 0..4095
     uint dirtyIdx = gl_GlobalInvocationID.y;
 
-    uint dirtyCount = counters.y;
+    uint dirtyCount = counters.dirty_count;
     if (dirtyIdx >= dirtyCount) return;
     if (voxelId >= u_voxels_per_chunk) return;
 

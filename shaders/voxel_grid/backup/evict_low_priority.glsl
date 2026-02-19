@@ -26,7 +26,8 @@ layout(std430, binding=9) coherent buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_
 layout(std430, binding=16) coherent buffer BucketHeads { uint bucket_heads[]; };
 layout(std430, binding=17) coherent buffer BucketNext  { uint bucket_next[]; };
 
-layout(std430, binding=24) buffer ChunkMeshAllocBuf { uvec4 chunk_alloc[]; };
+struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
+layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
 
 layout(std430, binding=18) coherent buffer VBHeads { uint vb_heads[]; };
 layout(std430, binding=19) coherent buffer VBNext  { uint vb_next[];  };

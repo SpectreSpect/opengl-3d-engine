@@ -11,7 +11,8 @@ layout(std430, binding=21) buffer IBHeads { uint ib_heads[]; };
 layout(std430, binding=22) buffer IBNext  { uint ib_next[];  };
 layout(std430, binding=23) buffer IBState { uint ib_state[]; };
 
-layout(std430, binding=24) buffer ChunkMeshAllocBuf { uvec4 chunk_alloc[]; };
+struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
+layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
 
 uniform uint u_vb_pages;
 uniform uint u_ib_pages;
@@ -53,6 +54,12 @@ void main() {
     if (i < u_ib_heads_count) ib_heads[i] = INVALID_ID;
 
     if (i < u_max_chunks) {
-        chunk_alloc[i] = uvec4(INVALID_ID, 0u, INVALID_ID, 0u);
+        chunk_alloc[i].v_startPage = INVALID_ID; 
+        chunk_alloc[i].v_order = 0u; 
+        chunk_alloc[i].needV = 0u; 
+        chunk_alloc[i].i_startPage = INVALID_ID; 
+        chunk_alloc[i].i_order = 0u; 
+        chunk_alloc[i].needI = 0u; 
+        chunk_alloc[i].need_rebuild = 0u;
     }
 }

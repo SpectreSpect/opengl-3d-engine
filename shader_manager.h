@@ -49,6 +49,7 @@ public:
     ComputeShader mesh_pool_clear_cs;
     ComputeShader mesh_pool_seed_cs;
     ComputeShader reset_load_list_counter_cs;
+    ComputeShader verify_mesh_allocation_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
