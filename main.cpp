@@ -761,63 +761,67 @@ int main() {
 
 
 
-    PointCloud map_point_cloud;
-    std::vector<PointInstance> map_points;
-    int W = 5;
-    float max_v = 1.0f;
-    float max_w = 0.2f;
-    auto motion = compute_motion_window(point_cloud_video.frames, 5);
+    // PointCloud map_point_cloud;
+    // std::vector<PointInstance> map_points;
+    // int W = 5;
+    // float max_v = 1.0f;
+    // float max_w = 0.2f;
+    // auto motion = compute_motion_window(point_cloud_video.frames, 5);
 
 
-    auto frame_ok = [&](size_t f)->bool {
-    return motion[f].ok &&
-           motion[f].lin_speed_mps <= max_v &&
-           motion[f].ang_speed_rps <= max_w;
-    };
+    // auto frame_ok = [&](size_t f)->bool {
+    // return motion[f].ok &&
+    //        motion[f].lin_speed_mps <= max_v &&
+    //        motion[f].ang_speed_rps <= max_w;
+    // };
 
-    float voxel = 1.0f;
+    // float voxel = 1.0f;
 
-    // PASS 1: choose owner frame per voxel (skip bad frames)
-    std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
+    // // PASS 1: choose owner frame per voxel (skip bad frames)
+    // std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
 
-    for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
-        if (!frame_ok(f)) continue;
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    //     if (!frame_ok(f)) continue;
 
-        auto& frame = point_cloud_video.frames[f];
+    //     auto& frame = point_cloud_video.frames[f];
 
-        std::unordered_map<VKey, uint32_t, VKeyHash> counts;
-        for (int i = 0; i < frame.point_cloud.size(); ++i) {
-            PointInstance p = frame.point_cloud.get_point(i);
-            if (!finite3(p.pos)) continue;
-            ++counts[key_from_pos(p.pos, voxel)];
-        }
+    //     std::unordered_map<VKey, uint32_t, VKeyHash> counts;
+    //     for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //         PointInstance p = frame.point_cloud.get_point(i);
+    //         if (!finite3(p.pos)) continue;
+    //         ++counts[key_from_pos(p.pos, voxel)];
+    //     }
 
-        for (auto& kv : counts) {
-            auto& best = owner[kv.first];
-            uint32_t c = kv.second;
-            if (c > best.count || (c == best.count && f > best.frame)) {
-                best.count = c;
-                best.frame = f;
-            }
-        }
-    }
+    //     for (auto& kv : counts) {
+    //         auto& best = owner[kv.first];
+    //         uint32_t c = kv.second;
+    //         if (c > best.count || (c == best.count && f > best.frame)) {
+    //             best.count = c;
+    //             best.frame = f;
+    //         }
+    //     }
+    // }
 
-    for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
-        if (!frame_ok(f)) continue;
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    //     if (!frame_ok(f)) continue;
 
-        auto& frame = point_cloud_video.frames[f];
+    //     auto& frame = point_cloud_video.frames[f];
 
-        for (int i = 0; i < frame.point_cloud.size(); ++i) {
-            PointInstance p = frame.point_cloud.get_point(i);
-            if (!finite3(p.pos)) continue;
+    //     for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //         PointInstance p = frame.point_cloud.get_point(i);
+    //         if (!finite3(p.pos)) continue;
 
-            VKey k = key_from_pos(p.pos, voxel);
-            auto it = owner.find(k);
-            if (it != owner.end() && it->second.frame == f) {
-                map_points.push_back(std::move(p));
-            }
-        }
-    }
+    //         VKey k = key_from_pos(p.pos, voxel);
+    //         auto it = owner.find(k);
+    //         if (it != owner.end() && it->second.frame == f) {
+    //             map_points.push_back(std::move(p));
+    //         }
+    //     }
+    // }
+
+
+
+
 
     // thresholds (tune)
     // double max_v = 0.20; // m/s
@@ -924,7 +928,7 @@ int main() {
     // }
 
 
-    map_point_cloud.update_points(std::move(map_points));
+    // map_point_cloud.update_points(std::move(map_points));
 
 
     // point_cloud_frame.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
@@ -1072,10 +1076,10 @@ int main() {
 
         
         
-        // point_cloud_video.update(delta_time);
-        // window.draw(&point_cloud_video, &camera);
+        point_cloud_video.update(delta_time);
+        window.draw(&point_cloud_video, &camera);
 
-        window.draw(&map_point_cloud, &camera);
+        // window.draw(&map_point_cloud, &camera);
 
         // point_cloud_video.rotation.x += delta_time;
 
