@@ -305,6 +305,9 @@ int main() {
             std::cout << "-----------------------" << std::endl << std::endl;
         }
 
+        #define ST_MASK_BITS 4
+        #define ST_MASK (1u << ST_MASK_BITS) - 1u
+
         if (ImGui::Button("Print vb free list")) {
             std::vector<uint32_t> vb_next(voxel_grid_gpu.count_vb_pages_);
             voxel_grid_gpu.vb_next_.read_subdata(0, vb_next.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
@@ -312,21 +315,29 @@ int main() {
             std::vector<uint32_t> vb_heads(voxel_grid_gpu.vb_order_ + 1);
             voxel_grid_gpu.vb_heads_.read_subdata(0, vb_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.vb_order_ + 1));
 
-            for (uint32_t i = 0; i < voxel_grid_gpu.vb_order_; i++) {
-                uint32_t order = i + 1;
+            std::vector<uint32_t> vb_states(voxel_grid_gpu.count_vb_pages_);
+            voxel_grid_gpu.vb_state_.read_subdata(0, vb_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
+
+            // uint32_t mask = (1 << voxel_grid_gpu.vb_index_bits_) - 1;
+            for (uint32_t i = 0; i < voxel_grid_gpu.vb_order_ + 1; i++) {
+                uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
                 uint32_t cur_node = vb_heads[order];
                 while (cur_node != 0xFFFFFFFFu && cur_node != 0xFFFFFFFEu) {
-                    std::cout << cur_node << std::endl;
+                    uint32_t kind = vb_states[cur_node] & ST_MASK;
+                    std::cout << cur_node << " ";
+                    if (kind == 0u) std::cout << "ST_FREE" << std::endl;
+                    else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
+                    else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
+                    else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
+                    else if (kind == 4u) std::cout << "ST_READY" << std::endl;
+                    else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
                     cur_node = vb_next[cur_node];
                 }
                 
                 std::cout << std::endl;
             }
         }
-
-        #define ST_MASK_BITS 4
-        #define ST_MASK (1u << ST_MASK_BITS) - 1u
 
         if (ImGui::Button("Print ib free list")) {
             std::vector<uint32_t> ib_next(voxel_grid_gpu.count_ib_pages_);
@@ -339,8 +350,8 @@ int main() {
             voxel_grid_gpu.ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
 
             // uint32_t mask = (1 << voxel_grid_gpu.ib_index_bits_) - 1;
-            for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_; i++) {
-                uint32_t order = i + 1;
+            for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_ + 1; i++) {
+                uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
                 uint32_t cur_node = ib_heads[order];
                 while (cur_node != 0xFFFFFFFFu && cur_node != 0xFFFFFFFEu) {

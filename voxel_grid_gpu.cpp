@@ -761,6 +761,8 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     uint32_t groups_vox = math_utils::div_up_u32(vox_per_chunk, 256u); // для 4096 будет 16
     uint32_t groups_dirty = math_utils::div_up_u32(dirtyCount, 256u);
 
+    // std::cout << "DIRTY COUT: " << dirtyCount << std::endl;
+
     // ---- Pass: reset global mesh counters (GPU) ----
     mesh_counters_.bind_base(10);
     prog_mesh_counters_reset_.use();
@@ -803,6 +805,7 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     dirty_quad_count_.bind_base(11);
 
     chunk_mesh_alloc_local_.bind_base(24);
+    chunk_mesh_alloc_.bind_base(29);
 
     vb_heads_.bind_base(18);
     vb_next_.bind_base(19);

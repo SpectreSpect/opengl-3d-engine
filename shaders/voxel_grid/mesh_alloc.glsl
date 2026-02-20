@@ -52,7 +52,8 @@ layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
 // ---- NEW: per-chunk alloc info ----
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
-layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
+layout(std430, binding=24) buffer ChunkMeshAllocLocalBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
+layout(std430, binding=29) readonly buffer ChunkMeshAllocGlobalBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
 
 // ---- NEW: VB pool ----
 layout(std430, binding=18) coherent buffer VBHeads { uint vb_heads[]; };
@@ -663,21 +664,21 @@ bool ib_free_pages(uint start, uint order) {
     return ib_push_free(cur_order, cur_start);
 }
 
-void free_chunk_mesh(uint chunkId) {
-    ChunkMeshAlloc a = chunk_alloc_local[chunkId];
+void free_chunk_mesh(uint chunk_id_local, uint chunk_id_global) {
+    ChunkMeshAlloc a = chunk_alloc_global[chunk_id_global];
     if (a.v_startPage != INVALID_ID) vb_free_pages(a.v_startPage, a.v_order);
     if (a.i_startPage != INVALID_ID) ib_free_pages(a.i_startPage, a.i_order);
 
-    chunk_alloc_local[chunkId].v_startPage = INVALID_ID;
-    chunk_alloc_local[chunkId].v_order = 0u;
-    chunk_alloc_local[chunkId].needV = 0u;
-    chunk_alloc_local[chunkId].i_startPage = INVALID_ID;
-    chunk_alloc_local[chunkId].i_order = 0u;
-    chunk_alloc_local[chunkId].needI = 0u;
+    chunk_alloc_local[chunk_id_local].v_startPage = INVALID_ID;
+    chunk_alloc_local[chunk_id_local].v_order = 0u;
+    chunk_alloc_local[chunk_id_local].needV = 0u;
+    chunk_alloc_local[chunk_id_local].i_startPage = INVALID_ID;
+    chunk_alloc_local[chunk_id_local].i_order = 0u;
+    chunk_alloc_local[chunk_id_local].needI = 0u;
 }
 
 void main() {
-    // if (gl_GlobalInvocationID.x != 0u) return;
+    if (gl_GlobalInvocationID.x != 0u) return;
     
     uint dirtyIdx = gl_GlobalInvocationID.x;
     uint dirtyCount = counters.dirty_count;
@@ -693,20 +694,34 @@ void main() {
         // vb_alloc_pages(dirtyIdx % 8);
         // if (r == INVALID_ID) atomicAdd(stats[2], 1u);
     // }
+    // uint starts[256];
+    // for (uint dirtyIdx = 0; dirtyIdx < 256; dirtyIdx++)
+    //     starts[dirtyIdx] = vb_alloc_pages(dirtyIdx % 8);
     
+    // for (uint dirtyIdx = 0; dirtyIdx < 256; dirtyIdx++)
+    //     vb_free_pages(starts[dirtyIdx], dirtyIdx % 8);
 
-    // vb_alloc_pages(2);
+    // uint s0 = vb_alloc_pages(0);
+    // uint s1 = vb_alloc_pages(1);
 
-    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
+    // vb_free_pages(s0, 0);
+    // vb_free_pages(s1, 1);
+
+    // vb_alloc_pages(1);
+    // uint v = vb_pop_free(1);
+    // if (v != INVALID_ID) vb_pop_free(0);
+
+
+    for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
     uint chunkId = dirty_list[dirtyIdx];
 
     if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages) {
-        return;
+        continue;
     }
 
     // мог быть уже выселен
     if (meta[chunkId].used == 0u) {
-        // free_chunk_mesh(dirtyIdx);
+        // free_chunk_mesh(dirtyIdx, chunkId);
         atomicAdd(stats[0], 1u);
 
         chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
@@ -716,14 +731,14 @@ void main() {
         chunk_alloc_local[dirtyIdx].i_order = 0u;
         chunk_alloc_local[dirtyIdx].needI = 0u;
         chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-        return;
+        continue;
     }
 
     uint quads = dirty_quad_count[dirtyIdx];
 
     // пустой меш
     if (quads == 0u) {
-        // free_chunk_mesh(dirtyIdx);
+        free_chunk_mesh(dirtyIdx, chunkId);
         atomicAdd(stats[1], 1u);
 
         chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
@@ -733,11 +748,11 @@ void main() {
         chunk_alloc_local[dirtyIdx].i_order = 0u;
         chunk_alloc_local[dirtyIdx].needI = 0u;
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-        return;
+        continue;
     }
 
     // free старого
-    // free_chunk_mesh(dirtyIdx);
+    free_chunk_mesh(dirtyIdx, chunkId);
 
     uint needV = quads * 4u;
     uint needI = quads * 6u;
@@ -753,7 +768,7 @@ void main() {
         atomicAdd(stats[2], 1u);
 
         chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-        return;
+        continue;
     }
 
     uint iStart = ib_alloc_pages(iOrder);
@@ -766,7 +781,7 @@ void main() {
         atomicAdd(stats[3], 1u);
 
         chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-        return;
+        continue;
     }
 
     chunk_alloc_local[dirtyIdx].v_startPage = vStart;
@@ -779,5 +794,5 @@ void main() {
 
     if (iStart != INVALID_ID && vStart != INVALID_ID)
         atomicAdd(stats[4], 1u); // success
-    // // }
+    }
 }
