@@ -25,16 +25,23 @@ struct VoxelData {
 };
 layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
 layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
 
 layout(std430, binding=12) buffer EmitCounterBuf { uint emit_counter[]; };
 
-struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
-layout(std430, binding=9) readonly buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
+// struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
+// layout(std430, binding=9) readonly buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
+
+struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
+layout(std430, binding=9) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+
+struct CountFreePages {uint count_vb_free_pages; uint count_ib_free_pages; };
+layout(std430, binding=28) readonly buffer CountFreePagesBuf { CountFreePages pages_counters; };
 
 // ===== Vertex / Index buffers =====
 struct Vertex {
@@ -55,6 +62,11 @@ uniform vec3  u_voxel_size;
 
 uniform uint u_pack_bits;
 uniform int  u_pack_offset;
+
+uniform uint u_vb_page_verts;
+uniform uint u_ib_page_inds;
+
+uniform uint u_min_free_pages;
 
 // ===== hash + lookup =====
 uint hash_uvec2(uvec2 v) {
@@ -251,12 +263,12 @@ uint ao_corner(uint chunkId, ivec3 chunkCoord, ivec3 p,
 
 // ===== emit quad =====
 void emit_quad(uint chunkId, ivec3 chunkCoord, ivec3 p, uint face, uint colorRGB) {
-    uint maxQuads = mesh_meta[chunkId].index_count / 6u;
+    uint maxQuads = chunk_alloc[chunkId].needI / 6u;
     uint q = atomicAdd(emit_counter[chunkId], 1u);
     if (q >= maxQuads) return;
 
-    uint baseV = mesh_meta[chunkId].base_vertex + q * 4u;
-    uint baseI = mesh_meta[chunkId].first_index + q * 6u;
+    uint baseV = chunk_alloc[chunkId].v_startPage * u_vb_page_verts + q * 4u;
+    uint baseI = chunk_alloc[chunkId].i_startPage * u_ib_page_inds + q * 6u;
 
     vec3 wp = vec3(chunkCoord * u_chunk_dim + p) * u_voxel_size;
 
@@ -374,14 +386,18 @@ void emit_quad(uint chunkId, ivec3 chunkCoord, ivec3 p, uint face, uint colorRGB
 }
 
 void main() {
+    if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages)
+        return;
+
     uint voxelId  = gl_GlobalInvocationID.x;
     uint dirtyIdx = gl_GlobalInvocationID.y;
 
-    uint dirtyCount = counters.y;
+    uint dirtyCount = counters.dirty_count;
     if (dirtyIdx >= dirtyCount) return;
     if (voxelId >= u_voxels_per_chunk) return;
 
     uint chunkId = dirty_list[dirtyIdx];
+    if (chunk_alloc[chunkId].need_rebuild == 0u) return;
 
     uvec2 key2 = uvec2(meta[chunkId].key_lo, meta[chunkId].key_hi);
     ivec3 chunkCoord = unpack_key_to_coord(key2);

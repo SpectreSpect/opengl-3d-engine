@@ -13,7 +13,9 @@ layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
-layout(std430, binding=5) coherent buffer FrameCounters { uvec4 counters; }; // w=freeCount
+
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) coherent buffer FrameCountersBuf { FrameCounters counters; }; // w=freeCount
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) coherent buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -181,7 +183,7 @@ uint pop_bucket(uint b) {
 void main() {
     if (gl_GlobalInvocationID.x != 0u) return;
 
-    uint freeCount = atomicAdd(counters.w, 0u);
+    uint freeCount = atomicAdd(counters.free_count, 0u);
     if (freeCount >= u_min_free) return;
 
     uint evicted = 0u;
@@ -213,15 +215,21 @@ void main() {
         mesh_meta[victim].mesh_valid = 0u;
         mesh_meta[victim].index_count = 0u;
 
-        uvec4 a = chunk_alloc[victim];
-        if (a.x != INVALID_ID) {
-            vb_free_pages(a.x, a.y);
-            ib_free_pages(a.z, a.w);
-            chunk_alloc[victim] = uvec4(INVALID_ID,0u,INVALID_ID,0u);
-        }
+        ChunkMeshAlloc a = chunk_alloc[victim];
+        
+        if (a.v_startPage != INVALID_ID) vb_free_pages(a.v_startPage, a.v_order);
+        if (a.i_startPage != INVALID_ID) ib_free_pages(a.i_startPage, a.i_order);
+        
+        chunk_alloc[victim].v_startPage = INVALID_ID; 
+        chunk_alloc[victim].v_order = 0u; 
+        chunk_alloc[victim].needV = 0u; 
+        chunk_alloc[victim].i_startPage = INVALID_ID; 
+        chunk_alloc[victim].i_order = 0u; 
+        chunk_alloc[victim].needI = 0u; 
+        chunk_alloc[victim].need_rebuild = 0u;
 
         // пушим обратно в free_list (stack)
-        uint idx = atomicAdd(counters.w, 1u);
+        uint idx = atomicAdd(counters.free_count, 1u);
         free_list[idx] = victim;
 
         freeCount++;

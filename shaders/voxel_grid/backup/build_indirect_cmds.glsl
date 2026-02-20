@@ -1,13 +1,18 @@
 #version 430
+
+#define INVALID_ID 0xFFFFFFFFu
+
 layout(local_size_x = 256) in;
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // z = cmdCount
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // z = cmdCount
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
-struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
-layout(std430, binding=9) readonly buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
+// x=v_startPage, y=v_order, z=i_startPage, w=i_order
+struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
+layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
 
 struct DrawElementsIndirectCommand {
     uint count;
@@ -27,6 +32,9 @@ uniform vec3  u_voxel_size;    // (sx,sy,sz)
 // pack/unpack как в C++
 uniform uint u_pack_bits;
 uniform int  u_pack_offset;
+
+uniform uint u_vb_page_verts;
+uniform uint u_ib_page_inds;
 
 // 6 плоскостей фрустума в world space: ax+by+cz+d >= 0 (внутри)
 uniform vec4 u_frustum_planes[6];
@@ -81,8 +89,13 @@ void main() {
 
     if (meta[chunkId].used == 0u) return;
 
-    ChunkMeshMeta m = mesh_meta[chunkId];
-    if (m.mesh_valid == 0u || m.index_count == 0u) return;
+    ChunkMeshAlloc mesh_alloc = chunk_mesh_alloc[chunkId];
+    // {uint v_startPage; uint v_order; uint i_startPage; uint i_order; };
+    if (mesh_alloc.v_startPage == INVALID_ID || mesh_alloc.i_startPage == INVALID_ID) return;
+    if (mesh_alloc.needV == 0 || mesh_alloc.needI == 0) return;
+
+    // ChunkMeshMeta m = mesh_meta[chunkId];
+    // if (m.mesh_valid == 0u || m.index_count == 0u) return;
 
     ivec3 chunkCoord = unpack_key_to_coord(uvec2(meta[chunkId].key_lo, meta[chunkId].key_hi));
 
@@ -95,11 +108,11 @@ void main() {
 
     if (!sphere_in_frustum(center, radius)) return;
 
-    uint cmdIdx = atomicAdd(counters.z, 1u);
+    uint cmdIdx = atomicAdd(counters.cmd_count, 1u);
 
-    cmds[cmdIdx].count         = m.index_count;
+    cmds[cmdIdx].count         = mesh_alloc.needI;
     cmds[cmdIdx].instanceCount = 1u;
-    cmds[cmdIdx].firstIndex    = m.first_index;
+    cmds[cmdIdx].firstIndex    = mesh_alloc.i_startPage * u_ib_page_inds;
     cmds[cmdIdx].baseVertex    = 0;
     cmds[cmdIdx].baseInstance  = chunkId;
 }

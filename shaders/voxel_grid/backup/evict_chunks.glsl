@@ -13,7 +13,9 @@ layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) buffer ChunkHashVals { uint  hash_vals[]; };
 
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // w=freeCount
+
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // w=freeCount
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -155,14 +157,19 @@ void main() {
     mesh_meta[chunkId].first_index = 0u;
     mesh_meta[chunkId].base_vertex = 0u;
 
-    uvec4 a = chunk_alloc[victim];
-    if (a.x != INVALID_ID) {
-        free_pages(vb_heads, vb_next, vb_state, a.x, a.y, u_vb_max_order);
-        free_pages(ib_heads, ib_next, ib_state, a.z, a.w, u_ib_max_order);
-        chunk_alloc[victim] = uvec4(INVALID_ID,0u,INVALID_ID,0u);
-    }
+    ChunkMeshAlloc a = chunk_alloc[victim];
+    if (a.v_startPage != INVALID_ID) free_pages(vb_heads, vb_next, vb_state, a.v_startPage, a.v_order, u_vb_max_order);
+    if (a.i_startPage != INVALID_ID) free_pages(ib_heads, ib_next, ib_state, a.i_startPage, a.i_order, u_ib_max_order);
+        
+    chunk_alloc[victim].v_startPage = INVALID_ID; 
+    chunk_alloc[victim].v_order = 0u; 
+    chunk_alloc[victim].needV = 0u; 
+    chunk_alloc[victim].i_startPage = INVALID_ID; 
+    chunk_alloc[victim].i_order = 0u; 
+    chunk_alloc[victim].needI = 0u; 
+    chunk_alloc[victim].need_rebuild = 0u;
 
     // 3) вернуть chunkId в free_list
-    uint slot = atomicAdd(counters.w, 1u);
+    uint slot = atomicAdd(counters.free_count, 1u);
     free_list[slot] = chunkId;
 }

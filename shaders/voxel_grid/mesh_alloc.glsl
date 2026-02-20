@@ -215,9 +215,10 @@ uint vb_alloc_pages(uint wantOrder) {
     // vb_free_pages сразу при освобождении страниц объединяет их, а если они не объеденены, значит сделать
     // этого было невозможно (необходимые страницы для объединения заняты ST_ALLOC).
 
-    while (true) {
+    uint attempt = 0u;
+    while (attempt < 32u) {
         // Показываем, что сейчас идёт аллокация
-        atomicAdd(vb_alloc_maker, 1u);
+        // atomicAdd(vb_alloc_maker, 1u);
 
         for (uint order = wantOrder; order <= u_vb_max_order; order++) {
             uint start_page = vb_pop_free(order); // Пытаемся достать страницу минимального размера
@@ -245,7 +246,7 @@ uint vb_alloc_pages(uint wantOrder) {
             }
 
             // Показываем, что аллокация завершена
-            atomicAdd(vb_alloc_maker, 0xFFFFFFFF);
+            // atomicAdd(vb_alloc_maker, 0xFFFFFFFF);
             
             // Теперь нужно сделать размер start_page равным wantOrder, так как он до сих пор равен order.
             // За одно поставили ST_ALLOC (тк так проще установить wantOrder), но в теории состояние и так уже 
@@ -254,18 +255,18 @@ uint vb_alloc_pages(uint wantOrder) {
             return start_page;
         }
 
-        atomicAdd(vb_alloc_maker, 0xFFFFFFFFu);
+        // atomicAdd(vb_alloc_maker, 0xFFFFFFFFu);
 
-        if (atomicAdd(vb_alloc_maker, 0u) == 0u) {
-            // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
-            // страницы. Такое может быть только в том случае, если память действительно закончилась.
-            return INVALID_ID; 
-        }
+        // if (atomicAdd(vb_alloc_maker, 0u) == 0u) {
+        //     // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
+        //     // страницы. Такое может быть только в том случае, если память действительно закончилась.
+        //     return INVALID_ID; 
+        // }
 
         // Какой-то поток сейчас выделяет страницы, значит он может нарезать кусочки, которые нам могут подойти, поэтому имеет
         // смысл попытаться выделить память снова.
+        attempt++;
     }
-
     // Цикл бесконечный, поэтому сюда никогда не попадём
 }
 
@@ -496,9 +497,10 @@ uint ib_alloc_pages(uint wantOrder) {
     // ib_free_pages сразу при освобождении страниц объединяет их, а если они не объеденены, значит сделать
     // этого было невозможно (необходимые страницы для объединения заняты ST_ALLOC).
 
-    while (true) {
+    uint attempt = 0u;
+    while (attempt < 32u) {
         // Показываем, что сейчас идёт аллокация
-        atomicAdd(ib_alloc_maker, 1u);
+        // atomicAdd(ib_alloc_maker, 1u);
 
         for (uint order = wantOrder; order <= u_ib_max_order; order++) {
             uint start_page = ib_pop_free(order); // Пытаемся достать страницу минимального размера
@@ -526,7 +528,7 @@ uint ib_alloc_pages(uint wantOrder) {
             }
 
             // Показываем, что аллокация завершена
-            atomicAdd(ib_alloc_maker, 0xFFFFFFFF);
+            // atomicAdd(ib_alloc_maker, 0xFFFFFFFF);
             
             // Теперь нужно сделать размер start_page равным wantOrder, так как он до сих пор равен order.
             // За одно поставили ST_ALLOC (тк так проще установить wantOrder), но в теории состояние и так уже 
@@ -535,18 +537,18 @@ uint ib_alloc_pages(uint wantOrder) {
             return start_page;
         }
 
-        atomicAdd(ib_alloc_maker, 0xFFFFFFFFu);
+        // atomicAdd(ib_alloc_maker, 0xFFFFFFFFu);
 
-        if (atomicAdd(ib_alloc_maker, 0u) == 0u) {
-            // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
-            // страницы. Такое может быть только в том случае, если память действительно закончилась.
-            return INVALID_ID; 
-        }
+        // if (atomicAdd(ib_alloc_maker, 0u) == 0u) {
+        //     // Значит что ни один поток не выделяет память, но мы всё равно не смогли найти подходящий для нас размер
+        //     // страницы. Такое может быть только в том случае, если память действительно закончилась.
+        //     return INVALID_ID; 
+        // }
 
         // Какой-то поток сейчас выделяет страницы, значит он может нарезать кусочки, которые нам могут подойти, поэтому имеет
         // смысл попытаться выделить память снова.
+        attempt++;
     }
-
     // Цикл бесконечный, поэтому сюда никогда не попадём
 }
 
@@ -681,106 +683,101 @@ void main() {
     uint dirtyCount = counters.dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
-    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
-        uint chunkId = dirty_list[dirtyIdx];
+    // if (dirtyIdx >= 256 * 3 + 43) return;
 
-        if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages) {
-            // chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].v_order = 0u;
-            // chunk_alloc_local[dirtyIdx].needV = 0u;
-            // chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].i_order = 0u;
-            // chunk_alloc_local[dirtyIdx].needI = 0u;
-            // chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-            return;
-        }
+    // if (dirtyIdx % 2 == 0) vb_alloc_pages(1); // 2^1 * (10 * 256 / 2) = 2 * 1'280 = 2'560
+    // if (dirtyIdx % 2 == 1) vb_alloc_pages(2); // 2^2 * (10 * 256 / 2) = 4 * 1'280 = 5'120
+    // // sum = 2'560 + 5'120 = 7'680
 
-        // мог быть уже выселен
-        if (meta[chunkId].used == 0u) {
-            // free_chunk_mesh(dirtyIdx);
-            atomicAdd(stats[0], 1u);
-
-            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
-            chunk_alloc_local[dirtyIdx].v_order = 0u;
-            chunk_alloc_local[dirtyIdx].needV = 0u;
-            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
-            chunk_alloc_local[dirtyIdx].i_order = 0u;
-            chunk_alloc_local[dirtyIdx].needI = 0u;
-            chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-            return;
-        }
-
-        uint quads = dirty_quad_count[dirtyIdx];
-
-        // пустой меш
-        if (quads == 0u) {
-            // free_chunk_mesh(dirtyIdx);
-            atomicAdd(stats[1], 1u);
-
-            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
-            chunk_alloc_local[dirtyIdx].v_order = 0u;
-            chunk_alloc_local[dirtyIdx].needV = 0u;
-            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
-            chunk_alloc_local[dirtyIdx].i_order = 0u;
-            chunk_alloc_local[dirtyIdx].needI = 0u;
-            chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-            return;
-        }
-
-        // free старого
-        // free_chunk_mesh(dirtyIdx);
-
-        uint needV = quads * 4u;
-        uint needI = quads * 6u;
-
-        uint vPages = div_up_u32(needV, u_vb_page_verts);
-        uint iPages = div_up_u32(needI, u_ib_page_inds);
-
-        uint vOrder = ceil_log2_u32(vPages);
-        uint iOrder = ceil_log2_u32(iPages);
-
-        uint vStart = vb_alloc_pages(vOrder);
-        if (vStart == INVALID_ID) {
-            atomicAdd(stats[2], 1u);
-
-            // chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].v_order = vOrder;
-            // chunk_alloc_local[dirtyIdx].needV = needV;
-            // chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].i_order = iOrder;
-            // chunk_alloc_local[dirtyIdx].needI = needI;
-            chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-            return;
-        }
-
-        uint iStart = ib_alloc_pages(iOrder);
-        if (iStart == INVALID_ID) {
-            atomicExchange(stats[5], iOrder);
-            atomicExchange(stats[6], iPages);
-            atomicExchange(stats[7], quads);
-
-            // vb_free_pages(vStart, vOrder); // rollback
-            atomicAdd(stats[3], 1u);
-
-            // chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].v_order = vOrder;
-            // chunk_alloc_local[dirtyIdx].needV = needV;
-            // chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
-            // chunk_alloc_local[dirtyIdx].i_order = iOrder;
-            // chunk_alloc_local[dirtyIdx].needI = needI;
-            chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
-            return;
-        }
-
-        chunk_alloc_local[dirtyIdx].v_startPage = vStart;
-        chunk_alloc_local[dirtyIdx].v_order = vOrder;
-        chunk_alloc_local[dirtyIdx].needV = needV;
-        chunk_alloc_local[dirtyIdx].i_startPage = iStart;
-        chunk_alloc_local[dirtyIdx].i_order = iOrder;
-        chunk_alloc_local[dirtyIdx].needI = needI;
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-
-        if (iStart != INVALID_ID && vStart != INVALID_ID)
-            atomicAdd(stats[4], 1u); // success
+    // for (uint dirtyIdx = 0; dirtyIdx < 256 * 3 + 43; dirtyIdx++) {
+        // vb_alloc_pages(dirtyIdx % 8);
+        // if (r == INVALID_ID) atomicAdd(stats[2], 1u);
     // }
+    
+
+    // vb_alloc_pages(2);
+
+    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
+    uint chunkId = dirty_list[dirtyIdx];
+
+    if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages) {
+        return;
+    }
+
+    // мог быть уже выселен
+    if (meta[chunkId].used == 0u) {
+        // free_chunk_mesh(dirtyIdx);
+        atomicAdd(stats[0], 1u);
+
+        chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+        chunk_alloc_local[dirtyIdx].v_order = 0u;
+        chunk_alloc_local[dirtyIdx].needV = 0u;
+        chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+        chunk_alloc_local[dirtyIdx].i_order = 0u;
+        chunk_alloc_local[dirtyIdx].needI = 0u;
+        chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
+        return;
+    }
+
+    uint quads = dirty_quad_count[dirtyIdx];
+
+    // пустой меш
+    if (quads == 0u) {
+        // free_chunk_mesh(dirtyIdx);
+        atomicAdd(stats[1], 1u);
+
+        chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+        chunk_alloc_local[dirtyIdx].v_order = 0u;
+        chunk_alloc_local[dirtyIdx].needV = 0u;
+        chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+        chunk_alloc_local[dirtyIdx].i_order = 0u;
+        chunk_alloc_local[dirtyIdx].needI = 0u;
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        return;
+    }
+
+    // free старого
+    // free_chunk_mesh(dirtyIdx);
+
+    uint needV = quads * 4u;
+    uint needI = quads * 6u;
+
+    uint vPages = div_up_u32(needV, u_vb_page_verts);
+    uint iPages = div_up_u32(needI, u_ib_page_inds);
+
+    uint vOrder = ceil_log2_u32(vPages);
+    uint iOrder = ceil_log2_u32(iPages);
+
+    uint vStart = vb_alloc_pages(vOrder);
+    if (vStart == INVALID_ID) {
+        atomicAdd(stats[2], 1u);
+
+        chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
+        return;
+    }
+
+    uint iStart = ib_alloc_pages(iOrder);
+    if (iStart == INVALID_ID) {
+        atomicExchange(stats[5], iOrder);
+        atomicExchange(stats[6], iPages);
+        atomicExchange(stats[7], quads);
+
+        // vb_free_pages(vStart, vOrder); // rollback
+        atomicAdd(stats[3], 1u);
+
+        chunk_alloc_local[dirtyIdx].need_rebuild = 0u;
+        return;
+    }
+
+    chunk_alloc_local[dirtyIdx].v_startPage = vStart;
+    chunk_alloc_local[dirtyIdx].v_order = vOrder;
+    chunk_alloc_local[dirtyIdx].needV = needV;
+    chunk_alloc_local[dirtyIdx].i_startPage = iStart;
+    chunk_alloc_local[dirtyIdx].i_order = iOrder;
+    chunk_alloc_local[dirtyIdx].needI = needI;
+    chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+
+    if (iStart != INVALID_ID && vStart != INVALID_ID)
+        atomicAdd(stats[4], 1u); // success
+    // // }
 }

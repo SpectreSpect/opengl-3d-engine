@@ -830,7 +830,8 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_min_free_pages"),  min_free_pages);
 
     prog_mesh_alloc_.dispatch_compute(groups_dirty, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // prog_mesh_alloc_.dispatch_compute(10, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // 2048
 
     // ---- Pass: verify_mesh_allocation ----
     chunk_mesh_alloc_local_.bind_base(0);

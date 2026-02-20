@@ -36,7 +36,9 @@ layout(std430, binding=2) readonly buffer VoxelWriteList { VoxelWrite writes[]; 
 layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
 
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // x=writeCount, y=dirtyCount, z=cmdCount, w=freeCount
+
+struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
 
 struct ChunkMeta {
     uint used;
@@ -90,9 +92,9 @@ uint voxel_index_in_chunk(ivec3 local) {
 
 uint pop_free_chunk_id() {
     // atomicAdd by 0xFFFFFFFFu is -1 (mod 2^32)
-    uint old = atomicAdd(counters.w, 0xFFFFFFFFu);
+    uint old = atomicAdd(counters.free_count, 0xFFFFFFFFu);
     if (old == 0u) {
-        atomicAdd(counters.w, 1u); // rollback
+        atomicAdd(counters.free_count, 1u); // rollback
         return INVALID_ID;
     }
     return free_list[old - 1u];
@@ -241,14 +243,14 @@ void mark_dirty(uint chunkId) {
 
     uint was = atomicExchange(enqueued[chunkId], 1u);
     if (was == 0u) {
-        uint di = atomicAdd(counters.y, 1u);
+        uint di = atomicAdd(counters.dirty_count, 1u);
         dirty_list[di] = chunkId;
     }
 }
 
 void main() {
     uint wi = gl_GlobalInvocationID.x;
-    uint writeCount = counters.x;
+    uint writeCount = counters.write_count;
     if (wi >= writeCount) return;
 
     VoxelWrite w = writes[wi];
