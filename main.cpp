@@ -33,6 +33,8 @@
 #include "voxel_rasterizator_gpu.h"
 #include "shader_manager.h"
 #include "voxel_grid_gpu.h"
+#include "fstream"
+#include "path_utils.h"
 
 void create_voxels_box(
     glm::ivec3 box_origin, 
@@ -287,8 +289,8 @@ int main() {
         }
 
         if (ImGui::Button("Print mesh_alloc debug counters")) {
-            uint32_t stats[8];
-            voxel_grid_gpu.debug_counters_.read_subdata(0, stats, sizeof(uint32_t) * 8);
+            uint32_t stats[40];
+            voxel_grid_gpu.debug_counters_.read_subdata(0, stats, sizeof(uint32_t) * 40);
 
             std::cout << "mesh_alloc debug counters" << std::endl;
             std::cout << "meta.used==0: " << stats[0] << std::endl;
@@ -296,11 +298,18 @@ int main() {
             std::cout << "vStart==INVALID: " << stats[2] << std::endl;
             std::cout << "iStart==INVALID: " << stats[3] << std::endl;
             std::cout << "success: " << stats[4] << std::endl;
+            std::cout << std::endl;
 
             std::cout << "last invalid iOrder: " << stats[5] << std::endl;
             std::cout << "last invalid iPages: " << stats[6] << std::endl;
             std::cout << "last invalid quads: " << stats[7] << std::endl;
+            std::cout << std::endl;
+            
+            std::cout << "count equal v_startPage: " << stats[8] << std::endl;
+            std::cout << "count equal i_startPage: " << stats[9] << std::endl;
+            std::cout << std::endl;
 
+            std::cout << "ST_CONCEDED: " << stats[30] << std::endl;
 
             std::cout << "-----------------------" << std::endl << std::endl;
         }
@@ -396,6 +405,31 @@ int main() {
             std::cout << "neighbor_marked: " << stats[1] << std::endl;
 
             std::cout << "-----------------------" << std::endl << std::endl;
+        }
+
+        if (ImGui::Button("Save alloc stack")) {
+            uint32_t vb_counter = voxel_grid_gpu.vb_alloc_stack_.read_scalar<uint32_t>(0);
+            
+            std::vector<uint32_t> vb_alloc_stack(vb_counter * 3);
+            voxel_grid_gpu.vb_alloc_stack_.read_subdata(sizeof(uint32_t), vb_alloc_stack.data(), sizeof(uint32_t) * 3 * vb_counter);
+            
+
+            uint32_t ib_counter = voxel_grid_gpu.ib_alloc_stack_.read_scalar<uint32_t>(0);
+            
+            std::vector<uint32_t> ib_alloc_stack(ib_counter * 3);
+            voxel_grid_gpu.ib_alloc_stack_.read_subdata(sizeof(uint32_t), ib_alloc_stack.data(), sizeof(uint32_t) * 3 * ib_counter);
+
+            std::ofstream vb_out(executable_dir() / "vb_alloc_stack.txt");
+            for (uint32_t v : vb_alloc_stack) {
+                vb_out << v << '\n';
+            }
+            vb_out.close();
+
+            std::ofstream ib_out(executable_dir() / "ib_alloc_stack.txt");
+            for (uint32_t v : ib_alloc_stack) {
+                ib_out << v << '\n';
+            }
+            ib_out.close();
         }
 
 

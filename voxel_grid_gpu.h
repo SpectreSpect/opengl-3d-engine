@@ -17,6 +17,9 @@
 #include "vao.h"
 #include "vbo.h"
 #include "ebo.h"
+#include "path_utils.h"
+#include <unordered_set>
+#include <fstream>
 
 #define SLOT_EMPTY 0xFFFFFFFF
 #define SLOT_LOCKED 0xFFFFFFFE
@@ -34,7 +37,7 @@ public:
     uint32_t max_evict_chunks;
     uint32_t bucket_step;
 
-    const uint32_t min_free_pages = 256;
+    const uint32_t min_free_pages = 1024;
 
     struct ChunkMetaGPU {
         uint32_t used;
@@ -189,6 +192,9 @@ public:
 
     SSBO debug_counters_;
     SSBO stream_generate_debug_counters_;
+
+    SSBO vb_alloc_stack_;
+    SSBO ib_alloc_stack_;
     
     size_t chunk_indices_to_clear_cap_bytes_ = 0;
     size_t chunk_indices_to_set_cap_bytes_ = 0;
@@ -210,6 +216,8 @@ public:
     VBO vbo;
     EBO ebo;
     VAO vao;
+
+    void load_alloc_stacks();
 
     void init_programs(ShaderManager& shader_manager);
 
@@ -245,4 +253,11 @@ public:
     void init_draw_buffers();
 
     void mark_all_used_chunks_as_dirty(); // Говно медленное
+
+    void read_states_data(
+        std::unordered_map<uint32_t, uint32_t>& meta_alloc_vb_out, 
+        std::unordered_map<uint32_t, uint32_t>& meta_alloc_ib_out,
+        std::unordered_map<uint32_t, uint32_t>& states_alloc_vb_out, 
+        std::unordered_map<uint32_t, uint32_t>& states_alloc_ib_out
+    );
 };

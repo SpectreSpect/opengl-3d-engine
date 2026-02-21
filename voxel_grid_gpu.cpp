@@ -128,6 +128,7 @@ VoxelGridGPU::VoxelGridGPU(
     world_init_gpu();
     init_draw_buffers();
     init_mesh_pool();
+    load_alloc_stacks();
 }
 
 void VoxelGridGPU::draw(RenderState state) {
@@ -178,6 +179,7 @@ void VoxelGridGPU::print_counters(uint32_t write_count, uint32_t dirty_count, ui
     if (cmd_count != 0) std::cout << "cmd_count: " << counters[2] << std::endl;
     if (free_count != 0) std::cout << "free_count: " << counters[3] << std::endl;
     if (load_list_count != 0) std::cout << "load_list_count: " << stream_counters[0] << std::endl;
+    std::cout << std::endl;
 
     print_count_free_mesh_alloc();
 }
@@ -194,6 +196,7 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
 
     #define INVALID_ID 0xFFFFFFFFu
 
+    std::unordered_set<uint32_t> allocated_mesh;
     uint32_t count_alloc_vb_pages_from_meta = 0, count_alloc_ib_pages_from_meta = 0;
     uint32_t count_vb_alloc_chunks_from_meta = 0, count_ib_alloc_chunks_from_meta = 0;
     for (uint32_t i = 0; i < count_active_chunks; i++) {
@@ -201,9 +204,11 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
         if (meta.v_startPage != INVALID_ID) {
             count_alloc_vb_pages_from_meta += 1 << meta.v_order;
             count_vb_alloc_chunks_from_meta++;
+            allocated_mesh.insert(i);
         }
 
         if (meta.i_startPage != INVALID_ID) {
+            allocated_mesh.insert(i);
             // std::cout << "ORDER: " << meta.i_order << std::endl;
             // std::cout << "2^ " << meta.i_order << ": " << (1 << meta.i_order) << std::endl;
             // std::cout << "i_start: " << meta.i_startPage << std::endl;
@@ -211,6 +216,31 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
             count_ib_alloc_chunks_from_meta++;
         }
     }
+
+    //=================РАСЧЁТ ПЕРЕСЕЧЕНИЙ=================
+    std::vector<uint32_t> ids(allocated_mesh.begin(), allocated_mesh.end());
+    std::vector<std::pair<uint32_t,uint32_t>> v_pairs, i_pairs;
+    v_pairs.reserve(64); i_pairs.reserve(64);
+
+    for (size_t a = 0; a < ids.size(); ++a) {
+        for (size_t b = a + 1; b < ids.size(); ++b) {
+            uint32_t ida = ids[a], idb = ids[b];
+            const auto &A = alloc_meta[ida];
+            const auto &B = alloc_meta[idb];
+
+            uint64_t vsA = A.v_startPage, vsB = B.v_startPage;
+            uint64_t vlA = (A.v_order < 64) ? (1ull << A.v_order) : UINT64_MAX;
+            uint64_t vlB = (B.v_order < 64) ? (1ull << B.v_order) : UINT64_MAX;
+            if (math_utils::intersects(vsA, vlA, vsB, vlB)) v_pairs.emplace_back(ida, idb);
+
+            uint64_t isA = A.i_startPage, isB = B.i_startPage;
+            uint64_t ilA = (A.i_order < 64) ? (1ull << A.i_order) : UINT64_MAX;
+            uint64_t ilB = (B.i_order < 64) ? (1ull << B.i_order) : UINT64_MAX;
+            if (math_utils::intersects(isA, ilA, isB, ilB)) i_pairs.emplace_back(ida, idb);
+        }
+    }
+    //=================РАСЧЁТ ПЕРЕСЕЧЕНИЙ=================
+
 
     const uint32_t ST_MASK_BITS = 4;
     const uint32_t ST_FREE    = 0u;
@@ -257,6 +287,14 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
         if (kind == ST_CONCEDED) {count_ib_conceded++; ib_conceded_pages += count_pages; }
     }
 
+    std::cout << "---INTERSECTIONS---" << std::endl;
+    std::cout << "==Vertex buffer==" << std::endl;
+    std::cout << "Count vb intersections: " << v_pairs.size() << std::endl;
+    std::cout << std::endl;
+    std::cout << "==Index buffer==" << std::endl;
+    std::cout << "Count ib intersections: " << i_pairs.size() << std::endl;
+    std::cout << std::endl;
+
     std::cout << "---DATA FROM META---"      << std::endl;
     std::cout << "==Vertex buffer==" << std::endl;
     std::cout << "ST_ALLOC:      count chunks = " << count_vb_alloc_chunks_from_meta << " count pages = " << count_alloc_vb_pages_from_meta << std::endl;
@@ -288,6 +326,26 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
     std::cout << "REAL_COUNT_PAGES: " << count_ib_pages_ << std::endl;
     std::cout << "LIMBO: " << count_ib_pages_ - (ib_free_pages + ib_alloc_pages) << std::endl;
     std::cout << std::endl;
+}
+
+void VoxelGridGPU::load_alloc_stacks() {
+    std::ifstream vb_in(executable_dir() / "vb_alloc_stack_with_bug.txt");
+    std::vector<uint32_t> vb_stack;
+    uint32_t value;
+    while(vb_in >> value) {
+        vb_stack.push_back(value);
+    }
+    vb_in.close();
+
+    std::ifstream ib_in(executable_dir() / "ib_alloc_stack_with_bug.txt");
+    std::vector<uint32_t> ib_stack;
+    while(ib_in >> value) {
+        ib_stack.push_back(value);
+    }
+    ib_in.close();
+
+    vb_alloc_stack_ = SSBO(sizeof(uint32_t) * vb_stack.size(), GL_DYNAMIC_DRAW, vb_stack.data());
+    ib_alloc_stack_ = SSBO(sizeof(uint32_t) * ib_stack.size(), GL_DYNAMIC_DRAW, ib_stack.data());
 }
 
 void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
@@ -764,16 +822,16 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // std::cout << "DIRTY COUT: " << dirtyCount << std::endl;
 
     // ---- Pass: reset global mesh counters (GPU) ----
-    mesh_counters_.bind_base(10);
+    mesh_counters_.bind_base(0);
     prog_mesh_counters_reset_.use();
     prog_mesh_counters_reset_.dispatch_compute(1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // ---- Pass: mesh_reset ----
-    frame_counters_.bind_base(5);
-    dirty_list_.bind_base(8);
-    dirty_quad_count_.bind_base(11);
-    emit_counter_.bind_base(12);
+    frame_counters_.bind_base(0);
+    dirty_list_.bind_base(1);
+    dirty_quad_count_.bind_base(2);
+    emit_counter_.bind_base(3);
 
     prog_mesh_reset_.use();
     prog_mesh_reset_.dispatch_compute(groups_dirty, 1, 1);
@@ -782,12 +840,11 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // ---- Pass: mesh_count ----
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
-    voxels_.bind_base(3);
+    voxels_.bind_base(2);
+    frame_counters_.bind_base(3);
+    dirty_list_.bind_base(4);
+    dirty_quad_count_.bind_base(5);
     chunk_meta_.bind_base(6);
-
-    frame_counters_.bind_base(5);
-    dirty_list_.bind_base(8);
-    dirty_quad_count_.bind_base(11);
 
     prog_mesh_count_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -800,23 +857,27 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // ---- Pass: mesh_alloc ----
-    frame_counters_.bind_base(5);
-    dirty_list_.bind_base(8);
-    dirty_quad_count_.bind_base(11);
+    frame_counters_.bind_base(0);
+    dirty_list_.bind_base(1);
+    dirty_quad_count_.bind_base(2);
 
-    chunk_mesh_alloc_local_.bind_base(24);
-    chunk_mesh_alloc_.bind_base(29);
+    chunk_meta_.bind_base(3);
 
-    vb_heads_.bind_base(18);
-    vb_next_.bind_base(19);
-    vb_state_.bind_base(20);
+    chunk_mesh_alloc_local_.bind_base(4);
+    chunk_mesh_alloc_.bind_base(5);
 
-    ib_heads_.bind_base(21);
-    ib_next_.bind_base(22);
-    ib_state_.bind_base(23);
-    alloc_markers_.bind_base(27);
-    debug_counters_.bind_base(25);
-    count_free_pages_.bind_base(28);
+    vb_heads_.bind_base(6);
+    vb_next_.bind_base(7);
+    vb_state_.bind_base(8);
+
+    ib_heads_.bind_base(9);
+    ib_next_.bind_base(10);
+    ib_state_.bind_base(11);
+
+    debug_counters_.bind_base(12);
+    count_free_pages_.bind_base(13);
+    vb_alloc_stack_.bind_base(14);
+    ib_alloc_stack_.bind_base(15);
 
     prog_mesh_alloc_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_max_vertices"), max_mesh_vertices_);
@@ -836,35 +897,103 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // prog_mesh_alloc_.dispatch_compute(10, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // 2048
 
+    // uint32_t free_pages[2] = {0};
+    // count_free_pages_.read_subdata(0, free_pages, sizeof(uint32_t) * 2);
+
+    // auto& print_diff = [&](auto& diff, auto& meta_alloc, const std::string& name) {
+    //     if (diff.different.size() > 0) {
+    //         std::cout << "==========" << name << " DIFFERENCE==========" << std::endl;
+    //         for (auto& p : diff.different) {
+    //             if (meta_alloc.find(p.first) != meta_alloc.end()) 
+    //                 std::cout << "META:    " << "start = " << p.first << "    order(META) = " << p.second.first << std::endl;
+    //             else
+    //                 std::cout << "STATE:    " << "start = " << p.first << "    order = " << p.second.second << std::endl;
+    //         }
+    //         std::cout << std::endl;
+    //     }
+    // };
+
+    // std::unordered_map<uint32_t, uint32_t> meta_alloc_vb;
+    // std::unordered_map<uint32_t, uint32_t> meta_alloc_ib;
+    // std::unordered_map<uint32_t, uint32_t> states_alloc_vb; 
+    // std::unordered_map<uint32_t, uint32_t> states_alloc_ib;
+    // read_states_data(meta_alloc_vb, meta_alloc_ib, states_alloc_vb, states_alloc_ib);
+
+    // auto diff_vb = math_utils::diff_maps(meta_alloc_vb, states_alloc_vb);
+    // auto diff_ib = math_utils::diff_maps(meta_alloc_ib, states_alloc_ib);
+
+    
+    // std::cout << "=======ALLOCATION PASS=======" << std::endl;
+
+    // if (diff_vb.different.size() > 0 || diff_ib.different.size() > 0) {
+    //     print_diff(diff_vb, meta_alloc_vb, "VB");
+    //     print_diff(diff_ib, meta_alloc_ib, "IB");
+    // } else {
+    //     std::cout << "--------" << std::endl;
+    // }
+
     // ---- Pass: verify_mesh_allocation ----
     chunk_mesh_alloc_local_.bind_base(0);
     chunk_mesh_alloc_.bind_base(1);
     count_free_pages_.bind_base(2);
     dirty_list_.bind_base(3);
     frame_counters_.bind_base(4);
+    
+    vb_heads_.bind_base(5);
+    vb_next_.bind_base(6);
+    vb_state_.bind_base(7);
+    
+    ib_heads_.bind_base(8);
+    ib_next_.bind_base(9);
+    ib_state_.bind_base(10);
+    vb_alloc_stack_.bind_base(11);
+    ib_alloc_stack_.bind_base(12);
+    debug_counters_.bind_base(13);
 
     prog_verify_mesh_allocation_.use();
     glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_min_free_pages"),  min_free_pages);
+    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_vb_max_order"),  vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_ib_max_order"),  ib_order_);
 
     prog_verify_mesh_allocation_.dispatch_compute(groups_dirty, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    // count_free_pages_.read_subdata(0, free_pages, sizeof(uint32_t) * 2);
+    // std::cout << "VB FREE PAGES[alloc+verify]: " << free_pages[0] << "    ";
+    // std::cout << "IB FREE PAGES[alloc+verify]: " << free_pages[1] << std::endl;;
+
+    // read_states_data(meta_alloc_vb, meta_alloc_ib, states_alloc_vb, states_alloc_ib);
+
+    // diff_vb = math_utils::diff_maps(meta_alloc_vb, states_alloc_vb);
+    // diff_ib = math_utils::diff_maps(meta_alloc_ib, states_alloc_ib);
+
+    
+    // std::cout << "=======VERIFICATION PASS=======" << std::endl;
+
+    // if (diff_vb.different.size() > 0 || diff_ib.different.size() > 0) {
+    //     print_diff(diff_vb, meta_alloc_vb, "VB");
+    //     print_diff(diff_ib, meta_alloc_ib, "IB");
+    // } else {
+    //     std::cout << "--------" << std::endl;
+    // }
+
+    std::cout << std::endl;
 
     // ---- Pass: mesh_emit ----
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
 
-    voxels_.bind_base(3);
-    chunk_meta_.bind_base(6);
+    voxels_.bind_base(2);
+    frame_counters_.bind_base(3);
+    dirty_list_.bind_base(4);
+    emit_counter_.bind_base(5);
+    chunk_mesh_alloc_.bind_base(6);
 
-    frame_counters_.bind_base(5);
-    dirty_list_.bind_base(8);
+    chunk_meta_.bind_base(7);
+    count_free_pages_.bind_base(8);
 
-    emit_counter_.bind_base(12);
-    chunk_mesh_alloc_.bind_base(9);
-
-    global_vertex_buffer_.bind_base(13);
-    global_index_buffer_.bind_base(14);
-    count_free_pages_.bind_base(28);
+    global_vertex_buffer_.bind_base(9);
+    global_index_buffer_.bind_base(10);
 
     prog_mesh_emit_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -881,14 +1010,12 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // ---- Pass: mesh_finalize ----
-    frame_counters_.bind_base(5);
-    dirty_list_.bind_base(8);
-    chunk_mesh_alloc_.bind_base(9);
-    failed_dirty_list_.bind_base(10);
-
-    // ДОБАВИТЬ:
-    chunk_meta_.bind_base(6);
-    equeued_.bind_base(7);
+    frame_counters_.bind_base(0);
+    dirty_list_.bind_base(1);
+    equeued_.bind_base(2);
+    chunk_meta_.bind_base(3);
+    chunk_mesh_alloc_.bind_base(4);
+    failed_dirty_list_.bind_base(5);
 
     prog_mesh_finalize_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_finalize_.id, "u_dirty_flag_bits"), 1u);
@@ -897,7 +1024,7 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // ---- Pass: rest_dirty_count ----
-    frame_counters_.bind_base(5);
+    frame_counters_.bind_base(0);
     prog_reset_dirty_count_.use();
     prog_reset_dirty_count_.dispatch_compute(1,1,1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -1052,4 +1179,53 @@ void VoxelGridGPU::mark_all_used_chunks_as_dirty() {
     prog_mark_all_user_chunks_as_dirty_.dispatch_compute(groups_x, 1, 1);
 
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+}
+
+void VoxelGridGPU::read_states_data(
+    std::unordered_map<uint32_t, uint32_t>& meta_alloc_vb_out, 
+    std::unordered_map<uint32_t, uint32_t>& meta_alloc_ib_out,
+    std::unordered_map<uint32_t, uint32_t>& states_alloc_vb_out, 
+    std::unordered_map<uint32_t, uint32_t>& states_alloc_ib_out
+) {
+    const uint32_t ST_MASK_BITS = 4;
+    const uint32_t ST_FREE    = 0u;
+    const uint32_t ST_ALLOC   = 1u;
+    const uint32_t ST_MERGED  = 2u;
+    const uint32_t ST_MERGING = 3u;
+    const uint32_t ST_READY = 4u;
+    const uint32_t ST_CONCEDED = 5u;
+    const uint32_t ST_MASK   = (1u << ST_MASK_BITS) - 1u;
+
+    std::vector<ChunkMeshAlloc> alloc_meta(count_active_chunks);
+    chunk_mesh_alloc_.read_subdata(0, alloc_meta.data(), sizeof(ChunkMeshAlloc) * count_active_chunks);
+
+    std::vector<uint32_t> vb_states(count_vb_pages_);
+    vb_state_.read_subdata(0, vb_states.data(), sizeof(uint32_t) * count_vb_pages_);
+
+    std::vector<uint32_t> ib_states(count_ib_pages_);
+    ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * count_ib_pages_);
+
+    std::unordered_map<uint32_t, uint32_t> meta_alloc_vb, meta_alloc_ib;
+    for (ChunkMeshAlloc& meta : alloc_meta) {
+        if (meta.v_startPage != 0xFFFFFFFFu) meta_alloc_vb.emplace(meta.v_startPage, meta.v_order);
+        if (meta.i_startPage != 0xFFFFFFFFu) meta_alloc_ib.emplace(meta.i_startPage, meta.i_order);
+    }
+
+    std::unordered_map<uint32_t, uint32_t> states_alloc_vb, states_alloc_ib;
+    for (uint32_t i = 0; i < vb_states.size(); i++) {
+        uint32_t kind = vb_states[i] & ST_MASK;
+        uint32_t order = vb_states[i] >> ST_MASK_BITS;
+        if (kind == ST_ALLOC) states_alloc_vb.emplace(i, order);
+    }
+
+    for (uint32_t i = 0; i < ib_states.size(); i++) {
+        uint32_t kind = ib_states[i] & ST_MASK;
+        uint32_t order = ib_states[i] >> ST_MASK_BITS;
+        if (kind == ST_ALLOC) states_alloc_ib.emplace(i, order);
+    }
+
+    meta_alloc_vb_out = std::move(meta_alloc_vb);
+    meta_alloc_ib_out = std::move(meta_alloc_ib);
+    states_alloc_vb_out = std::move(states_alloc_vb);
+    states_alloc_ib_out = std::move(states_alloc_ib);
 }

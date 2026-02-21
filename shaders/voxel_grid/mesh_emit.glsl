@@ -23,25 +23,25 @@ struct VoxelData {
     uint type_vis_flags;
     uint color; // RGBA8
 };
-layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
 struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
-layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
+layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_list[]; };
 
-layout(std430, binding=12) buffer EmitCounterBuf { uint emit_counter[]; };
+layout(std430, binding=5) buffer EmitCounterBuf { uint emit_counter[]; };
 
 // struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
 // layout(std430, binding=9) readonly buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
 
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
-layout(std430, binding=9) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
+layout(std430, binding=6) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=7) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
 struct CountFreePages {uint count_vb_free_pages; uint count_ib_free_pages; };
-layout(std430, binding=28) readonly buffer CountFreePagesBuf { CountFreePages pages_counters; };
+layout(std430, binding=8) readonly buffer CountFreePagesBuf { CountFreePages pages_counters; };
 
 // ===== Vertex / Index buffers =====
 struct Vertex {
@@ -51,8 +51,8 @@ struct Vertex {
     uint pad0;
     uint pad1;
 };
-layout(std430, binding=13) buffer GlobalVB { Vertex vb[]; };
-layout(std430, binding=14) buffer GlobalIB { uint ib[]; };
+layout(std430, binding=9) buffer GlobalVB { Vertex vb[]; };
+layout(std430, binding=10) buffer GlobalIB { uint ib[]; };
 
 // ===== uniforms =====
 uniform uint  u_hash_table_size;
@@ -386,7 +386,7 @@ void emit_quad(uint chunkId, ivec3 chunkCoord, ivec3 p, uint face, uint colorRGB
 }
 
 void main() {
-    if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages)
+    if (pages_counters.count_vb_free_pages == INVALID_ID || pages_counters.count_ib_free_pages == INVALID_ID)
         return;
 
     uint voxelId  = gl_GlobalInvocationID.x;
@@ -397,7 +397,8 @@ void main() {
     if (voxelId >= u_voxels_per_chunk) return;
 
     uint chunkId = dirty_list[dirtyIdx];
-    if (chunk_alloc[chunkId].need_rebuild == 0u) return;
+    if (chunk_alloc[chunkId].v_startPage == INVALID_ID || chunk_alloc[chunkId].i_startPage == INVALID_ID) return;
+    // if (chunk_alloc[chunkId].need_rebuild == 0u) return;
 
     uvec2 key2 = uvec2(meta[chunkId].key_lo, meta[chunkId].key_hi);
     ivec3 chunkCoord = unpack_key_to_coord(key2);

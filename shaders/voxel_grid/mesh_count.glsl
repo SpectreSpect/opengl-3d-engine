@@ -21,12 +21,12 @@ struct VoxelData {
     uint color;
 };
 
-layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
 struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
-layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
-layout(std430, binding=11) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
+layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=5) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
