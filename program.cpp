@@ -47,6 +47,15 @@ void Program::set_vec3(const std::string name, const glm::vec3& value) const{
     glUniform3fv(loc, 1, &value[0]); // set the uniform
 }
 
+void Program::set_bool(const std::string& name, bool value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform1i(loc, value ? 1 : 0);
+}
 
 void Program::set_float(const std::string& name, float value) const {
     this->use();

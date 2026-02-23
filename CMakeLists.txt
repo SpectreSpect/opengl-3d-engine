@@ -65,6 +65,7 @@ add_executable(app
   point_cloud/point_cloud_frame.cpp
   point_cloud/point_cloud.cpp
   point_cloud/point_cloud_video.cpp
+  hdr_frame_buffer.cpp
 )
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")

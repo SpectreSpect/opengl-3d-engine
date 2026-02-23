@@ -270,6 +270,7 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
 
     const glm::vec3 road_color = {0.2f, 0.2f, 0.2f};
     // const glm::vec3 road_color = {1.0f, 1.0f, 1.0f};
+    // const glm::vec3 curvature_color = {5.0f, 0.0f, 0.0f};
     const glm::vec3 curvature_color = {1.0f, 0.0f, 0.0f};
     // const glm::vec3 curvature_color = {0.0f, 0.0f, 1.0f};
 
@@ -279,8 +280,8 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         int gz = base_z + vz;
 
         float h = height_at(gx, gz);
-        int y_surface = (int)std::floor(h);
-        // int y_surface = 0;
+        // int y_surface = (int)std::floor(h);
+        int y_surface = 0;
 
         float cosUp = cos_up_at(gx, gz); // <-- the value you asked for
 
@@ -294,6 +295,13 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
         for (int vy = 0; vy < chunk_size.y; ++vy) {
             int gy = base_y + vy;
             int id = (int)Chunk::idx({vx, vy, vz}, chunk_size);
+
+
+            if (vx == 0 && vz == 0 && vy == 10) {
+                (*voxels)[id].visible = true;
+                (*voxels)[id].color = glm::vec3(0.0f, 5.0f, 0.0f);
+                continue;
+            }
 
             if (gy <= y_surface) {
                 (*voxels)[id].visible = true;

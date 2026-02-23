@@ -34,6 +34,12 @@ void Mesh::update(const void* vertex_data, size_t vertex_data_size, const void* 
         ebo->update_mapped(index_data, index_data_size, usage);
 }
 
+void Mesh::draw_raw() {
+    vao->bind();
+    glDrawElements(GL_TRIANGLES, ebo->num_indices, GL_UNSIGNED_INT, 0);
+    vao->unbind();
+}
+
 void Mesh::draw(RenderState state) {
     glm::mat4 model = get_model_matrix();
     glm::mat4 world = state.transform * model;
