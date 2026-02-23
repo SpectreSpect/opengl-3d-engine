@@ -68,6 +68,16 @@ void Program::set_int(const std::string& name, int value) const {
     glUniform1i(loc, value);
 }
 
+void Program::set_uint(const std::string& name, int value) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+        return;
+    }
+    glUniform1ui(loc, value);
+}
+
 void Program::set_vec2(const std::string& name, const glm::vec2& value) const {
     this->use();
     GLint loc = glGetUniformLocation(id, name.c_str());

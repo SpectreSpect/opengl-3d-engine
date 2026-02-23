@@ -35,6 +35,15 @@ SSBO::SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data)
     unbind();
 }
 
+SSBO::SSBO(const VBO& vbo) {
+    set_id(vbo.id);
+
+
+    size_bytes_ = vbo.size_bytes;      // "логический" размер данных
+    capacity_bytes_ = vbo.capacity_bytes;  // реально выделенный размер
+    usage_ = GL_DYNAMIC_DRAW;
+}
+
 SSBO SSBO::create_persistent(std::size_t size_bytes,
                             GLbitfield storage_flags,
                             GLbitfield map_flags,
@@ -316,4 +325,8 @@ uint32_t SSBO::read_u32(std::size_t offset_bytes) const {
 
 GLuint SSBO::id() {
     return id_;
+}
+
+void SSBO::set_id(GLuint id) {
+    id_ = id;
 }

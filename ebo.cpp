@@ -1,4 +1,5 @@
 #include "ebo.h"
+#include "ssbo.h"
 
 EBO::EBO(const void* indices, size_t size_bytes) {
     if (size_bytes == 0) 
@@ -7,9 +8,11 @@ EBO::EBO(const void* indices, size_t size_bytes) {
         glGenBuffers(1, &id);
     if (id == 0) 
         throw std::runtime_error("EBO: glGenBuffers failed (no GL context?)");
+    
+    this->usage = GL_STATIC_DRAW;
 
     this->bind();
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_bytes, indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_bytes, indices, this->usage);
     this->unbind();
 
     this->size_bytes = size_bytes;
@@ -27,6 +30,15 @@ EBO::EBO(GLuint id, size_t size_bytes) {
     this->id = id;
     this->size_bytes = size_bytes;
     this->capacity_bytes = size_bytes;
+    this->num_indices = size_bytes / sizeof(unsigned int);
+}
+
+EBO::EBO(const SSBO& ssbo) {
+    this->id = ssbo.id_;
+    this->size_bytes = ssbo.size_bytes();
+    this->capacity_bytes = ssbo.capacity_bytes();
+    // this->capacity_bytes = ssbo.size_bytes();
+    this->usage = ssbo.usage();
     this->num_indices = size_bytes / sizeof(unsigned int);
 }
 
@@ -67,6 +79,7 @@ EBO& EBO::operator=(EBO&& o) noexcept {
 }
 
 void EBO::update_mapped(const void* data, size_t new_size_bytes, GLenum usage) {
+    this->usage = usage;
     if (!data || new_size_bytes == 0)
         return;
     

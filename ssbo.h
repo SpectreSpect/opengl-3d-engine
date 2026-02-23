@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+#include "vbo.h"
 
 class SSBO {
 public:
@@ -12,6 +13,7 @@ public:
 
     // Обычное выделение через glBufferData
     SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
+    SSBO(const VBO& vbo);
 
     // Создание SSBO с persistent mapping (OpenGL 4.4 / GL_ARB_buffer_storage)
     // storage_flags обычно: GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | (опц.) GL_MAP_COHERENT_BIT
@@ -89,17 +91,21 @@ public:
 
     GLuint id();
 
+    void set_id(GLuint id);
+
+    GLuint id_ = 0;
+    std::size_t size_bytes_ = 0;      // "логический" размер данных
+    std::size_t capacity_bytes_ = 0;  // реально выделенный размер
+    GLenum usage_ = GL_DYNAMIC_DRAW;
 
 private:
     void destroy() noexcept;
     void move_from(SSBO&& other) noexcept;
 
 private:
-    GLuint id_ = 0;
+    
 
-    std::size_t size_bytes_ = 0;      // "логический" размер данных
-    std::size_t capacity_bytes_ = 0;  // реально выделенный размер
-    GLenum usage_ = GL_DYNAMIC_DRAW;
+
 
     // persistent mapping
     void* mapped_ptr_ = nullptr;

@@ -8,16 +8,19 @@
 #include <stdexcept>
 #include <cstring>
 
+class SSBO;
 class EBO{
 public:
     GLuint id = 0;
     size_t size_bytes = 0;
     size_t num_indices = 0;
     size_t capacity_bytes = 0;
+    GLenum usage = GL_STATIC_DRAW;
 
     EBO() = default;
     EBO(const void* indices, size_t size_bytes);
     EBO(GLuint id, size_t size_bytes);
+    EBO(const SSBO& ssbo);
     ~EBO();
 
     EBO(const EBO&) = delete;

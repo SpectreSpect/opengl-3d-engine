@@ -1,9 +1,25 @@
 #include "mesh.h"
+#include "ssbo.h"
 
 Mesh::Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, VertexLayout* vertex_layout) {
     vao = new VAO();
     vbo = new VBO(vertices.data(), vertices.size() * sizeof(float));
     ebo = new EBO(indices.data(), indices.size() * sizeof(unsigned int));
+
+    vao->init_vao();
+
+    this->vertex_layout = vertex_layout;
+
+    vao->setup(*vbo, *ebo, *vertex_layout);
+}
+
+Mesh::Mesh(const SSBO& vertex_buffer, const SSBO& index_buffer, VertexLayout* vertex_layout) {
+    vao = new VAO();
+    
+    // vbo = new VBO(vertex_buffer.id_, vertex_buffer.size_bytes());
+    // ebo = new EBO(index_buffer.id_, index_buffer.size_bytes());
+    vbo = new VBO(vertex_buffer);
+    ebo = new EBO(index_buffer);
 
     vao->init_vao();
 

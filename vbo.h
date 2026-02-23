@@ -8,15 +8,18 @@
 #include <stdexcept>
 #include <cstring>
 
+class SSBO;
 class VBO{
 public:
     size_t size_bytes = 0;
     size_t capacity_bytes = 0;
-    GLuint id;
+    GLuint id = 0;
+    GLenum usage = GL_STATIC_DRAW;
 
     VBO() = default;
-    VBO(const void* data, size_t size_bytes);
+    VBO(const void* data, size_t size_bytes, GLenum usage = GL_STATIC_DRAW);
     VBO(GLuint id, size_t size_bytes);
+    VBO(const SSBO& ssbo);
     ~VBO();
     
     VBO(const VBO&) = delete;

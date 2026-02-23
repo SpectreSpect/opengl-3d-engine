@@ -47,7 +47,6 @@
 #include <vector>
 #include <cmath>
 #include <cstdint>
-#include "math_utils.h"
 
 struct PointXYZRGBI {
     float x, y, z;
@@ -324,7 +323,6 @@ void push_point(std::vector<float>& vertices, const PointXYZRGBI& point, const g
 
 
 Mesh* get_mesh_from_point_cloud(std::vector<PointXYZRGBI> points, float rel_thresh = 1.5f) {
-    
     VertexLayout* vertex_layout = new VertexLayout();
     vertex_layout->add("position", 0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0, 0, {0.0f, 0.0f, 0.0f});
     vertex_layout->add("normal", 1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float), 0, {0.0f, 1.0f, 0.0f});
@@ -625,6 +623,8 @@ int main() {
     engine.set_window(&window);
     ui::init(window.window);
     
+    
+
     // ShaderManager shader_manager = ShaderManager(executable_dir_str());
 
     Camera camera;
@@ -633,8 +633,120 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 50;
 
+    // VoxelGrid voxel_grid = VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
+    // float chunk_render_size = voxel_grid.chunk_size.x * voxel_grid.voxel_size;
+
+    // VoxelRasterizatorGPU voxel_rastorizator(&voxel_grid, shader_manager);
+
+    // VtkMeshLoader vtk_mesh_loader = VtkMeshLoader(vertex_layout);
+
+    // MeshData model_mesh_data = vtk_mesh_loader.load_mesh((executable_dir() / "models" / "test_mesh.vtk").string());
+    // Mesh model = Mesh(model_mesh_data.vertices, model_mesh_data.indices, &vertex_layout); 
+    // model.position = {chunk_render_size * 0, chunk_render_size * 5, chunk_render_size * 0};
+    // model.scale = glm::vec3(5.0f);
+
+    // VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
+    //     {16, 16, 16}, // chunk_size
+    //     {1.0f, 1.0f, 1.0f}, // voxel_size
+    //     100'000, // count_active_chunks
+    //     30'000'000, // max_quads
+    //     4, // chunk_hash_table_size_factor
+    //     512, // max_count_probing
+    //     64, // count_evict_buckets
+    //     4'000, // min_free_chunks
+    //     10'000, // max_evict_chunks
+    //     32, // bucket_step
+    //     shader_manager
+    // );
+
+    // std::vector<glm::ivec3> positions;
+    // std::vector<VoxelGridGPU::VoxelDataGPU> voxels;
+    // create_occlusion_test_box({0, 0, 0}, positions, voxels);
+    // voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
+
+    glm::vec3 prev_cam_pos = camera_controller.camera->position;
+
+    float timer = 0;
+    float lastFrame = 0;
+
     VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
     voxel_grid->update(&window, &camera);
+    // sleep(1);
+
+    NonholonomicPos start_pos = NonholonomicPos{glm::ivec3(-0.388, 1.2f, -1.719), 0};
+    NonholonomicPos end_pos = NonholonomicPos{glm::ivec3(-4.061, 1.2f, -7.569), 0};
+
+    float const path_lines_width = 5.0f;
+    std::vector<Line*> path_lines;
+    std::vector<std::vector<LineInstance>> path_line_instances;
+    std::vector<std::pair<glm::ivec3, Voxel>> old_voxels;
+
+    Line* start_dir_line = new Line();
+    start_dir_line->color = glm::vec3(1.0f, 0.466666667f, 0.0f);
+    Line* end_dir_line = new Line();
+    end_dir_line->color = glm::vec3(0.023529412f, 0.768627451f, 1.0f);
+
+    glm::vec3 dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
+    end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + dir * 1.0f));
+
+    glm::vec3 dir2(std::cos(start_pos.theta), 0.0f, std::sin(start_pos.theta));
+    start_dir_line->set_lines(get_arrow(start_pos.pos, start_pos.pos + dir2 * 1.0f));
+
+    Line* explored_path_lines = new Line();
+    explored_path_lines->color = glm::vec3(0.0f, 0, 0);
+
+    NonholonomicAStar* nonholonomic_astar = new NonholonomicAStar(voxel_grid);
+    bool simulation_running = false;
+
+    ReedsShepp reeds_shepp;
+    float min_radius = 5;
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.get_optimal_path(start_pos, end_pos, min_radius);
+
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path;
+    // std::vector<NonholonomicPathElement> reeds_shepp_test_path = reeds_shepp.path1(end_pos.pos.x, -end_pos.pos.z, -end_pos.theta);
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(2.0f, Steering::LEFT, Gear::BACKWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(2.0f, Steering::RIGHT, Gear::FORWARD));
+    // reeds_shepp_test_path.push_back(NonholonomicPathElement(5.0f, Steering::STRAIGHT, Gear::FORWARD));
+    // std::vector<NonholonomicPos> discretized_path = reeds_shepp.discretize_path(reeds_shepp_test_path, 4, min_radius);
+
+    // std::vector<LineInstance> reeds_shepp_test_line_instances;
+    // if (discretized_path.size() >= 2)
+    // for (int i = 0; i < discretized_path.size() - 1; i++) {
+    //     LineInstance line_instance;
+    //     line_instance.p0 = discretized_path[i].pos;
+    //     line_instance.p1 = discretized_path[i+1].pos;
+
+    //     reeds_shepp_test_line_instances.push_back(line_instance);
+    // }
+    
+    Line* reeds_shepp_test_path_lines = new Line();
+    reeds_shepp_test_path_lines->color = glm::vec3(1.0f, 0, 0);
+    reeds_shepp_test_path_lines->width = 5;
+
+    Line* unimpended_line = new Line();
+    unimpended_line->color = glm::vec3(1.0f, 1.0f, 0);
+    unimpended_line->width = 5;
+
+
+    // end_pos.pos = camera->position;
+    // voxel_grid->adjust_to_ground(end_pos.pos);
+    // end_pos.pos.y += 0.2f;
+
+    end_pos.theta = glm::radians(30.0f);
+    glm::vec3 end_dir(std::cos(end_pos.theta), 0.0f, std::sin(end_pos.theta));
+    end_dir_line->set_lines(get_arrow(end_pos.pos, end_pos.pos + end_dir * 1.0f));
+
+    bool force_stop = false;
+    bool TEMP_block_start_pathfinnding = false;
+
+
+    // Frame frame = read_frame_bin("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000067.bin");
+
+    // std::vector<IndexEntry> point_cloud_entries = read_index_csv("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+
 
     glm::vec3 origin = glm::vec3(0.0f, 10.0f, 0.0f);
 
@@ -643,31 +755,267 @@ int main() {
     std::vector<Mesh*> lidar_meshes;
 
     PointCloudFrame point_cloud_frame = PointCloudFrame("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
-    size_t rings_count = 16;
-    size_t ring_size = point_cloud_frame.point_cloud.size() / rings_count;
+    PointCloudVideo point_cloud_video = PointCloudVideo();
+    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
 
-    double t0 = math_utils::ms_now();
-    // Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh(1.5);
+
+
+    // PointCloud map_point_cloud;
+    // std::vector<PointInstance> map_points;
+    // int W = 5;
+    // float max_v = 1.0f;
+    // float max_w = 0.2f;
+    // auto motion = compute_motion_window(point_cloud_video.frames, 5);
+
+
+    // auto frame_ok = [&](size_t f)->bool {
+    // return motion[f].ok &&
+    //        motion[f].lin_speed_mps <= max_v &&
+    //        motion[f].ang_speed_rps <= max_w;
+    // };
+
+    // float voxel = 1.0f;
+
+    // // PASS 1: choose owner frame per voxel (skip bad frames)
+    // std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    //     if (!frame_ok(f)) continue;
+
+    //     auto& frame = point_cloud_video.frames[f];
+
+    //     std::unordered_map<VKey, uint32_t, VKeyHash> counts;
+    //     for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //         PointInstance p = frame.point_cloud.get_point(i);
+    //         if (!finite3(p.pos)) continue;
+    //         ++counts[key_from_pos(p.pos, voxel)];
+    //     }
+
+    //     for (auto& kv : counts) {
+    //         auto& best = owner[kv.first];
+    //         uint32_t c = kv.second;
+    //         if (c > best.count || (c == best.count && f > best.frame)) {
+    //             best.count = c;
+    //             best.frame = f;
+    //         }
+    //     }
+    // }
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    //     if (!frame_ok(f)) continue;
+
+    //     auto& frame = point_cloud_video.frames[f];
+
+    //     for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //         PointInstance p = frame.point_cloud.get_point(i);
+    //         if (!finite3(p.pos)) continue;
+
+    //         VKey k = key_from_pos(p.pos, voxel);
+    //         auto it = owner.find(k);
+    //         if (it != owner.end() && it->second.frame == f) {
+    //             map_points.push_back(std::move(p));
+    //         }
+    //     }
+    // }
+
+
+
+
+
+    // thresholds (tune)
+    // double max_v = 0.20; // m/s
+    // double max_w = 0.30; // rad/s
+        // map_points.clear();
+
+    // build_map_column_overwrite(point_cloud_video, map_points, 0.10f, 1);
+
+
+    // std::unordered_map<VKey, OwnerInfo, VKeyHash> owner;
+    // owner.reserve(200000); // guess; big voxels => not too many keys
+
+    // float voxel = 4.0f; // try 1m first; 2m may be too coarse
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    // auto& frame = point_cloud_video.frames[f];
+
+    // // counts just for this frame
+    // std::unordered_map<VKey, uint32_t, VKeyHash> counts;
+    // counts.reserve(20000);
+
+    // for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //     PointInstance p = frame.point_cloud.get_point(i);
+    //     if (!finite3(p.pos)) continue;
+    //     ++counts[key_from_pos(p.pos, voxel)];
+    // }
+
+    // // update global owner
+    // for (const auto& kv : counts) {
+    //     const VKey& k = kv.first;
+    //     uint32_t c = kv.second;
+
+    //     auto& best = owner[k];
+    //     if (c > best.count || (c == best.count && f > best.frame)) {
+    //     best.count = c;
+    //     best.frame = f; // tie-break: newer wins
+    //     }
+    // }
+    // }
+
+
+    // std::vector<PointInstance> map_points;
+    // map_points.clear();
+    // map_points.reserve(5'000'000);
+
+    // for (uint32_t f = 0; f < point_cloud_video.frames.size(); ++f) {
+    // auto& frame = point_cloud_video.frames[f];
+
+    // for (int i = 0; i < frame.point_cloud.size(); ++i) {
+    //     PointInstance p = frame.point_cloud.get_point(i);
+    //     if (!finite3(p.pos)) continue;
+
+    //     VKey k = key_from_pos(p.pos, voxel);
+    //     auto it = owner.find(k);
+    //     if (it == owner.end()) continue;
+
+    //     if (it->second.frame == f) {
+    //     map_points.push_back(std::move(p));
+    //     }
+    // }
+    // }
+
+
+
+
+
+
+    // glm::vec3 prev_min_pos = glm::vec3(0.0f, 0.0f, 0.0f);
+    // glm::vec3 prev_max_pos = glm::vec3(99999.0f, 99999.0f, 99999.0f);
+    // for (int frame_id = point_cloud_video.frames.size() - 1; frame_id >= 0; frame_id--) {
+    //     PointCloudFrame& point_cloud_frame =  point_cloud_video.frames[frame_id];
+
+    //     glm::vec3 new_min_pos = glm::vec3(0.0f, 0.0f, 0.0f);
+    //     glm::vec3 new_max_pos = glm::vec3(99999.0f, 99999.0f, 99999.0f);
+
+    //     for (int i = 0; i < point_cloud_frame.point_cloud.size(); i++) {
+    //         PointInstance point = point_cloud_frame.point_cloud.get_point(i);
+
+    //         if (frame_id == point_cloud_video.frames.size() - 1) {
+    //             map_points.push_back(point);
+    //         }
+    //         else if (!inside(point.pos, prev_min_pos, prev_max_pos)) {
+    //             map_points.push_back(point);
+    //         }
+                
+
+    //         if (point.pos.x <= new_min_pos.x)
+    //             new_min_pos.x = point.pos.x;
+    //         if (point.pos.y <= new_min_pos.y)
+    //             new_min_pos.y = point.pos.y;
+    //         if (point.pos.z <= new_min_pos.z)
+    //             new_min_pos.z = point.pos.z;
+            
+    //         if (point.pos.x >= new_max_pos.x)
+    //             new_max_pos.x = point.pos.x;
+    //         if (point.pos.y >= new_max_pos.y)
+    //             new_max_pos.y = point.pos.y;
+    //         if (point.pos.z >= new_max_pos.z)
+    //             new_max_pos.z = point.pos.z;
+    //     }
+
+    //     prev_min_pos = new_min_pos;
+    //     prev_max_pos = new_max_pos;
+    // }
+
+
+    // map_point_cloud.update_points(std::move(map_points));
+
+
+    // point_cloud_frame.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
+
+    // for (int i = 0; i < point_cloud_entries.size(); i++) {
+    //     std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[i].filename;
+    //     Frame frame = read_frame_bin(file_path);
+
+
+    //     float minZ = std::numeric_limits<float>::infinity();
+    //     float maxZ = -std::numeric_limits<float>::infinity();
+
+    //     for (size_t i = 0; i < frame.points.size(); ++i) {
+    //         const auto& p = frame.points[i];
+    //         glm::vec3 pos(-p.x, p.z, p.y);
+    //         minZ = std::min(minZ, pos.y); // using pos.y as "up" in your convention
+    //         maxZ = std::max(maxZ, pos.y);
+    //     }
+
+    //     float inv = (maxZ > minZ) ? (1.0f / (maxZ - minZ)) : 0.0f;
+
+    //     std::vector<PointInstance> point_cloud_point_instance;
+    //     point_cloud_point_instance.reserve(frame.points.size());
+        
+    //     for (int i = 0; i < frame.points.size(); i++) {
+    //         PointXYZRGBI point = frame.points[i - 1];
+    //         glm::vec3 pos = glm::vec3(-point.x, point.z, point.y);
+
+    //         float t = (pos.y - minZ) * inv;        // 0..1
+    //         t = clamp01(t);
+
+    //         float hue = (1.0f - t) * 0.66f;
+            
+    //         PointInstance point_instance;
+    //         point_instance.pos = pos;
+            
+            
+    //         point_instance.color = hsv_to_rgb(hue, 1.0f, 1.0f);
+
+    //         point_cloud_point_instance.push_back(point_instance);
+
+    //     }
+
+    //     Point* point = new Point();
+    //     point->set_points(point_cloud_point_instance);
+    //     point->size_px = 2.0f;
+
+    //     point_cloud_video_points.push_back(point);
+
+    //     std::vector<LineInstance> point_clound_line_instance;
+    //     for (int i = 1; i < frame.points.size(); i++) {
+
+    //         PointXYZRGBI point_0 = frame.points[i - 1];
+    //         PointXYZRGBI point_1 = frame.points[i];
+
+    //         glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+    //         glm::vec3 pos_1 = glm::vec3(-point_1.x, point_1.z, point_1.y);
+
+    //         LineInstance line_instance;
+    //         line_instance.p0 = pos_0;
+    //         line_instance.p1 = pos_1;
+
+    //         point_clound_line_instance.push_back(line_instance);
+    //     }
+        
+    //     Line* point_clound_line = new Line();
+    //     point_clound_line->color = {1.0f, 0.0f, 0.0f};
+    //     point_clound_line->set_lines(point_clound_line_instance);
+
+    //     point_cloud_video_lines.push_back(point_clound_line);
+
+
+    //     Mesh* mesh = get_mesh_from_point_cloud(frame.points);
+    //     lidar_meshes.push_back(mesh);
+    // }
+
+    // std::filesystem::path file_path = "/home/spectre/TEMP_lidar_output_mesh/recording/" / point_cloud_entries[0].filename;
+    // Frame frame = read_frame_bin(file_path);
     
-    Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh_gpu(rings_count, ring_size, 1.5);
-    double t1 = math_utils::ms_now();
-
-    std::cout << t1 - t0 << " ms" << std::endl;
-
-
-
-    // PointCloudVideo point_cloud_video = PointCloudVideo();
-    // point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+    // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points);
     
     float rel_thresh = 1.5f;
-    float last_frame = 0.0f;
-    float timer = 0.0f;
     // window->disable_cursor();
     while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
-        float delta_time = currentFrame - last_frame;
+        float delta_time = currentFrame - lastFrame;
         timer += delta_time;
-        last_frame = currentFrame;   
+        lastFrame = currentFrame;   
 
         ui::begin_frame();
         ui::update_mouse_mode(&window);
@@ -692,15 +1040,51 @@ int main() {
         ImGui::End();
 
         ui::end_frame();
-    
-        // point_cloud_video.update(delta_time);
-        // window.draw(&point_cloud_video, &camera);
 
+        // for (int i = 0; i < path_lines.size(); i++)
+        //     window->draw(path_lines[i], camera);
+        
+        // explored_path_lines->set_lines(nonholonomic_astar->state_explored_paths);
+        // window.draw(explored_path_lines, &camera);
+            
+        // window.draw(start_dir_line, &camera);
+        // window.draw(end_dir_line, &camera);
+        // window.draw(unimpended_line, &camera);
+
+        // window.draw(reeds_shepp_test_path_lines, &camera);
+
+        // int cur_frame_id = 0;
+        // for (int i = 0; i < point_cloud_entries.size(); i++) {
+        //     double time_seconds = (double)point_cloud_entries[i].timestamp_ns / 1000000000.0f;
+
+        //     if (time_seconds > video_timer)
+        //         break;
+        //     else
+        //         cur_frame_id = i;
+        // }
+
+        // std::cout << cur_frame_id << std::endl;
+
+
+        // window.draw(point_cloud_video_points[cur_frame_id], &camera);
+        // window.draw(lidar_meshes[cur_frame_id], &camera);
         // window.draw(&point_cloud_frame, &camera);
-        
-        window.draw(&point_cloud_mesh, &camera);
-        
+        // point_cloud_frame.point_cloud.position.x += delta_time * 0.2f;
+        // point_cloud_frame.point_cloud.rotation.x += delta_time * 180.0f;
+        // point_cloud_frame.rotation.y += delta_time * 30.0f;
 
+        
+        
+        point_cloud_video.update(delta_time);
+        window.draw(&point_cloud_video, &camera);
+
+        // window.draw(&map_point_cloud, &camera);
+
+        // point_cloud_video.rotation.x += delta_time;
+
+        // Mesh* lidar_mesh = get_mesh_from_point_cloud(frame.points, rel_thresh);
+        // window.draw(lidar_mesh, &camera);
+        // delete lidar_mesh;
         window.swap_buffers();
         engine.poll_events();
     }

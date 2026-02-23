@@ -1,7 +1,8 @@
 #include "vbo.h"
+#include "ssbo.h"
 
 
-VBO::VBO(const void* data, size_t size_bytes) {
+VBO::VBO(const void* data, size_t size_bytes, GLenum usage) {
     if (size_bytes == 0) {
         throw std::invalid_argument("VBO: size == 0");
     }
@@ -9,7 +10,7 @@ VBO::VBO(const void* data, size_t size_bytes) {
     if (id == 0)
         throw std::runtime_error("VBO: glGenBuffers failed (no GL context?)");
     this->bind();
-    glBufferData(GL_ARRAY_BUFFER, size_bytes, data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, size_bytes, data, usage);
     this->unbind();
 
     this->size_bytes = size_bytes;
@@ -26,6 +27,14 @@ VBO::VBO(GLuint id, size_t size_bytes) {
     this->id = id;
     this->size_bytes = size_bytes;
     this->capacity_bytes = size_bytes;
+}
+
+VBO::VBO(const SSBO& ssbo) {
+    this->id = ssbo.id_;
+    this->size_bytes = ssbo.size_bytes();
+    this->capacity_bytes = ssbo.capacity_bytes();
+    // this->capacity_bytes = ssbo.size_bytes();
+    this->usage = ssbo.usage();
 }
 
 VBO::~VBO() {
@@ -61,6 +70,7 @@ VBO& VBO::operator=(VBO&& o) noexcept {
 }
 
 void VBO::update_mapped(const void* data, size_t new_size_bytes, GLenum usage) {
+    this->usage = usage;
     if (!data || new_size_bytes == 0)
         return;
 

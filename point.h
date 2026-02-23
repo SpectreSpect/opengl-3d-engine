@@ -31,11 +31,12 @@ public:
 
     void set_points(const std::vector<PointInstance>& points);
     void draw(RenderState state) override;
+    VBO* instance_vbo = nullptr;   // dynamic: pos/color per point
 
 private:
     VAO* vao = nullptr;
     VBO* quad_vbo = nullptr;       // static: 4 corners
     EBO* quad_ebo = nullptr;       // static: 6 indices
-    VBO* instance_vbo = nullptr;   // dynamic: pos/color per point
+    
     int instance_count = 0;
 };
