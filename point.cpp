@@ -18,8 +18,10 @@ Point::Point() {
 
     // Dummy instance so VBO(data,size) is valid
     PointInstance dummy{};
-    dummy.pos   = {0, 0, 0};
-    dummy.color = {1, 1, 1};
+    // dummy.pos   = {0, 0, 0};
+    // dummy.color = {1, 1, 1};
+    dummy.pos   = {0, 0, 0, 0};
+    dummy.color = {1, 1, 1, 1};
 
     vao = new VAO();
     quad_vbo = new VBO(quadCorners, sizeof(quadCorners));

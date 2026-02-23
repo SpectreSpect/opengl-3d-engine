@@ -132,6 +132,10 @@ Mesh PointCloud::generate_mesh(float rel_thresh) {
     for (int y = 0; y < rings_count - 1; y++){
         bool top_jump = false;
         bool bottom_jump = false;
+
+        // if (y != 14)
+        //     continue;
+
         for (int x = 0; x < ring_width - 1; x++){
             int id1 = xy_id(x, y, ring_width, cloud_size);
             int id2 = xy_id(x, y + 1, ring_width, cloud_size);
@@ -140,6 +144,8 @@ Mesh PointCloud::generate_mesh(float rel_thresh) {
             int id4 = xy_id(x + 1, y + 1, ring_width, cloud_size);
             int id5 = xy_id(x + 1, y, ring_width, cloud_size);
             int id6 = xy_id(x, y, ring_width, cloud_size);
+
+            
 
 
             // float top_color = get_color_float(WHITE_ID, num_colors);
@@ -153,6 +159,37 @@ Mesh PointCloud::generate_mesh(float rel_thresh) {
             PointInstance p1 = points[id2]; // upper-left
             PointInstance p2 = points[id3]; // upper-right
             PointInstance p3 = points[id5]; // lower-right
+
+
+            if (x == 0  && y == 0) {
+                std::cout << p0.pos.x << " " << p0.pos.y << " " << p0.pos.z << std::endl;
+                std::cout << p1.pos.x << " " << p1.pos.y << " " << p1.pos.z << std::endl;
+                std::cout << p2.pos.x << " " << p2.pos.y << " " << p2.pos.z << std::endl;
+                std::cout << std::endl;
+
+                std::cout << p0.color.x << " " << p0.color.y << " " << p0.color.z << std::endl;
+                std::cout << p1.color.x << " " << p1.color.y << " " << p1.color.z << std::endl;
+                std::cout << p2.color.x << " " << p2.color.y << " " << p2.color.z << std::endl;
+                std::cout << std::endl;
+
+                // std::cout << p0.time << std::endl;
+                // std::cout << p1.time << std::endl;
+                // std::cout << p2.time << std::endl;
+                // std::cout << std::endl;
+
+                // std::cout << p0.gps_pos.x << " " << p0.gps_pos.y << " " << p0.gps_pos.z << std::endl;
+                // std::cout << p1.gps_pos.x << " " << p1.gps_pos.y << " " << p1.gps_pos.z << std::endl;
+                // std::cout << p2.gps_pos.x << " " << p2.gps_pos.y << " " << p2.gps_pos.z << std::endl;
+                // std::cout << std::endl;
+
+                // std::cout << p0.imu_rotation.x << " " << p0.imu_rotation.y << " " << p0.imu_rotation.z << std::endl;
+                // std::cout << p1.imu_rotation.x << " " << p1.imu_rotation.y << " " << p1.imu_rotation.z << std::endl;
+                // std::cout << p2.imu_rotation.x << " " << p2.imu_rotation.y << " " << p2.imu_rotation.z << std::endl;
+
+
+                // glm::vec3 gps_pos;
+                // glm::vec3 imu_rotation;
+            }
 
             bool tri1_ok = false;
             bool tri2_ok = false;
@@ -209,6 +246,9 @@ Mesh PointCloud::generate_mesh_gpu(unsigned int rings_count, unsigned int ring_s
     size_t vertex_ssbo_size = sizeof(Vertex) * vertices_count;
     size_t index_ssbo_size = sizeof(unsigned int) * vertices_count;
 
+    
+    update_points(points);
+    sync_gpu();
     point_cloud_ssbo = new SSBO(*point_renderer.instance_vbo);
     vertex_ssbo = new SSBO(vertex_ssbo_size, GL_DYNAMIC_DRAW);
     // vertex_ssbo = new SSBO(sizeof(Vertex) * 3, GL_STATIC_DRAW);
@@ -222,8 +262,8 @@ Mesh PointCloud::generate_mesh_gpu(unsigned int rings_count, unsigned int ring_s
     vertex_layout->add("normal", 1, 4, GL_FLOAT, GL_FALSE, 12 * sizeof(float), 4 * sizeof(float), 0, {0.0f, 1.0f, 0.0f, 0.0f});
     vertex_layout->add("color", 2, 4, GL_FLOAT, GL_FALSE, 12 * sizeof(float), 8 * sizeof(float), 0, {1.0f, 1.0f, 1.0f, 1.0f});
 
-    std::vector<float> vertices(12 * 3);
-    std::vector<unsigned int> indices(3);
+    // std::vector<float> vertices(12 * 3);
+    // std::vector<unsigned int> indices(3);
 
     // std::vector<float> vertices;
     // std::vector<unsigned int> indices;
@@ -254,6 +294,11 @@ Mesh PointCloud::generate_mesh_gpu(unsigned int rings_count, unsigned int ring_s
 
     // indices.reserve(3);
     // index_ssbo->read_subdata(0, indices.data(), sizeof(unsigned int) * 3);
+    
+    // std::vector<PointInstance> test_points(2);
+    // point_cloud_ssbo->read_subdata(0, test_points.data(), sizeof(PointInstance) * test_points.size());
+
+    // std::cout << test_points[0].pos.x << " " << test_points[0].pos.y << " " << test_points[0].pos.z << std::endl;
 
     // for (int i = 0; i < vertices.size(); i++)
     //     std::cout << vertices[i] << " ";
@@ -282,29 +327,58 @@ void PointCloud::generate_mesh_gpu(const SSBO& point_cloud_ssbo, const SSBO& ver
     int y_count = rings_count - 1;
 
     mesh_generation_program.set_uint("triangles_count", triangles_count);
+
+    GLuint q[2];
+    glGenQueries(2, q);
     
+    // glFinish();
+    // double t0 = math_utils::ms_now();
+
+    glQueryCounter(q[0], GL_TIMESTAMP);   
     mesh_generation_program.dispatch_compute(x_count, y_count, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glQueryCounter(q[1], GL_TIMESTAMP);   
+    // glFinish();
+    // double t1 = math_utils::ms_now();
+
+    GLuint64 start_ns = 0, end_ns = 0;
+    glGetQueryObjectui64v(q[0], GL_QUERY_RESULT, &start_ns);
+    glGetQueryObjectui64v(q[1], GL_QUERY_RESULT, &end_ns);
+
+    double gpu_ms = double(end_ns - start_ns) * 1e-6;
+    std::cout << "GPU time: " << gpu_ms << " ms\n";
+
+    glDeleteQueries(2, q);
+
+    // std::cout << t1 - t0 << " ms" << std::endl;
     // glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
-    Vertex out[3];
-    vertex_ssbo.read_subdata(0, out, sizeof(Vertex) * 3);
+    // Vertex out[3];
+    // vertex_ssbo.read_subdata(0, out, sizeof(Vertex) * 3);
 
     // std::cout << sizeof(Vertex) << std::endl;
 
-    print_vertex(out[0]);
-    print_vertex(out[1]);
-    print_vertex(out[2]);
-    // print_vertex(out[3]);
-    // print_vertex(out[4]);
-    // print_vertex(out[5]);
+    // print_vertex(out[0]);
+    // print_vertex(out[1]);
+    // print_vertex(out[2]);
 
-    unsigned int out_indices[3];
-    index_ssbo.read_subdata(0, out_indices, sizeof(unsigned int) * 3);
+    // unsigned int out_indices[6];
+    // index_ssbo.read_subdata(0, out_indices, sizeof(unsigned int) * 6);
 
-    for (int i = 0; i < 3; i++)
-        std::cout << out_indices[i] << " ";
-    std::cout <<  std::endl;
+    // for (int i = 0; i < 6; i++)
+    //     std::cout << out_indices[i] << " ";
+    // std::cout <<  std::endl;
+
+
+    // PointInstance out_points[200];
+    // point_cloud_ssbo.read_subdata(0, out_points, sizeof(PointInstance) * 200);
+
+    // std::cout << out_points[150].pos.x << " " << out_points[150].pos.y << " " << out_points[150].pos.z << std::endl;
+    // std::cout << points[150].pos.x << " " << points[150].pos.y << " " << points[150].pos.z << std::endl;
+
+    // // for (int i = 0; i < 6; i++)
+    // //     std::cout << out_points[i] << " ";
+    // std::cout <<  std::endl;
 }
 
 void PointCloud::print_vertex(const Vertex& vertex) {

@@ -633,8 +633,8 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 50;
 
-    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
-    voxel_grid->update(&window, &camera);
+    // VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
+    // voxel_grid->update(&window, &camera);
 
     glm::vec3 origin = glm::vec3(0.0f, 10.0f, 0.0f);
 
@@ -646,13 +646,13 @@ int main() {
     size_t rings_count = 16;
     size_t ring_size = point_cloud_frame.point_cloud.size() / rings_count;
 
-    double t0 = math_utils::ms_now();
+    // double t0 = math_utils::ms_now();
     // Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh(1.5);
     
     Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh_gpu(rings_count, ring_size, 1.5);
-    double t1 = math_utils::ms_now();
+    // double t1 = math_utils::ms_now();
 
-    std::cout << t1 - t0 << " ms" << std::endl;
+    // std::cout << t1 - t0 << " ms" << std::endl;
 
 
 

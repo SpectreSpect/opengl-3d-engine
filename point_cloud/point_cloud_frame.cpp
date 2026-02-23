@@ -36,13 +36,15 @@ void PointCloudFrame::load_from_file(const std::filesystem::path& path) {
         std::memcpy(&local_points[i].pos.x, p, 4); p += 4;
         std::memcpy(&local_points[i].pos.y, p, 4); p += 4;
         std::memcpy(&local_points[i].pos.z, p, 4); p += 4;
-        std::memcpy(&local_points[i].time, p, 4); p += 4;
-        std::memcpy(&local_points[i].gps_pos.x, p, 4); p += 4;
-        std::memcpy(&local_points[i].gps_pos.y, p, 4); p += 4;
-        std::memcpy(&local_points[i].gps_pos.z, p, 4); p += 4;
-        std::memcpy(&local_points[i].imu_rotation.x, p, 4); p += 4;
-        std::memcpy(&local_points[i].imu_rotation.y, p, 4); p += 4;
-        std::memcpy(&local_points[i].imu_rotation.z, p, 4); p += 4;
+        p += 28;
+        // std::memcpy(&local_points[i].time, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.x, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.y, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.z, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.x, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.y, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.z, p, 4); p += 4;
+
         // std::memcpy(&local_points[i].time, p, 4); p += 4;
 
         // local_points[i].pos.x += local_points[i].gps_pos.x;
@@ -56,29 +58,29 @@ void PointCloudFrame::load_from_file(const std::filesystem::path& path) {
 
         // How do I apply the gps and imu transformation to each point here?????
         
-        // float y = local_points[i].pos.y;
-        // float z = local_points[i].pos.z;
+        float y = local_points[i].pos.y;
+        float z = local_points[i].pos.z;
 
-        // local_points[i].pos.x = -local_points[i].pos.x;
-        // local_points[i].pos.y = z;
-        // local_points[i].pos.z = y;
+        local_points[i].pos.x = -local_points[i].pos.x;
+        local_points[i].pos.y = z;
+        local_points[i].pos.z = y;
 
 
 
-        glm::vec3 p_local_ros = local_points[i].pos;
+        // glm::vec3 p_local_ros = local_points[i].pos;
 
-        // 2) pose in ROS coords (translation + RPY)
-        glm::vec3 t_ros = local_points[i].gps_pos;
-        float roll  = local_points[i].imu_rotation.x;
-        float pitch = local_points[i].imu_rotation.y;
-        float yaw   = local_points[i].imu_rotation.z;
+        // // 2) pose in ROS coords (translation + RPY)
+        // glm::vec3 t_ros = local_points[i].gps_pos;
+        // float roll  = local_points[i].imu_rotation.x;
+        // float pitch = local_points[i].imu_rotation.y;
+        // float yaw   = local_points[i].imu_rotation.z;
 
-        // 3) transform point into "world" (or whatever GPS frame is)
-        glm::mat3 R_ros = rpy_to_mat3_zyx(roll, pitch, yaw);
-        glm::vec3 p_world_ros = R_ros * p_local_ros + t_ros;
+        // // 3) transform point into "world" (or whatever GPS frame is)
+        // glm::mat3 R_ros = rpy_to_mat3_zyx(roll, pitch, yaw);
+        // glm::vec3 p_world_ros = R_ros * p_local_ros + t_ros;
 
-        // 4) convert to engine coords once
-        local_points[i].pos = ros_pos_to_engine(p_world_ros);
+        // // 4) convert to engine coords once
+        // local_points[i].pos = ros_pos_to_engine(p_world_ros);
 
         
 

@@ -10,12 +10,13 @@
 #include "drawable.h"
 #include "transformable.h"
 
-struct PointInstance {
-    glm::vec3 pos;
-    glm::vec3 color;  // per-point color (RGB 0..1)
-    float time;
-    glm::vec3 gps_pos;
-    glm::vec3 imu_rotation;
+struct alignas(16) PointInstance {
+    glm::vec4 pos;
+    glm::vec4 color;  // per-point color (RGB 0..1)
+    
+    // float time;
+    // glm::vec3 gps_pos;
+    // glm::vec3 imu_rotation;
 };
 
 class Point : public Drawable, public Transformable {
