@@ -6,6 +6,7 @@ Engine3D::Engine3D(){
 
     mesh_manager = new MeshManager();
     material_manager = new MaterialManager();
+    light_sources = std::vector<LightSource>(max_num_light_sources);
 }
 
 Engine3D::~Engine3D(){
@@ -61,7 +62,7 @@ int Engine3D::init_glew() {
     // default_point_fragment_shader = new FragmentShader(default_point_fragment_shader_path);
     default_point_program = new VfProgram(&shader_manager->default_point_vertex_shader, &shader_manager->default_point_fragment_shader);
 
-    
+    light_source_ssbo = SSBO(sizeof(LightSource) * max_num_light_sources, GL_DYNAMIC_DRAW, light_sources.data());
 
     return 1;
 }
@@ -108,6 +109,33 @@ void Engine3D::set_window(Window* window) {
 // void Engine3D::set_camera(Camera* camera) {
 //     this->camera = camera;
 // }
+
+void Engine3D::set_light_source(size_t id, LightSource light_source) {
+    light_sources[id] = light_source;
+    dirty_lights.insert(id);
+}
+
+void Engine3D::update_light_sources() {
+    if (dirty_lights.empty())
+        return;
+    
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, light_source_ssbo.id_);
+
+    LightSource* gpu_lights = (LightSource*)glMapBufferRange(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        light_sources.size() * sizeof(LightSource),
+        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT
+    );
+    
+    for (size_t light_id : dirty_lights) {
+        gpu_lights[light_id] = light_sources[light_id];
+    }
+
+    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+    
+    dirty_lights.clear();
+}
 
 void Engine3D::enable_depth_test() {
     glEnable(GL_DEPTH_TEST);

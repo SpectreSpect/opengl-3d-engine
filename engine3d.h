@@ -26,6 +26,9 @@
 #include "path_utils.h"
 #include "shader_manager.h"
 #include "path_utils.h"
+#include "light_source.h"
+#include "ssbo.h"
+#include <unordered_set>
 
 class Window;
 
@@ -50,6 +53,11 @@ public:
     VertexShader* default_vertex_shader;
     FragmentShader* default_fragment_shader;
     VfProgram* default_program;
+
+    size_t max_num_light_sources = 100;
+    std::vector<LightSource> light_sources;
+    std::unordered_set<size_t> dirty_lights;
+    SSBO light_source_ssbo;
 
 
     // std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
@@ -81,6 +89,9 @@ public:
     int init();
     int init_glew();
     void set_window(Window* window);
+    
+    void set_light_source(size_t id, LightSource light_source);
+    void update_light_sources();
     // void set_camera(Camera* camera);
     static void enable_depth_test();
     static void poll_events();

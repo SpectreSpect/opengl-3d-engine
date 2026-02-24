@@ -20,27 +20,28 @@ uniform uint num_light_sources;
 void main() {
     
     vec3 global_light_dir = normalize(vec3(1, 1.5, 1.3));
+    vec3 global_light_color = vec3(0.15, 0.15, 0.18);
     // vec3 albedo = vec3(0.7, 0.1, 0.1);
     vec3 albedo = vColor;
     vec3 normal = normalize(vNormal);
 
     // Ambient
     // vec3 ambient = vec3(0.776470588, 0.988235294, 1.0) * albedo;
-    vec3 ambient = vec3(0.5, 0.5, 0.5) * albedo;
+    vec3 ambient = global_light_color * albedo;
 
     // Diffuse
-    // float diff = max(dot(normal, global_light_dir), 0.0);
-    // vec3 diffuse = diff * albedo;
+    float diff = max(dot(normal, global_light_dir), 0.0);
+    vec3 diffuse = diff * global_light_color * albedo;
 
     // Specular
     vec3 view_dir = normalize(uViewPos - vFragPos);
-    // vec3 halfway_dir = normalize(global_light_dir + view_dir);
-    // float spec = pow(max(dot(normal, halfway_dir), 0.0), 70.0);
-    // vec3 specular = vec3(0.7) * spec;
+    vec3 halfway_dir = normalize(global_light_dir + view_dir);
+    float spec = pow(max(dot(normal, halfway_dir), 0.0), 70.0);
+    vec3 specular = global_light_color * spec;
 
     // Final color
-    // vec3 color = (ambient * 0.8 + specular + diffuse);
-    vec3 color = vec3(0.0);
+    vec3 color = (ambient + specular + diffuse);
+    // vec3 color = vec3(0.0);
 
     for (int i = 0; i < num_light_sources; i++) {
     // for (int i = 0; i < 1; i++) {

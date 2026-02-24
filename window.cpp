@@ -149,6 +149,9 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
     int fbW, fbH;
     glfwGetFramebufferSize(window, &fbW, &fbH);
 
+    engine->light_source_ssbo.bind_base(5);
+    states.program->set_uint("num_light_sources", engine->light_sources.size());
+
     states.viewport_px = {fbW, fbH};
 
     drawable->draw(states);
