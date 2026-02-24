@@ -143,21 +143,23 @@ void main(){
         normal = triangle_normal(p2.pos, p3.pos, p0.pos);
     }
     
-    vec4 color = vec4(1, 0, 1, 1.0);
-    // if (is_triangle_0)
-    //     color = vec4(0, 0, 0, 1);
-    if (ring_id % 2 == 0) {
-        if (left_bottom_point_id % 10 >= 5)
-            color = vec4(0, 0, 0, 1); 
-    } else {
-        if (left_bottom_point_id % 10 < 5)
-            color = vec4(0, 0, 0, 1); 
-    }
+    vec4 color = vec4(1, 1, 1, 1.0);
+    
+    // vec4 color = vec4(1, 0, 1, 1.0);
+    // // if (is_triangle_0)
+    // //     color = vec4(0, 0, 0, 1);
+    // if (ring_id % 2 == 0) {
+    //     if (left_bottom_point_id % 10 >= 5)
+    //         color = vec4(0, 0, 0, 1); 
+    // } else {
+    //     if (left_bottom_point_id % 10 < 5)
+    //         color = vec4(0, 0, 0, 1); 
+    // }
         
     
-    // if (ring_id >= 10 && ring_id <= 13 && left_bottom_point_id >= 500 && left_bottom_point_id <= 700)
-    if (ring_id >= 9 && ring_id <= 10 && left_bottom_point_id >= 1600 && left_bottom_point_id <= 1800)
-        color = vec4(1, 0, 0, 1);
+    // // if (ring_id >= 10 && ring_id <= 13 && left_bottom_point_id >= 500 && left_bottom_point_id <= 700)
+    // if (ring_id >= 9 && ring_id <= 10 && left_bottom_point_id >= 1600 && left_bottom_point_id <= 1800)
+    //     color = vec4(1, 0, 0, 1);
 
 
     for (uint i = 0; i < 3; i++) {

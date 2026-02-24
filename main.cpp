@@ -48,6 +48,7 @@
 #include <cmath>
 #include <cstdint>
 #include "math_utils.h"
+#include "light_source.h"
 
 struct PointXYZRGBI {
     float x, y, z;
@@ -658,6 +659,22 @@ int main() {
 
     // PointCloudVideo point_cloud_video = PointCloudVideo();
     // point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+
+    size_t max_num_light_sources = 20;
+    std::vector<LightSource> light_sources(max_num_light_sources);
+
+    light_sources[0] = {glm::vec4(-10.0f, 5.0f, 10.0f, 20.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)};
+    light_sources[1] = {glm::vec4(-10.0f, 5.0f, 0.0f, 20.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)};
+    light_sources[2] = {glm::vec4(-15.0f, 5.0f, 5.0f, 20.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f)};
+
+    SSBO light_source_ssbo(sizeof(LightSource) * max_num_light_sources, GL_DYNAMIC_DRAW, light_sources.data());
+
+
+    std::vector<LightSource> read_light_sources(3);
+    light_source_ssbo.read_subdata(0, read_light_sources.data(), read_light_sources.size() * sizeof(LightSource));
+
+    std::cout << light_sources[0].color.r << std::endl;
+
     
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
@@ -675,6 +692,8 @@ int main() {
         camera_controller.update(&window, delta_time);
 
         window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
+        light_source_ssbo.bind_base(5);
+        engine.default_program->set_uint("num_light_sources", light_sources.size());
 
         // voxel_grid->update(&window, &camera);
         // window.draw(voxel_grid, &camera);
