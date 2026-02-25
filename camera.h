@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_access.hpp>
 #include <array>
+#include <vector>
 
 
 struct Plane {
@@ -20,6 +21,11 @@ struct Plane {
     }
 };
 
+struct AABB {
+    glm::vec4 min;
+    glm::vec4 max;   
+};
+
 
 class Camera{
 public:
@@ -27,7 +33,8 @@ public:
     glm::vec3 front;
     glm::vec3 up;
     float near = 0.1f;
-    float far = 5000.0f;
+    // float far = 5000.0f;
+    float far = 1000.0f;
     float fov;
     // float movment_speed;
         
@@ -39,15 +46,11 @@ public:
 
     std::array<Plane, 6> frustum_planes;
 
-    Camera(
-        glm::vec3 pos = {0.0f, 1.0f, 5.0f},
-        glm::vec3 up_vec = {0.0f, 1.0f, 0.0f},
-        float fov_deg = 60.0f
-        // float movment_speed = 5.0
-    ) : position(pos), up(up_vec), fov(fov_deg)
-    {
-        front = {0.0f, 0.0f, 1.0f};
-    }
+    std::vector<AABB> clusters;
+    // glm::vec3 num_clusters{10, 10, 10};
+    glm::vec3 num_clusters{25, 25, 25};
+
+    Camera(glm::vec3 pos = {0.0f, 1.0f, 5.0f}, glm::vec3 up_vec = {0.0f, 1.0f, 0.0f}, float fov_deg = 60.0f);
 
     glm::mat4 get_view_matrix() const;
     glm::mat4 get_projection_matrix(float aspect_ratio) const;
@@ -87,6 +90,16 @@ public:
         }
         return true;
     }
+
+    void computeSliceDistancesLinear(float nearPlane, float farPlane, unsigned zSlices, std::vector<float>& out);
+    void computeSliceDistancesLog(float nearPlane, float farPlane, unsigned zSlices, std::vector<float>& out);
+    void create_clusters(std::vector<AABB>& out_cluster_cells, glm::vec3 num_clusters,
+                         float fovY_radians, float aspect, float nearPlane, float farPlane,
+                         bool useLogSlices = false);
+    static void create_clusters_full(std::vector<AABB>& out_cluster_cells, glm::uvec3 numClusters,
+                                     float fovY_radians, float aspect, const std::vector<float>& sliceDistances);
+
+    
     // void processMouseMovement(float xoffset, float yoffset);
 
     // void update_default_camera_controls();

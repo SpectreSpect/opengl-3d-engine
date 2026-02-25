@@ -82,6 +82,8 @@ public:
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
+    ComputeShader light_incides_for_clusters_cs;
+
     std::vector<Shader*> shaders;
 
     ShaderManager() = default;

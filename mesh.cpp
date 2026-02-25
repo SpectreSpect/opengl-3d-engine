@@ -1,5 +1,6 @@
 #include "mesh.h"
 #include "ssbo.h"
+#include "engine3d.h"
 
 Mesh::Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, VertexLayout* vertex_layout) {
     vao = new VAO();
@@ -57,11 +58,30 @@ void Mesh::draw(RenderState state) {
 
     Program* prog = state.program;
     prog->use();
+    
     prog->set_mat4("uModel", world);
     prog->set_mat4("uMVP", mvp);
 
+
+    // uniform uint xTiles;
+    // uniform uint yTiles;
+    // uniform uint zSlices;
+    // uniform float screenWidth;
+    // uniform float screenHeight;
+    // uniform float nearPlane;
+    // uniform float farPlane;
+
+    prog->set_uint("xTiles", state.engine->num_clusters.x);
+    prog->set_uint("yTiles", state.engine->num_clusters.y);
+    prog->set_uint("zSlices", state.engine->num_clusters.z);
+    prog->set_float("screenWidth", state.viewport_px.x);
+    prog->set_float("screenHeight", state.viewport_px.y);
     if (state.camera) {
         prog->set_vec3("uViewPos", state.camera->position);
+        prog->set_mat4("uView", state.camera->get_view_matrix());
+
+        prog->set_float("nearPlane", state.camera->near);
+        prog->set_float("farPlane", state.camera->far);
     }
 
     vao->bind();

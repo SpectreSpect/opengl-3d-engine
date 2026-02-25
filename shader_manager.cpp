@@ -11,8 +11,8 @@ ShaderManager::ShaderManager(const std::string& root_path) {
 void ShaderManager::init_shaders(const std::string& root_path) {
     fs::path p(root_path);
 
-    add_shader(default_vertex_shader, VertexShader((p / "shaders" / "deafult_vertex.glsl").string())); 
-    add_shader(default_fragment_shader, FragmentShader((p / "shaders" / "deafult_fragment.glsl").string())); 
+    // add_shader(default_vertex_shader, VertexShader((p / "shaders" / "deafult_vertex.glsl").string())); 
+    // add_shader(default_fragment_shader, FragmentShader((p / "shaders" / "deafult_fragment.glsl").string())); 
 
     add_shader(default_line_vertex_shader, VertexShader((p / "shaders" / "line_vs.glsl").string())); 
     add_shader(default_line_fragment_shader, FragmentShader((p / "shaders" / "line_fs.glsl").string())); 
@@ -54,6 +54,6 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     add_shader(mark_all_user_chunks_as_dirty_cs, ComputeShader((p / "shaders" / "voxel_grid" / "mark_all_user_chunks_as_dirty.glsl").string()));
     add_shader(voxel_mesh_vs, VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string()));
     add_shader(voxel_mesh_fs, FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string()));
-    
+    add_shader(light_incides_for_clusters_cs, ComputeShader((p / "shaders" / "light_system" / "light_indices_for_clusters_cs.glsl").string()));    
 }
 

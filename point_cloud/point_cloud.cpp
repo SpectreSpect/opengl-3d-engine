@@ -346,7 +346,7 @@ void PointCloud::generate_mesh_gpu(const SSBO& point_cloud_ssbo, const SSBO& ver
     glGetQueryObjectui64v(q[1], GL_QUERY_RESULT, &end_ns);
 
     double gpu_ms = double(end_ns - start_ns) * 1e-6;
-    std::cout << "GPU time: " << gpu_ms << " ms\n";
+    // std::cout << "GPU time: " << gpu_ms << " ms\n";
 
     glDeleteQueries(2, q);
 
