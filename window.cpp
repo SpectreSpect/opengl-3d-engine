@@ -36,7 +36,7 @@ float Window::get_aspect_ratio() {
     return (float)width / (float)height;
 }
 
-float Window::get_fbuffer_aspect_ratio() {
+float Window::get_fbuffer_aspect_ratio() const {
     int fbWidth, fbHeight;
     glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
     
@@ -148,9 +148,6 @@ void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
 
     int fbW, fbH;
     glfwGetFramebufferSize(window, &fbW, &fbH);
-
-    engine->light_source_ssbo.bind_base(5);
-    states.program->set_uint("max_lights_per_cluster", engine->max_lights_per_cluster);
 
     states.viewport_px = {fbW, fbH};
 

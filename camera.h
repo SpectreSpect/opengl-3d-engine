@@ -46,10 +46,6 @@ public:
 
     std::array<Plane, 6> frustum_planes;
 
-    std::vector<AABB> clusters;
-    // glm::vec3 num_clusters{10, 10, 10};
-    glm::vec3 num_clusters{25, 25, 25};
-
     Camera(glm::vec3 pos = {0.0f, 1.0f, 5.0f}, glm::vec3 up_vec = {0.0f, 1.0f, 0.0f}, float fov_deg = 60.0f);
 
     glm::mat4 get_view_matrix() const;
@@ -90,43 +86,4 @@ public:
         }
         return true;
     }
-
-    void computeSliceDistancesLinear(float nearPlane, float farPlane, unsigned zSlices, std::vector<float>& out);
-    void computeSliceDistancesLog(float nearPlane, float farPlane, unsigned zSlices, std::vector<float>& out);
-    void create_clusters(std::vector<AABB>& out_cluster_cells, glm::vec3 num_clusters,
-                         float fovY_radians, float aspect, float nearPlane, float farPlane,
-                         bool useLogSlices = false);
-    static void create_clusters_full(std::vector<AABB>& out_cluster_cells, glm::uvec3 numClusters,
-                                     float fovY_radians, float aspect, const std::vector<float>& sliceDistances);
-
-    
-    // void processMouseMovement(float xoffset, float yoffset);
-
-    // void update_default_camera_controls();
-
-    // void move_forward(float dt) {
-    //     position += front * movment_speed * dt;
-    // }
-
-    // void move_backward(float dt) {
-    //     position -= front * movment_speed * dt;
-    // }
-
-    // void move_right(float dt) {
-    //     glm::vec3 right = glm::normalize(glm::cross(front, up));
-    //     position += right * movment_speed * dt;
-    // }
-
-    // void move_left(float dt) {
-    //     glm::vec3 right = glm::normalize(glm::cross(front, up));
-    //     position -= right * movment_speed * dt;
-    // }
-
-    // void move_up(float dt) {
-    //     position += up * movment_speed * dt;
-    // }
-
-    // void move_down(float dt) {
-    //     position -= up * movment_speed * dt;
-    // }
 };

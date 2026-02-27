@@ -76,8 +76,8 @@ uint computeClusterID()
 void main() {
     
     vec3 global_light_dir = normalize(vec3(1, 1.5, 1.3));
-    // vec3 global_light_color = vec3(0.15, 0.15, 0.18);
-    vec3 global_light_color = vec3(0, 0, 0);
+    vec3 global_light_color = vec3(0.15, 0.15, 0.18);
+    // vec3 global_light_color = vec3(0, 0, 0);
     // vec3 albedo = vec3(0.7, 0.1, 0.1);
     vec3 albedo = vColor;
     vec3 normal = normalize(vNormal);
@@ -103,13 +103,6 @@ void main() {
 
     uint cluster_id = computeClusterID();
     uint cluster_base = cluster_id * max_lights_per_cluster;
-
-    // vec3 cluster_id = computeClusterID();
-    // color.x = num_lights_in_clusters[cluster_id];
-    // color.y = cluster_id / 10.0;
-    // color.z = cluster_id.z / 10.0;
-
-
     for (int i = 0; i < num_lights_in_clusters[cluster_id]; i++) {
     // for (int i = 0; i < 1; i++) {
 
@@ -132,31 +125,5 @@ void main() {
         // color = vec3(1.0, 0, 0);
     }
 
-    // for (int i = 0; i < num_light_sources; i++) {
-    // // for (int i = 0; i < 1; i++) {
-    //     LightSource light_source = light_sources[i];
-    //     vec3 light_dir = normalize(light_source.position.xyz - vFragPos);
-    //     float dist_to_light = distance(light_source.position.xyz, vFragPos);
-    //     float light_radius = light_source.position.w;
-    //     // float light_radius = 20;
-    //     float light_intensity = max((light_radius - dist_to_light) / light_radius, 0.0);
-
-    //     vec3 light_halfway_dir = normalize(light_dir + view_dir);
-    //     float light_spec = pow(max(dot(normal, light_halfway_dir), 0.0), 70.0);
-    //     vec3 light_specular = light_source.color.xyz * light_spec;
-
-    //     float light_diff = max(dot(normal, light_dir), 0.0);
-    //     vec3 light_diffuse = light_diff * light_source.color.xyz * albedo;
-
-    //     color += (light_specular + light_diffuse) * light_intensity;
-    // }
-
-
-
-
-    // vec3 color = light_sources[0].color.xyz;
-    
-
     FragColor = vec4(color, 1.0);
-    // FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

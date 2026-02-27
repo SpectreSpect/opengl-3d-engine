@@ -42,7 +42,7 @@ public:
     void swap_buffers();
     bool is_open();
     float get_aspect_ratio();
-    float get_fbuffer_aspect_ratio();
+    float get_fbuffer_aspect_ratio() const;
 
     static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
     static void mouse_callback(GLFWwindow* window, double xpos, double ypos);

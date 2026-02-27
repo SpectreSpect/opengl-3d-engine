@@ -169,6 +169,16 @@ void SSBO::bind_range(GLuint binding, std::size_t offset_bytes, std::size_t size
                       static_cast<GLsizeiptr>(size_bytes));
 }
 
+void SSBO::clear() {
+    GLuint zero = 0;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, id_);
+    glClearBufferData(GL_SHADER_STORAGE_BUFFER,
+                    GL_R32UI,
+                    GL_RED_INTEGER,
+                    GL_UNSIGNED_INT,
+                    &zero);
+}
+
 void SSBO::realloc(std::size_t new_capacity_bytes, GLenum usage, const void* data) {
     if (new_capacity_bytes == 0) {
         throw std::invalid_argument("SSBO::realloc: new_capacity_bytes must be > 0");

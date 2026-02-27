@@ -71,15 +71,16 @@ void Mesh::draw(RenderState state) {
     // uniform float nearPlane;
     // uniform float farPlane;
 
-    prog->set_uint("xTiles", state.engine->num_clusters.x);
-    prog->set_uint("yTiles", state.engine->num_clusters.y);
-    prog->set_uint("zSlices", state.engine->num_clusters.z);
+    state.engine->lighting_system.bind_buffers();
+    prog->set_uint("xTiles", state.engine->lighting_system.num_clusters.x);
+    prog->set_uint("yTiles", state.engine->lighting_system.num_clusters.y);
+    prog->set_uint("zSlices", state.engine->lighting_system.num_clusters.z);
     prog->set_float("screenWidth", state.viewport_px.x);
     prog->set_float("screenHeight", state.viewport_px.y);
+    prog->set_uint("max_lights_per_cluster", state.engine->lighting_system.max_lights_per_cluster);
     if (state.camera) {
         prog->set_vec3("uViewPos", state.camera->position);
         prog->set_mat4("uView", state.camera->get_view_matrix());
-
         prog->set_float("nearPlane", state.camera->near);
         prog->set_float("farPlane", state.camera->far);
     }

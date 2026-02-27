@@ -11,9 +11,9 @@ ShaderManager::ShaderManager(const std::string& root_path) {
 void ShaderManager::init_shaders(const std::string& root_path) {
     fs::path p(root_path);
 
-    // add_shader(default_vertex_shader, VertexShader((p / "shaders" / "deafult_vertex.glsl").string())); 
-    // add_shader(default_fragment_shader, FragmentShader((p / "shaders" / "deafult_fragment.glsl").string())); 
-
+    add_shader(default_vertex_shader, VertexShader((p / "shaders" / "deafult_vertex.glsl").string())); 
+    add_shader(default_fragment_shader, FragmentShader((p / "shaders" / "deafult_fragment.glsl").string())); 
+    
     add_shader(default_line_vertex_shader, VertexShader((p / "shaders" / "line_vs.glsl").string())); 
     add_shader(default_line_fragment_shader, FragmentShader((p / "shaders" / "line_fs.glsl").string())); 
 

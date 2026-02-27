@@ -58,6 +58,8 @@ public:
     // Если persistent — то просто memcpy в mapped_ptr и (опц.) flush.
     void update_discard(const void* data, std::size_t data_bytes);
 
+    void clear();
+
     // --- mapping ---
     // Для НЕ-persistent буфера. Вернёт nullptr если не удалось.
     void* map_range(std::size_t offset_bytes, std::size_t length_bytes, GLbitfield access_flags);
