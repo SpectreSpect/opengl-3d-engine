@@ -5,13 +5,43 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+#include <iostream>
+#include <filesystem>
+#include <map>
+#include <fstream>
+#include <sstream>
 
 class SSBO {
 public:
+    enum DumpType {
+        UINT = 0,
+        INT = 1,
+        FLOAT = 2,
+        BOOL = 3
+    };
+
     SSBO() noexcept = default;
 
     // Обычное выделение через glBufferData
     SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
+    SSBO(std::filesystem::path path_to_ssbo_dump_file);
+
+    template<class T>
+    static inline SSBO from_fill(std::size_t size_bytes, GLenum usage, T fill_value) {
+        if (size_bytes % sizeof(T) != 0)
+            throw std::runtime_error("size_bytes is not a multiple of sizeof(T).");
+
+        size_t count_elements = size_bytes / sizeof(T);
+
+        std::vector<T> initial_data(count_elements, fill_value);
+        
+        SSBO ssbo;
+        ssbo.init_with_initial_data(size_bytes, usage, initial_data.data());
+
+        return ssbo;
+    }
+
+    void init_with_initial_data(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
 
     // Создание SSBO с persistent mapping (OpenGL 4.4 / GL_ARB_buffer_storage)
     // storage_flags обычно: GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | (опц.) GL_MAP_COHERENT_BIT
@@ -35,6 +65,12 @@ public:
     std::size_t capacity_bytes() const noexcept { return capacity_bytes_; }
     GLenum usage() const noexcept { return usage_; }
 
+    std::filesystem::path make_csv_dump(const std::filesystem::path& path, const std::map<std::string, DumpType>& structure_field_sizes_bytes,
+                                              size_t offset_bytes, size_t count_structures) const;
+    
+    std::filesystem::path make_binary_dump(const std::filesystem::path& file_path);
+    void read_binary_dump(const std::filesystem::path& file_path);
+
     // --- binding ---
     void bind() const noexcept;
     static void unbind() noexcept;
@@ -51,6 +87,17 @@ public:
     // --- updates ---
     // Обновить диапазон (без map). Хорошо для редких апдейтов.
     void update_subdata(std::size_t offset_bytes, const void* data, std::size_t data_bytes);
+
+    template<class T>
+    inline void update_subdata_fill(std::size_t offset_bytes, T fill_value, std::size_t data_bytes) {
+        if (data_bytes % sizeof(T) != 0)
+            throw std::runtime_error("data_bytes is not a multiple of sizeof(T).");
+
+        size_t count_elements = data_bytes / sizeof(T);
+
+        std::vector<T> initial_data(count_elements, fill_value);
+        update_subdata(offset_bytes, initial_data.data(), data_bytes);
+     }
 
     // Быстрый путь для "перезаписать с 0": orphan (если надо) + map + memcpy.
     // Если persistent — то просто memcpy в mapped_ptr и (опц.) flush.

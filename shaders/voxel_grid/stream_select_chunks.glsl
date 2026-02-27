@@ -171,7 +171,7 @@ void main() {
     ivec3 off = ivec3(gid) - ivec3(R);
     int d2 = off.x*off.x + off.y*off.y + off.z*off.z;
     if (d2 > R*R) return;
-    // if (d2 > 0.5) return;
+    // if (d2 > 4) return;
 
     vec3 chunkWorldSize = vec3(u_chunk_dim) * u_voxel_size;
     ivec3 camChunk = ivec3(floor(u_cam_pos_local / chunkWorldSize));

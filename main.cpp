@@ -1,4 +1,5 @@
 // main.cpp
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -9,6 +10,8 @@
 #include <string>
 #include <chrono>
 #include <cmath>
+
+#include <functional>
 
 #include "engine3d.h"
 
@@ -224,7 +227,7 @@ int main() {
     VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
         {16, 16, 16}, // chunk_size
         {1.0f, 1.0f, 1.0f}, // voxel_size
-        20'000, // count_active_chunks
+        100'000, // count_active_chunks
         5'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         512, // max_count_probing
@@ -243,6 +246,44 @@ int main() {
     // voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
+
+
+    std::function<void()> build_mesh_from_dirty_fn = [&](){
+        voxel_grid_gpu.build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
+    };
+
+    std::function<void()> build_indirect_draw_commands_frustum_fn = [&]() {
+        float aspect = window.get_fbuffer_aspect_ratio();
+        glm::mat4 view_matrix = window.camera->get_view_matrix();
+        glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
+        glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
+        voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+    };
+
+    std::function<void()> draw_indirect_fn = [&]() {
+        float aspect = window.get_fbuffer_aspect_ratio();
+        glm::mat4 view_matrix = window.camera->get_view_matrix();
+        glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
+        glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
+
+        voxel_grid_gpu.draw_indirect(voxel_grid_gpu.vao.id, glm::identity<glm::mat4>(), view_proj_matrix, window.camera->position);
+    };
+
+    bool voxel_grid_draw_streaming[3] = {false};
+    std::function<void()> voxel_grid_draw_steps[3] = {build_mesh_from_dirty_fn, build_indirect_draw_commands_frustum_fn, draw_indirect_fn};
+    std::string voxel_grid_draw_steps_names[3] = {"build_mesh_from_dirty()", "build_indirect_draw_commands_frustum_fn()", "draw_indirect()"};
+
+    std::filesystem::path state_dumps_dir = executable_dir() / "voxel_grid" / "state_dumps";
+    std::filesystem::path dumps_dir = executable_dir() / "voxel_grid" / "dumps";
+    std::filesystem::path base_dump_path = dumps_dir / "base_dump";
+    std::filesystem::path dump_animations_path = dumps_dir / "dump_animations";
+    std::filesystem::path frames_path_to_load = dump_animations_path / "to_load";
+
+    int selected_frame_id = 0;
+    int offset_verify_stack = 0;
+    int count_elements_verify_stack = -1;
+    int dirty_count_to_set = 0;
+    bool use_verify_stack = false;
 
     float timer = 0;
     float lastFrame = 0;
@@ -265,7 +306,7 @@ int main() {
         
         
         voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
-        window.draw(&voxel_grid_gpu, &camera);
+        // window.draw(&voxel_grid_gpu, &camera);
 
         ImGui::Begin("Debug");
 
@@ -314,8 +355,49 @@ int main() {
             std::cout << "-----------------------" << std::endl << std::endl;
         }
 
+
+        if (ImGui::Button("Debug uauaua")) {
+            // verify_debug_stack_
+            uint32_t stack_size = voxel_grid_gpu.verify_debug_stack_.read_scalar<uint32_t>(0);
+            // uint32_t count_elements = stack_size / 2;
+            
+            std::vector<uint32_t> allocator_stack(stack_size * 2);
+            voxel_grid_gpu.verify_debug_stack_.read_subdata(sizeof(uint32_t) * 1, allocator_stack.data(), sizeof(uint32_t) * stack_size * 2);
+            int max_order = 0;
+            int max_start = 0;
+            int min_order = 999999999;
+            int min_start = 999999999;
+            for (uint32_t i = 0; i < stack_size; i++) {
+
+                uint32_t start = allocator_stack[i*2 + 0];
+                uint32_t order = allocator_stack[i*2 + 1];
+
+                if (order > max_order)
+                    max_order = order;
+                if (start > max_start)
+                    max_start = start;
+
+
+                if (order < min_order)
+                    min_order = order;
+                if (start < min_start)
+                    min_start = start;
+
+                // uint32_t start_idx = allocator_stack[i*2 + 0];
+                // uint32_t order = allocator_stack[i*2 + 1];
+
+                // std::cout << i << ": " << "idx = " << start << "    " << "order = " << order << std::endl;
+            }
+            std::cout << min_order << " " << min_start << std::endl;
+        }
+
+        #define INVALID_ID 0xFFFFFFFFu
         #define ST_MASK_BITS 4
         #define ST_MASK (1u << ST_MASK_BITS) - 1u
+        #define HEAD_TAG_BITS 16
+        #define HEAD_TAG_MASK (1u << HEAD_TAG_BITS) - 1u
+        #define INVALID_HEAD_IDX INVALID_ID >> HEAD_TAG_BITS
+        #define HEAD_LOCK 0xFFFFFFFEu
 
         if (ImGui::Button("Print vb free list")) {
             std::vector<uint32_t> vb_next(voxel_grid_gpu.count_vb_pages_);
@@ -327,20 +409,23 @@ int main() {
             std::vector<uint32_t> vb_states(voxel_grid_gpu.count_vb_pages_);
             voxel_grid_gpu.vb_state_.read_subdata(0, vb_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
 
-            // uint32_t mask = (1 << voxel_grid_gpu.vb_index_bits_) - 1;
             for (uint32_t i = 0; i < voxel_grid_gpu.vb_order_ + 1; i++) {
                 uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
-                uint32_t cur_node = vb_heads[order];
-                while (cur_node != 0xFFFFFFFFu && cur_node != 0xFFFFFFFEu) {
+                uint32_t head_idx = vb_heads[order] >> HEAD_TAG_BITS;
+                uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
+                while (cur_node != INVALID_ID) {
                     uint32_t kind = vb_states[cur_node] & ST_MASK;
-                    std::cout << cur_node << " ";
-                    if (kind == 0u) std::cout << "ST_FREE" << std::endl;
-                    else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
-                    else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
-                    else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
-                    else if (kind == 4u) std::cout << "ST_READY" << std::endl;
-                    else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
+                    uint32_t real_order = vb_states[cur_node] >> ST_MASK_BITS;
+                    if (real_order == order) {
+                        std::cout << cur_node << " ";
+                        if (kind == 0u) std::cout << "ST_FREE" << std::endl;
+                        // else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
+                        // else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
+                        // else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
+                        // else if (kind == 4u) std::cout << "ST_READY" << std::endl;
+                        // else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
+                    }
                     cur_node = vb_next[cur_node];
                 }
                 
@@ -358,20 +443,23 @@ int main() {
             std::vector<uint32_t> ib_states(voxel_grid_gpu.count_ib_pages_);
             voxel_grid_gpu.ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
 
-            // uint32_t mask = (1 << voxel_grid_gpu.ib_index_bits_) - 1;
             for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_ + 1; i++) {
                 uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
-                uint32_t cur_node = ib_heads[order];
-                while (cur_node != 0xFFFFFFFFu && cur_node != 0xFFFFFFFEu) {
+                uint32_t head_idx = ib_heads[order] >> HEAD_TAG_BITS;
+                uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
+                while (cur_node != INVALID_ID) {
                     uint32_t kind = ib_states[cur_node] & ST_MASK;
-                    std::cout << cur_node << " ";
-                    if (kind == 0u) std::cout << "ST_FREE" << std::endl;
-                    else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
-                    else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
-                    else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
-                    else if (kind == 4u) std::cout << "ST_READY" << std::endl;
-                    else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
+                    uint32_t real_order = ib_states[cur_node] >> ST_MASK_BITS;
+                    if (real_order == order && kind == 0u) {
+                        std::cout << cur_node << " ST_FREE" << std::endl;
+                        // if (kind == 0u) std::cout << "ST_FREE" << std::endl;
+                        // else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
+                        // else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
+                        // else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
+                        // else if (kind == 4u) std::cout << "ST_READY" << std::endl;
+                        // else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
+                    }
                     cur_node = ib_next[cur_node];
                 }
                 
@@ -457,9 +545,445 @@ int main() {
             window.draw(&voxel_grid_gpu, &camera);
         }
 
+        if (ImGui::Button("Save VB states dump")) {
+            std::vector<uint32_t> vb_state(voxel_grid_gpu.count_vb_pages_);
+            voxel_grid_gpu.vb_state_.read_subdata(0, vb_state.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
 
+            std::filesystem::path vb_states_dir = state_dumps_dir / "vb";
+            std::filesystem::create_directories(vb_states_dir);
+            
+            std::string dump_file_name = "vb_dump" + math_utils::get_current_date_time() + ".csv"; 
+            
+            std::replace(dump_file_name.begin(), dump_file_name.end(), ':', '-');
+            std::replace(dump_file_name.begin(), dump_file_name.end(), ' ', '_');
+
+            std::ofstream vb_out(vb_states_dir / dump_file_name);
+
+            vb_out << "page_id,kind,order\n";
+            
+            for (uint32_t page_id = 0; page_id < voxel_grid_gpu.count_vb_pages_; page_id++) {
+                uint32_t kind = vb_state[page_id] & ST_MASK;
+                uint32_t order = vb_state[page_id] >> ST_MASK_BITS;
+                vb_out << page_id << "," << kind << "," << order << "\n";
+            }
+            vb_out.close();
+        }
+
+        if (ImGui::Button("Save ib states dump")) {
+            std::vector<uint32_t> ib_state(voxel_grid_gpu.count_ib_pages_);
+            voxel_grid_gpu.ib_state_.read_subdata(0, ib_state.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
+
+            std::filesystem::path ib_states_dir = state_dumps_dir / "ib";
+            std::filesystem::create_directories(ib_states_dir);
+            
+            std::string dump_file_name = "ib_dump" + math_utils::get_current_date_time() + ".csv"; 
+            
+            std::replace(dump_file_name.begin(), dump_file_name.end(), ':', '-');
+            std::replace(dump_file_name.begin(), dump_file_name.end(), ' ', '_');
+            
+            std::ofstream ib_out(ib_states_dir / dump_file_name);
+
+            ib_out << "page_id,kind,order\n";
+            
+            for (uint32_t page_id = 0; page_id < voxel_grid_gpu.count_ib_pages_; page_id++) {
+                uint32_t kind = ib_state[page_id] & ST_MASK;
+                uint32_t order = ib_state[page_id] >> ST_MASK_BITS;
+                ib_out << page_id << "," << kind << "," << order << "\n";
+            }
+            ib_out.close();
+        }
+
+        if (ImGui::Button("Save base dump")) {
+            voxel_grid_gpu.save_verify_mesh_buffers_dumps(base_dump_path);
+
+            std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+                voxel_grid_gpu.vb_heads_, 
+                voxel_grid_gpu.vb_state_, 
+                voxel_grid_gpu.vb_next_, 
+                voxel_grid_gpu.vb_order_,
+                voxel_grid_gpu.count_vb_pages_
+            );
+
+            std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+                voxel_grid_gpu.ib_heads_, 
+                voxel_grid_gpu.ib_state_, 
+                voxel_grid_gpu.ib_next_, 
+                voxel_grid_gpu.ib_order_,
+                voxel_grid_gpu.count_ib_pages_
+            );
+
+            std::ofstream vb_out(base_dump_path / "vb_limbo.txt");
+            for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
+            vb_out.close();
+
+            std::ofstream ib_out(base_dump_path / "ib_limbo.txt");
+            for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
+            ib_out.close();
+        }
+
+        if (ImGui::Button("Save verify_mesh_allocation dump-animation")) {
+            voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
+
+            std::string folder_name = math_utils::get_current_date_time();
+            std::filesystem::path dir = dump_animations_path / folder_name;
+
+            uint32_t dirty_count = voxel_grid_gpu.frame_counters_.read_scalar<uint32_t>(sizeof(uint32_t));
+            for (uint32_t cur_dirty_count = 0; cur_dirty_count <= dirty_count; cur_dirty_count++) {
+                voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
+
+                voxel_grid_gpu.frame_counters_.update_subdata(sizeof(uint32_t), &cur_dirty_count, sizeof(uint32_t));
+                voxel_grid_gpu.verify_mesh_allocation(cur_dirty_count);
+
+                std::string frame_name = "frame_" + std::to_string(cur_dirty_count);
+                std::filesystem::path frame_dir = dir / frame_name;
+                voxel_grid_gpu.save_verify_mesh_buffers_dumps(frame_dir);
+
+                std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+                    voxel_grid_gpu.vb_heads_, 
+                    voxel_grid_gpu.vb_state_, 
+                    voxel_grid_gpu.vb_next_, 
+                    voxel_grid_gpu.vb_order_,
+                    voxel_grid_gpu.count_vb_pages_
+                );
+
+                std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+                    voxel_grid_gpu.ib_heads_, 
+                    voxel_grid_gpu.ib_state_, 
+                    voxel_grid_gpu.ib_next_, 
+                    voxel_grid_gpu.ib_order_,
+                    voxel_grid_gpu.count_ib_pages_
+                );
+
+                std::ofstream vb_out(frame_dir / "vb_limbo.txt");
+                for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
+                vb_out.close();
+
+                std::ofstream ib_out(frame_dir / "ib_limbo.txt");
+                for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
+                ib_out.close();
+            }
+        }
+        ImGui::Separator();
+
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputInt("dirty_count", &dirty_count_to_set);
+        ImGui::SameLine();
+        if (ImGui::Button("Set dirty count")) {
+            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1, (uint32_t)(dirty_count_to_set), sizeof(uint32_t));
+            std::cout << "Dirty count has been set to " << dirty_count_to_set << "." << std::endl;
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Checkout to base")) {
+            if (std::filesystem::exists(base_dump_path)) {
+                voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
+                std::cout << "Moved to base " << std::endl;
+            } else {
+                std::cout << "Directory: " << std::endl;
+                std::cout << base_dump_path << std::endl;
+                std::cout << "Does not exist!" << std::endl;
+            }
+            
+        }
+
+        if (ImGui::Button("Checkout to frame")) {
+            std::filesystem::path dumps_path = frames_path_to_load / ("frame_" + std::to_string(selected_frame_id));
+            if (std::filesystem::exists(dumps_path)) {
+                voxel_grid_gpu.load_verify_mesh_buffers_dumps(dumps_path);
+                std::cout << "Moved to frame " << selected_frame_id << std::endl;
+            } else {
+                std::cout << "Directory: " << std::endl;
+                std::cout << dumps_path << std::endl;
+                std::cout << "Does not exist!" << std::endl;
+            }
+            
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputInt("Frame number", &selected_frame_id);
+
+        ImGui::Separator();
+        
+        bool use_verify_stack_local = use_verify_stack;
+        ImGui::Checkbox("Enable verify stack", &use_verify_stack_local);
+
+        if (use_verify_stack != use_verify_stack_local) {
+            use_verify_stack = use_verify_stack_local;
+            
+            voxel_grid_gpu.verify_debug_stack_.update_subdata_fill<uint32_t>(0, (use_verify_stack ? 1u : 0u), sizeof(uint32_t));
+
+            if (use_verify_stack)
+                std::cout << "Verify stack is enable." << std::endl;
+            else 
+                std::cout << "Verify stack is disable." << std::endl;
+        }
+
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputInt("Offset", &offset_verify_stack);
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputInt("Count elements", &count_elements_verify_stack);
+        if (ImGui::Button("Print verify debug stack")) {
+            voxel_grid_gpu.print_verify_debug_stack(offset_verify_stack, count_elements_verify_stack);
+        }
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Limbo", 
+        ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding)) {
+            ImGui::Text("States vs headers limbo");
+            if (ImGui::Button("vb")) {
+                std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+                    voxel_grid_gpu.vb_heads_, 
+                    voxel_grid_gpu.vb_state_, 
+                    voxel_grid_gpu.vb_next_, 
+                    voxel_grid_gpu.vb_order_,
+                    voxel_grid_gpu.count_vb_pages_
+                );
+
+                std::cout << "States vs heads limbo: VB" << std::endl;
+                if (vb_limbo.size() > 0) {
+                    for (uint32_t page_id : vb_limbo) {
+                        std::cout << "PAGE_ID: " << page_id << std::endl; 
+                    }
+                } else {
+                    std::cout << "There is no VB limbo." << std::endl;
+                }
+                std::cout << std::endl;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("ib")) {
+                std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+                    voxel_grid_gpu.ib_heads_, 
+                    voxel_grid_gpu.ib_state_, 
+                    voxel_grid_gpu.ib_next_, 
+                    voxel_grid_gpu.ib_order_,
+                    voxel_grid_gpu.count_ib_pages_
+                );
+
+                std::cout << "States vs heads limbo: IB" << std::endl;
+                if (ib_limbo.size() > 0) {
+                    for (uint32_t page_id : ib_limbo) {
+                        std::cout << "PAGE_ID: " << page_id << std::endl; 
+                    }
+                } else {
+                    std::cout << "There is no IB limbo." << std::endl;
+                }
+                std::cout << std::endl;
+            }
+        }
+        
+
+        ImGui::Separator();
+
+        if (ImGui::CollapsingHeader("Dirty list data", 
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding)) {
+            ImGui::Text("Mesh alloc");
+
+            bool vb_button = ImGui::Button("Print VB");
+            ImGui::SameLine();
+            bool ib_button = ImGui::Button("Print IB");
+
+            std::vector<VoxelGridGPU::ChunkMeshAlloc> alloc_meta(voxel_grid_gpu.count_active_chunks);
+            std::vector<uint32_t> dirty_list;
+            uint32_t dirty_count;
+
+            if (vb_button || ib_button) {
+                voxel_grid_gpu.chunk_mesh_alloc_.read_subdata(0, alloc_meta.data(), sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid_gpu.count_active_chunks);
+                voxel_grid_gpu.frame_counters_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
+                dirty_list.resize(dirty_count);
+                voxel_grid_gpu.dirty_list_.read_subdata(0, dirty_list.data(), sizeof(uint32_t) * dirty_count);
+            }
+            
+            if (vb_button) {
+                if (dirty_count > 0) {
+                    std::cout << "VB mesh allocs of dirty list:" << std::endl;
+                    uint32_t count_alloc_pages = 0, count_alloc_states = 0; 
+                    for (uint32_t dirty_idx = 0; dirty_idx < dirty_count; dirty_idx++) {
+                        uint32_t chunk_id = dirty_list[dirty_idx];
+                        if (alloc_meta[chunk_id].v_startPage == 0xFFFFFFFFu) continue;
+                        count_alloc_pages += 1u << alloc_meta[chunk_id].v_order;
+                        count_alloc_states++;
+                    }
+
+                    std::cout << "ST_ALLOC:     " << "count states = " << count_alloc_states << "   count pages = " << count_alloc_pages << std::endl;
+                    std::cout << std::endl;
+
+                    for (uint32_t dirty_idx = 0; dirty_idx < dirty_count; dirty_idx++) {
+                        uint32_t chunk_id = dirty_list[dirty_idx];
+
+                        if (alloc_meta[chunk_id].v_startPage == 0xFFFFFFFFu) continue;
+                        
+                        std::cout << std::left << std::setw(9 + 8) << ("DIRTY_ID " + std::to_string(dirty_idx))
+                                << std::left << std::setw(5) << "  |"
+                                << std::left << std::setw(9 + 8) << ("CHUNK_ID " + std::to_string(chunk_id) + ":")
+                                << std::right << std::setw(13 + 5) << "start page = "
+                                << std::right << std::setw(6 + 5) << alloc_meta[chunk_id].v_startPage
+                                << std::right << std::setw(8 + 5) << "order = "
+                                << std::right << std::setw(3 + 5) << alloc_meta[chunk_id].v_order
+                                << std::endl;
+                    }
+                    std::cout << std::endl;
+                } else {
+                    std::cout << "===DIRTY LIST IS EMPTY===" << std::endl;
+                    std::cout << std::endl;
+                }
+            }
+
+            if (ib_button) {
+                if (dirty_count > 0) {
+                    std::cout << "IB mesh allocs of dirty list:" << std::endl;
+                    uint32_t count_alloc_pages = 0, count_alloc_states = 0; 
+                    for (uint32_t dirty_idx = 0; dirty_idx < dirty_count; dirty_idx++) {
+                        uint32_t chunk_id = dirty_list[dirty_idx];
+                        if (alloc_meta[chunk_id].i_startPage == 0xFFFFFFFFu) continue;
+                        count_alloc_pages += 1u << alloc_meta[chunk_id].i_order;
+                        count_alloc_states++;
+                    }
+
+                    std::cout << "ST_ALLOC:     " << "count states = " << count_alloc_states << "   count pages = " << count_alloc_pages << std::endl;
+                    std::cout << std::endl;
+
+                    for (uint32_t dirty_idx = 0; dirty_idx < dirty_count; dirty_idx++) {
+                        uint32_t chunk_id = dirty_list[dirty_idx];
+
+                        if (alloc_meta[chunk_id].i_startPage == 0xFFFFFFFFu) continue;
+                        
+                        std::cout << std::left << std::setw(9 + 8) << ("DIRTY_ID " + std::to_string(dirty_idx))
+                                << std::left << std::setw(9 + 8) << "        |"
+                                << std::left << std::setw(9 + 8) << ("CHUNK_ID " + std::to_string(chunk_id) + ":")
+                                << std::right << std::setw(13 + 5) << "start page = "
+                                << std::right << std::setw(6 + 5) << alloc_meta[chunk_id].i_startPage
+                                << std::right << std::setw(8 + 5) << "order = "
+                                << std::right << std::setw(3 + 5) << alloc_meta[chunk_id].i_order
+                                << std::endl;
+                    }
+                    std::cout << std::endl;
+                } else {
+                    std::cout << "===DIRTY LIST IS EMPTY===" << std::endl;
+                    std::cout << std::endl;
+                }
+            }
+
+            ImGui::Separator();
+
+            // ImGui::Checkbox("streaming##1", &stream1);
+            // ImGui::SameLine();
+            // if (ImGui::Button("Run once##1")) { /* ... */ }
+            // ImGui::Spacing();
+        }
 
         ImGui::End();
+
+        ImGui::Begin("Build mesh from dirty pipeline");
+        if (ImGui::Button("Run all pipeline")) {
+            voxel_grid_gpu.build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Pipeline steps");
+        ImGui::Separator();
+
+        if (ImGui::Button("reset_global_mesh_counters()")) {
+            voxel_grid_gpu.reset_global_mesh_counters();
+        }
+
+        if (ImGui::Button("mesh_reset()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.mesh_reset(dirty_count);
+        }
+
+        if (ImGui::Button("mesh_count()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.mesh_count(dirty_count, math_utils::BITS, math_utils::OFFSET);
+        }
+
+        if (ImGui::Button("mesh_alloc()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.mesh_alloc(dirty_count);
+        }
+
+        if (ImGui::Button("verify_mesh_allocation()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.verify_mesh_allocation(dirty_count);
+        }
+
+        if (ImGui::Button("mesh_emit()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.mesh_emit(dirty_count, math_utils::BITS, math_utils::OFFSET);
+        }
+
+        if (ImGui::Button("mesh_finalize()")) {
+            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            voxel_grid_gpu.mesh_finalize(dirty_count);
+        }
+
+        if (ImGui::Button("reset_dirty_count()")) {
+            voxel_grid_gpu.reset_dirty_count();
+        }
+        ImGui::End();
+
+        ImGui::Begin("Build draw commands pipeline");
+        if (ImGui::Button("Run all pipeline")) {
+            float aspect = window.get_fbuffer_aspect_ratio();
+            glm::mat4 view_matrix = window.camera->get_view_matrix();
+            glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
+            glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
+            voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Pipeline steps");
+        ImGui::Separator();
+
+        if (ImGui::Button("reset_cmd_count()")) {
+            voxel_grid_gpu.reset_cmd_count();
+        }
+
+        if (ImGui::Button("build_draw_commands()")) {
+            float aspect = window.get_fbuffer_aspect_ratio();
+            glm::mat4 view_matrix = window.camera->get_view_matrix();
+            glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
+            glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
+            voxel_grid_gpu.build_draw_commands(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+        }
+        ImGui::End();
+
+        ImGui::Begin("Voxel grid draw pipeline");
+        if (ImGui::BeginTable("pipeline_table", 3, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableSetupColumn("Step");
+            ImGui::TableSetupColumn("Streaming", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("Run", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableHeadersRow();
+
+            for (uint32_t i = 0; i < 3; i++) {
+                ImGui::TableNextRow(); // ----
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(voxel_grid_draw_steps_names[i].c_str());
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(i);
+
+                ImGui::Checkbox("streaming", &voxel_grid_draw_streaming[i]);
+                
+                ImGui::TableNextColumn();
+                if (ImGui::Button("Run once")) {
+                    voxel_grid_draw_steps[i]();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+
+        for (uint32_t i = 0; i < 3; i++) {
+            if (voxel_grid_draw_streaming[i]) {
+                voxel_grid_draw_steps[i]();
+            }
+        }
+        ImGui::End();
+
 
         ui::end_frame();
 

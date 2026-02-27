@@ -1,4 +1,5 @@
 #pragma once
+#define NOMINMAX
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -20,6 +21,8 @@
 #include "path_utils.h"
 #include <unordered_set>
 #include <fstream>
+#include <set>
+#include <algorithm>
 
 #define SLOT_EMPTY 0xFFFFFFFF
 #define SLOT_LOCKED 0xFFFFFFFE
@@ -27,6 +30,19 @@
 
 class VoxelGridGPU : public Transformable, public Drawable {
 public:
+    const uint32_t INVALID_ID = 0xFFFFFFFFu;
+
+    const uint32_t ST_MASK_BITS = 4;
+    const uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
+    
+    const uint32_t ST_FREE = 0u;
+    const uint32_t ST_ALLOC = 1u;
+    const uint32_t ST_MERGED = 2u;
+    
+    const uint32_t HEAD_TAG_BITS = 16;
+    const uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
+    const uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
     glm::vec3 voxel_size;
@@ -91,6 +107,51 @@ public:
         uint32_t needI;
         uint32_t need_rebuild;
     };
+
+
+    struct PushLoopData {
+        uint32_t old_h;
+        uint32_t next_val;
+        uint32_t old_value_of_next_val;
+        uint32_t new_tag;
+        uint32_t new_head;
+        uint32_t was_head;
+    };
+
+    struct PushData {
+        uint32_t input_start_page;
+        uint32_t input_order;
+        uint32_t old_state_of_input_start_page;
+        uint32_t count_loop_cycles;
+        PushLoopData loop_data[32];
+    };
+
+    struct MergeData {
+        uint32_t cur_start;
+        uint32_t cur_order;
+        uint32_t cur_state;
+        uint32_t buddy_size;
+        uint32_t start_buddy;
+        uint32_t buddy_state;
+    };
+
+    struct DebugStackElement {
+        uint32_t dirty_idx;
+        uint32_t chunk_id;
+        uint32_t a_i_startPage; 
+        uint32_t i_order;
+        uint32_t prev_alloc_state;
+        uint32_t count_merges;
+        MergeData merge_data[33];
+        uint32_t result_start;
+        uint32_t result_order;
+        uint32_t state_before_change;
+        uint32_t state_after_change;
+        PushData push_data;
+        uint32_t current_head;
+        uint32_t bool_push_result;
+    };
+
 
     VoxelGridGPU(
         glm::ivec3 chunk_size, 
@@ -175,6 +236,7 @@ public:
     SSBO stream_counters_;
     SSBO load_list_;
     SSBO failed_dirty_list_;
+    SSBO verify_debug_stack_;
 
     SSBO vb_heads_;
     SSBO vb_next_;
@@ -246,8 +308,20 @@ public:
     void ensure_free_chunks_gpu(const glm::vec3& camPos);
     void ensure_voxel_write_list(size_t count);
 
+    void reset_global_mesh_counters();
+    void mesh_reset(uint32_t dirty_count);
+    void mesh_count(uint32_t dirty_count, uint32_t pack_bits, uint32_t pack_offset);
+    void mesh_alloc(uint32_t dirty_count);
+    void verify_mesh_allocation(uint32_t dirty_count);
+    void mesh_emit(uint32_t dirty_count, uint32_t pack_bits, uint32_t pack_offset);
+    void mesh_finalize(uint32_t dirty_count);
+    void reset_dirty_count();
     void build_mesh_from_dirty(uint32_t pack_bits, int pack_offset);
+
+    void reset_cmd_count();
+    void build_draw_commands(const glm::mat4& view_proj, uint32_t pack_bits, int pack_offset);
     void build_indirect_draw_commands_frustum(const glm::mat4& viewProj, uint32_t pack_bits, int pack_offset);
+
     void draw_indirect(const GLuint vao, const glm::mat4& world, const glm::mat4& proj_view, const glm::vec3& cam_pos);
 
     void init_draw_buffers();
@@ -260,4 +334,10 @@ public:
         std::unordered_map<uint32_t, uint32_t>& states_alloc_vb_out, 
         std::unordered_map<uint32_t, uint32_t>& states_alloc_ib_out
     );
+
+    void save_verify_mesh_buffers_dumps(std::filesystem::path dir);
+    void load_verify_mesh_buffers_dumps(std::filesystem::path dir);
+    
+    std::set<uint32_t> find_limbo_pages(SSBO& heads_buffer, SSBO& states_buffer, SSBO& next_buffer, uint32_t max_order_in_heads_buffer, uint32_t count_pages_in_states_buffer);
+    void print_verify_debug_stack(uint32_t offset, int count_elements_to_print = -1);
 };

@@ -13,6 +13,8 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <sstream>
+#include <iomanip>
 
 #if __has_include(<bit>) && (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
   #include <bit>
@@ -235,5 +237,22 @@ namespace math_utils {
         }
 
         return out;
+    }
+
+    static inline std::string get_current_date_time()
+    {
+        using namespace std::chrono;
+
+        auto now = system_clock::now();
+        auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+        std::time_t t = system_clock::to_time_t(now);
+        std::tm tm = *std::localtime(&t);
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
+        oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
+        return oss.str();
     }
 }

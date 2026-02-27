@@ -22,12 +22,7 @@ uniform uint u_max_chunks;
 uniform uint u_vb_index_bits;
 uniform uint u_ib_index_bits;
 
-uint vb_mask() { return (1u << u_vb_index_bits) - 1u; } // INVALID_ID
-uint ib_mask() { return (1u << u_ib_index_bits) - 1u; } // INVALID_ID
-
-uint vb_pack_head(uint idx, uint tag) { return (tag << u_vb_index_bits) | idx; }
-uint ib_pack_head(uint idx, uint tag) { return (tag << u_ib_index_bits) | idx; }
-
+// ---- state packing ----
 const uint ST_MASK_BITS = 4;
 const uint ST_FREE    = 0u;
 const uint ST_ALLOC   = 1u;
@@ -35,9 +30,19 @@ const uint ST_MERGED  = 2u;
 const uint ST_MERGING = 3u;
 const uint ST_READY = 4u;
 const uint ST_CONCEDED = 5u;
-const uint ST_MASK   = (1 << ST_MASK_BITS) - 1;
+const uint ST_MASK   = (1u << ST_MASK_BITS) - 1u;
+
+// ---- head state packing ----
+const uint HEAD_TAG_BITS = 16; // Чтобы точно не случилось ABA, но если что можно уменьшить
+const uint HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
+const uint INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+const uint HEAD_LOCK = 0xFFFFFFFEu;
+
+const uint OP_ALLOC = 0u;
+const uint OP_FREE = 1u;
 
 uint pack_state(uint order, uint kind) { return (order << ST_MASK_BITS) | (kind & ST_MASK); }
+uint pack_head(uint start, uint tag) {return (start << HEAD_TAG_BITS) | (tag & HEAD_TAG_MASK); };
 
 void main() {
     uint i = gl_GlobalInvocationID.x;
@@ -46,12 +51,14 @@ void main() {
         vb_next[i]  = INVALID_ID;
         vb_state[i] = pack_state(0, ST_MERGED); // "ничего"
     }
+    
     if (i < u_ib_pages) {
         ib_next[i]  = INVALID_ID;
         ib_state[i] = pack_state(0, ST_MERGED);
     }
-    if (i < u_vb_heads_count) vb_heads[i] = INVALID_ID;
-    if (i < u_ib_heads_count) ib_heads[i] = INVALID_ID;
+
+    if (i < u_vb_heads_count) vb_heads[i] = pack_head(INVALID_HEAD_IDX, 0u);
+    if (i < u_ib_heads_count) ib_heads[i] = pack_head(INVALID_HEAD_IDX, 0u);
 
     if (i < u_max_chunks) {
         chunk_alloc[i].v_startPage = INVALID_ID; 

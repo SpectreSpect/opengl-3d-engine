@@ -1,6 +1,8 @@
 #version 430
 layout(local_size_x = 1) in;
 
+#define INVALID_ID 0xFFFFFFFFu
+
 layout(std430, binding=18) buffer VBHeads { uint vb_heads[]; };
 layout(std430, binding=19) buffer VBNext  { uint vb_next[];  };
 layout(std430, binding=20) buffer VBState { uint vb_state[]; };
@@ -14,28 +16,27 @@ uniform uint u_ib_max_order; // log2(u_ib_pages)
 uniform uint u_vb_index_bits;
 uniform uint u_ib_index_bits;
 
-const uint ST_MASK_BITS = 4u;
-const uint ST_FREE     = 0u;
-const uint ST_ALLOC    = 1u;
-const uint ST_MERGED   = 2u;
-const uint ST_MERGING  = 3u;
-const uint ST_READY    = 4u;
+// ---- state packing ----
+const uint ST_MASK_BITS = 4;
+const uint ST_FREE    = 0u;
+const uint ST_ALLOC   = 1u;
+const uint ST_MERGED  = 2u;
+const uint ST_MERGING = 3u;
+const uint ST_READY = 4u;
 const uint ST_CONCEDED = 5u;
-const uint ST_MASK   = (1 << ST_MASK_BITS) - 1;
+const uint ST_MASK   = (1u << ST_MASK_BITS) - 1u;
 
-#define INVALID_ID 0xFFFFFFFFu
+// ---- head state packing ----
+const uint HEAD_TAG_BITS = 16; // Чтобы точно не случилось ABA, но если что можно уменьшить
+const uint HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
+const uint INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+const uint HEAD_LOCK = 0xFFFFFFFEu;
+
+const uint OP_ALLOC = 0u;
+const uint OP_FREE = 1u;
 
 uint pack_state(uint order, uint kind) { return (order << ST_MASK_BITS) | (kind & ST_MASK); }
-
-uint vb_mask() { return (1u << u_vb_index_bits) - 1u; } // INVALID_ID
-uint vb_pack_head(uint idx, uint tag) { return (tag << u_vb_index_bits) | idx; }
-uint vb_head_idx(uint h) { return h & vb_mask(); }
-uint vb_head_tag(uint h) { return h >> u_vb_index_bits; }
-
-uint ib_mask() { return (1u << u_ib_index_bits) - 1u; } // INVALID_ID
-uint ib_pack_head(uint idx, uint tag) { return (tag << u_ib_index_bits) | idx; }
-uint ib_head_idx(uint h) { return h & ib_mask(); }
-uint ib_head_tag(uint h) { return h >> u_ib_index_bits; }
+uint pack_head(uint start, uint tag) {return (start << HEAD_TAG_BITS) | (tag & HEAD_TAG_MASK); };
 
 // void vb_push_free(uint order, uint startPage) {
 //     for (uint it = 0u; it < 64u; ++it) {
@@ -82,11 +83,11 @@ void main() {
     // uint vb_blockPages = 1u << vb_seed_order;
     // uint vb_blocks = 1u << (u_vb_max_order - vb_seed_order);
 
-    vb_heads[u_vb_max_order] = 0u;
+    vb_heads[u_vb_max_order] = pack_head(0u, 0u);
     vb_state[0u] = pack_state(u_vb_max_order, ST_FREE);
     vb_next[0u] = INVALID_ID;
 
-    ib_heads[u_ib_max_order] = 0u;
+    ib_heads[u_ib_max_order] = pack_head(0u, 0u);;
     ib_state[0u] = pack_state(u_ib_max_order, ST_FREE);
     ib_next[0u] = INVALID_ID;
     
