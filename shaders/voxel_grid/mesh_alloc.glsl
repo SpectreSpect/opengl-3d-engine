@@ -274,7 +274,7 @@ uint bb_alloc_pages(uint wantOrder) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x != 0u) return;
+    // if (gl_GlobalInvocationID.x != 0u) return;
     
     uint dirtyIdx = gl_GlobalInvocationID.x;
     uint dirtyCount = counters.dirty_count;
@@ -315,42 +315,40 @@ void main() {
     // stats[14] = head_after_last_pop >> HEAD_TAG_BITS;
 
 
-    for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
+    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
     uint chunkId = dirty_list[dirtyIdx];
 
     if (counters.count_vb_free_pages == INVALID_ID || counters.count_ib_free_pages == INVALID_ID) {
         if (is_vb_phase){
-            counters.count_vb_free_pages = INVALID_ID;
+            atomicExchange(counters.count_vb_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            counters.count_ib_free_pages = INVALID_ID;
+            atomicExchange(counters.count_ib_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
 
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-        continue;
+        return;
     }
 
     // мог быть уже выселен
     if (meta[chunkId].used == 0u) {
         if (is_vb_phase){
-            counters.count_vb_free_pages = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            counters.count_ib_free_pages = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-        continue;
+        return;
     }
 
     uint quads = dirty_quad_count[dirtyIdx];
@@ -358,19 +356,17 @@ void main() {
     // пустой меш
     if (quads == 0u) {
         if (is_vb_phase){
-            counters.count_vb_free_pages = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            counters.count_ib_free_pages = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-        continue;
+        return;
     }
 
     uint needB = quads * u_bb_quad_size;
@@ -380,19 +376,19 @@ void main() {
     uint bStart = bb_alloc_pages(bOrder);
     if (bStart == INVALID_ID) {
         if (is_vb_phase){
-            counters.count_vb_free_pages = INVALID_ID;
+            atomicExchange(counters.count_vb_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            counters.count_ib_free_pages = INVALID_ID;
+            atomicExchange(counters.count_ib_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
-        continue;
+        return;
     }
 
     if (is_vb_phase) {
@@ -407,5 +403,5 @@ void main() {
         chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
     }
 
-    }
+    // }
 }

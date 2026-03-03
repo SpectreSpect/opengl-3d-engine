@@ -426,13 +426,13 @@ void free_chunk_mesh(uint chunk_id_local, uint chunk_id_global) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x != 0u) return;
+    // if (gl_GlobalInvocationID.x != 0u) return;
 
     uint dirtyIdx = gl_GlobalInvocationID.x;
     uint dirtyCount = counters.dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
-    for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
+    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
     // is_debug_stack_on = debug_stack_on == 1u;
     is_debug_stack_on = debug_stack_on == 1u && dirtyIdx == (dirtyCount - 1u);
     if (is_debug_stack_on) debug_stack_idx = atomicAdd(verify_debug_stack_counter, 1u);
@@ -455,5 +455,5 @@ void main() {
         free_chunk_mesh(dirtyIdx, chunkId);
         chunk_alloc_global[chunkId] = chunk_alloc_local[dirtyIdx];
     }
-    }
+    // }
 }

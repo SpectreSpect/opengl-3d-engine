@@ -818,33 +818,58 @@ int main() {
 
         if (ImGui::Button("mesh_reset()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            voxel_grid_gpu.mesh_reset(dirty_count);
+            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
+            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            
+            voxel_grid_gpu.mesh_reset();
         }
 
         if (ImGui::Button("mesh_count()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            voxel_grid_gpu.mesh_count(dirty_count, math_utils::BITS, math_utils::OFFSET);
+            uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
+            uint32_t vox_groups = math_utils::div_up_u32(vox_per_chunk, 256u);
+            uint32_t dispatch_args[3] = {vox_groups, dirty_count, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_1_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+
+            voxel_grid_gpu.mesh_count(math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_alloc()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            std::cout << "DIRTY_COUNT: " << dirty_count << std::endl;
-            voxel_grid_gpu.mesh_alloc(dirty_count);
+            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
+            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            
+            voxel_grid_gpu.mesh_alloc();
         }
 
         if (ImGui::Button("verify_mesh_allocation()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            voxel_grid_gpu.verify_mesh_allocation(dirty_count);
+            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
+            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+
+            voxel_grid_gpu.verify_mesh_allocation();
         }
 
         if (ImGui::Button("mesh_emit()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            voxel_grid_gpu.mesh_emit(dirty_count, math_utils::BITS, math_utils::OFFSET);
+            uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
+            uint32_t vox_groups = math_utils::div_up_u32(vox_per_chunk, 256u);
+            uint32_t dispatch_args[3] = {vox_groups, dirty_count, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_1_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+
+            voxel_grid_gpu.mesh_emit(math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_finalize()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            voxel_grid_gpu.mesh_finalize(dirty_count);
+            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
+            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
+            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            
+            voxel_grid_gpu.mesh_finalize();
         }
 
         if (ImGui::Button("reset_dirty_count()")) {
