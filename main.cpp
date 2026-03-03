@@ -237,7 +237,7 @@ int main() {
         32, // bucket_step
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
-        4.0, // buddy_allocator_nodes_factor
+        1.0, // buddy_allocator_nodes_factor
         shader_manager
     );
 
@@ -851,6 +851,10 @@ int main() {
             voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
 
             voxel_grid_gpu.verify_mesh_allocation();
+        }
+
+        if (ImGui::Button("return_free_alloc_nodes()")) {
+            voxel_grid_gpu.return_free_alloc_nodes();
         }
 
         if (ImGui::Button("mesh_emit()")) {

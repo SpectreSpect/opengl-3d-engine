@@ -182,6 +182,12 @@ void VoxelGridGPU::print_counters(uint32_t write_count, uint32_t dirty_count, ui
     std::cout << "count_ib_free_pages: " << counters[6] << std::endl;
     if (load_list_count != 0) std::cout << "load_list_count: " << stream_counters[0] << std::endl;
 
+    uint32_t count_free_nodes_vb = vb_free_nodes_list_.read_scalar<uint32_t>(0);
+    uint32_t count_free_nodes_ib = ib_free_nodes_list_.read_scalar<uint32_t>(0);
+
+    std::cout << "count_free_nodes_vb: " << count_free_nodes_vb << std::endl;
+    std::cout << "count_free_nodes_ib: " << count_free_nodes_ib << std::endl;
+
     std::cout << std::endl;
 
     print_count_free_mesh_alloc();
@@ -900,8 +906,21 @@ void VoxelGridGPU::verify_mesh_allocation() {
 }
 
 
-void return_free_alloc_nodes() {
-    
+void VoxelGridGPU::return_free_alloc_nodes() {
+    vb_free_nodes_list_.bind_base(0);
+    vb_returned_nodes_list.bind_base(1);
+
+    ib_free_nodes_list_.bind_base(2);
+    ib_returned_nodes_list.bind_base(3);
+
+    uint32_t count_returned_nodes_vb = vb_returned_nodes_list.read_scalar<uint32_t>(0);
+    uint32_t count_returned_nodes_ib = ib_returned_nodes_list.read_scalar<uint32_t>(0);
+    uint32_t max_count_returned_nodes = std::max(count_returned_nodes_vb, count_returned_nodes_ib);
+    uint32_t returned_node_groups = math_utils::div_up_u32(max_count_returned_nodes, 256u);
+
+    prog_return_free_alloc_nodes_.dispatch_compute(returned_node_groups, 1, 1);
+
+    glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void VoxelGridGPU::mesh_emit(uint32_t pack_bits, uint32_t pack_offset) {
@@ -969,11 +988,15 @@ void VoxelGridGPU::mesh_finalize() {
 
 void VoxelGridGPU::reset_dirty_count() {
     frame_counters_.bind_base(0);
-    vb_returned_nodes_list.bind_base(1);
-    ib_returned_nodes_list.bind_base(2);
+
+    vb_free_nodes_list_.bind_base(1);
+    vb_returned_nodes_list.bind_base(2);
+
+    ib_free_nodes_list_.bind_base(3);
+    ib_returned_nodes_list.bind_base(4);
 
     prog_reset_dirty_count_.use();
-    prog_reset_dirty_count_.dispatch_compute(1,1,1);
+    prog_reset_dirty_count_.dispatch_compute(1, 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -1186,6 +1209,8 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     verify_mesh_allocation();
     // glFinish();
     // std::cout << "VERIFY_ALLOCATION" << std::endl;
+
+    return_free_alloc_nodes();
 
     // ---- Pass: mesh_emit ----
     mesh_emit(pack_bits, pack_offset);
