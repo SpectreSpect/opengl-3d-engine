@@ -886,8 +886,9 @@ void VoxelGridGPU::verify_mesh_allocation() {
     ib_free_nodes_list_.bind_base(12);
     ib_returned_nodes_list.bind_base(13);
 
-    debug_counters_vb_.bind_base(14);
-    verify_debug_stack_.bind_base(15);
+    // debug_counters_vb_.bind_base(14);
+    verify_debug_stack_.bind_base(14);
+    dispatch_indirect_buf_1_.bind_base(15);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
 
@@ -913,12 +914,21 @@ void VoxelGridGPU::return_free_alloc_nodes() {
     ib_free_nodes_list_.bind_base(2);
     ib_returned_nodes_list.bind_base(3);
 
-    uint32_t count_returned_nodes_vb = vb_returned_nodes_list.read_scalar<uint32_t>(0);
-    uint32_t count_returned_nodes_ib = ib_returned_nodes_list.read_scalar<uint32_t>(0);
-    uint32_t max_count_returned_nodes = std::max(count_returned_nodes_vb, count_returned_nodes_ib);
-    uint32_t returned_node_groups = math_utils::div_up_u32(max_count_returned_nodes, 256u);
+    dispatch_indirect_buf_0_.bind_base(4);
+    frame_counters_.bind_base(5);
 
-    prog_return_free_alloc_nodes_.dispatch_compute(returned_node_groups, 1, 1);
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_1_.id());
+
+    prog_return_free_alloc_nodes_.use();
+    glUniform3ui(glGetUniformLocation(prog_return_free_alloc_nodes_.id, "u3_chunk_size"), chunk_size.x, chunk_size.y, chunk_size.z);
+    // uint32_t count_returned_nodes_vb = vb_returned_nodes_list.read_scalar<uint32_t>(0);
+    // uint32_t count_returned_nodes_ib = ib_returned_nodes_list.read_scalar<uint32_t>(0);
+    // uint32_t max_count_returned_nodes = std::max(count_returned_nodes_vb, count_returned_nodes_ib);
+    // uint32_t returned_node_groups = math_utils::div_up_u32(max_count_returned_nodes, 256u);
+
+    glDispatchComputeIndirect(0);
+
+    // prog_return_free_alloc_nodes_.dispatch_compute(returned_node_groups, 1, 1);
 
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -940,9 +950,9 @@ void VoxelGridGPU::mesh_emit(uint32_t pack_bits, uint32_t pack_offset) {
     global_vertex_buffer_.bind_base(8);
     global_index_buffer_.bind_base(9);
 
-    // debug_counters_vb_.bind_base(10);
+    dispatch_indirect_buf_1_.bind_base(10);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_1_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
 
     prog_mesh_emit_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -972,7 +982,7 @@ void VoxelGridGPU::mesh_finalize() {
     chunk_mesh_alloc_.bind_base(4);
     failed_dirty_list_.bind_base(5);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_1_.id());
 
     prog_mesh_finalize_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_finalize_.id, "u_dirty_flag_bits"), 1u);

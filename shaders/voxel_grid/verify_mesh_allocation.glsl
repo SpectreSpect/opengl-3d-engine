@@ -33,7 +33,7 @@ layout(std430, binding=11) coherent buffer IBNodes { Node ib_nodes[];  };
 layout(std430, binding=12) coherent buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
 layout(std430, binding=13) coherent buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
 
-layout(std430, binding=14) buffer DebugBuffer { uint stats[]; };
+// layout(std430, binding=14) buffer DebugBuffer { uint stats[]; };
 
 struct PushLoopData {
     uint old_h;
@@ -79,6 +79,7 @@ struct DebugStackElement {
 };
 
 layout(std430, binding=15) buffer VerifyDebugStack { uint debug_stack_on; uint verify_debug_stack_counter; DebugStackElement verify_debug_stack[]; };
+layout(std430, binding=16) buffer DispatchBuf { uvec3 dispatch_buf; };
 
 
 uniform uint u_vb_max_order;
@@ -104,6 +105,12 @@ const uint OP_ALLOC = 0u;
 const uint OP_FREE = 1u;
 bool is_debug_stack_on;
 uint debug_stack_idx;
+
+uint div_up_u32(uint a, uint b) { return (a + b - 1u) / b; }
+
+uint max(uint a, uint b) {
+    return a > b ? a : b;
+}
 
 uint pack_state(uint order, uint kind) { return (order << ST_MASK_BITS) | (kind & ST_MASK); }
 uint pack_head(uint start, uint tag) {return (start << HEAD_TAG_BITS) | (tag & HEAD_TAG_MASK); };
@@ -427,6 +434,12 @@ void free_chunk_mesh(uint chunk_id_local, uint chunk_id_global) {
 
 void main() {
     // if (gl_GlobalInvocationID.x != 0u) return;
+
+    if (gl_GlobalInvocationID.x == 0u) {
+        uint max_count_returned_nodes = max(vb_returned_nodes_counter, ib_returned_nodes_counter);
+        uint returned_node_groups = div_up_u32(max_count_returned_nodes, 256u);
+        dispatch_buf = uvec3(max(returned_node_groups, 1u), 1u, 1u);
+    }
 
     uint dirtyIdx = gl_GlobalInvocationID.x;
     uint dirtyCount = counters.dirty_count;
