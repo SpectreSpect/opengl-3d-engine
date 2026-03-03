@@ -237,6 +237,7 @@ int main() {
         32, // bucket_step
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
+        4.0, // buddy_allocator_nodes_factor
         shader_manager
     );
 
@@ -324,84 +325,51 @@ int main() {
         ImGui::Text("z: %.3f", camera_controller.camera->position.z);
         ImGui::PopStyleColor();
 
+        if (ImGui::Button("Temp stats")) {
+            std::vector<uint32_t> stats(5000);
+            voxel_grid_gpu.debug_counters_vb_.read_subdata(0, stats.data(), sizeof(uint32_t) * 5000);
+
+            // std::cout << "count_vb_nodes: " << voxel_grid_gpu.count_vb_nodes_ << std::endl;
+            // std::cout << std::endl;
+            // std::cout << "old_head: " << stats[0] << std::endl;
+            // std::cout << "old_head & HEAD_TAG_MASK: " << stats[1] << std::endl;
+            // std::cout << "old_head >> HEAD_TAG_BITS: " << stats[2] << std::endl;
+            // std::cout << "vb_nodes[old_head >> HEAD_TAG_BITS].page: " << stats[15] << std::endl;
+            // std::cout << "vb_nodes[old_head >> HEAD_TAG_BITS].next: " << stats[16] << std::endl;
+            // std::cout << "head_id: " << stats[3] << std::endl;
+            // std::cout << "after_pop_head: " << stats[4] << std::endl;
+            // std::cout << "after_pop_head & HEAD_TAG_MASK: " << stats[5] << std::endl;
+            // std::cout << "after_pop_head >> HEAD_TAG_BITS: " << stats[6] << std::endl;
+            // std::cout << "vb_push_free(new_order, head_id): " << stats[7] << std::endl;
+            // std::cout << "head_after_push: " << stats[8] << std::endl;
+            // std::cout << "head_after_push & HEAD_TAG_MASK: " << stats[9] << std::endl;
+            // std::cout << "head_after_push >> HEAD_TAG_BITS: " << stats[10] << std::endl;
+            // std::cout << "new_order_head_idx: " << stats[11] << std::endl;
+            // std::cout << "head_after_last_pop: " << stats[12] << std::endl;
+            // std::cout << "head_after_last_pop & HEAD_TAG_MASK: " << stats[13] << std::endl;
+            // std::cout << "head_after_last_pop >> HEAD_TAG_BITS: " << stats[14] << std::endl;
+            // std::cout << std::endl;
+
+            std::cout << "node_id[0]: " << stats[0] << std::endl;
+            std::cout << "node_id[1]: " << stats[1] << std::endl;
+            std::cout << "node_id[2]: " << stats[2] << std::endl;
+            std::cout << "node_id[3]: " << stats[3] << std::endl;
+            std::cout << "node_id[4]: " << stats[4] << std::endl;
+            std::cout << "node_id[5]: " << stats[5] << std::endl;
+            std::cout << "node_id[6]: " << stats[6] << std::endl;
+            std::cout << "node_id[7]: " << stats[7] << std::endl;
+            std::cout << std::endl;
+            
+        }
+
         if (ImGui::Button("Print counters")) {
             voxel_grid_gpu.print_counters(1, 1, 1, 1, 1);
             std::cout << "-----------------------" << std::endl << std::endl;
         }
 
-        if (ImGui::Button("Print mesh_alloc debug counters")) {
-            uint32_t stats[40];
-            voxel_grid_gpu.debug_counters_.read_subdata(0, stats, sizeof(uint32_t) * 40);
-
-            std::cout << "mesh_alloc debug counters" << std::endl;
-            std::cout << "meta.used==0: " << stats[0] << std::endl;
-            std::cout << "quads==0: " << stats[1] << std::endl;
-            std::cout << "vStart==INVALID: " << stats[2] << std::endl;
-            std::cout << "iStart==INVALID: " << stats[3] << std::endl;
-            std::cout << "success: " << stats[4] << std::endl;
-            std::cout << std::endl;
-
-            std::cout << "last invalid iOrder: " << stats[5] << std::endl;
-            std::cout << "last invalid iPages: " << stats[6] << std::endl;
-            std::cout << "last invalid quads: " << stats[7] << std::endl;
-            std::cout << std::endl;
-            
-            std::cout << "count equal v_startPage: " << stats[8] << std::endl;
-            std::cout << "count equal i_startPage: " << stats[9] << std::endl;
-            std::cout << std::endl;
-
-            std::cout << "ST_CONCEDED: " << stats[30] << std::endl;
-
-            std::cout << "-----------------------" << std::endl << std::endl;
-        }
-
-
-        if (ImGui::Button("Debug uauaua")) {
-            // verify_debug_stack_
-            uint32_t stack_size = voxel_grid_gpu.verify_debug_stack_.read_scalar<uint32_t>(0);
-            // uint32_t count_elements = stack_size / 2;
-            
-            std::vector<uint32_t> allocator_stack(stack_size * 2);
-            voxel_grid_gpu.verify_debug_stack_.read_subdata(sizeof(uint32_t) * 1, allocator_stack.data(), sizeof(uint32_t) * stack_size * 2);
-            int max_order = 0;
-            int max_start = 0;
-            int min_order = 999999999;
-            int min_start = 999999999;
-            for (uint32_t i = 0; i < stack_size; i++) {
-
-                uint32_t start = allocator_stack[i*2 + 0];
-                uint32_t order = allocator_stack[i*2 + 1];
-
-                if (order > max_order)
-                    max_order = order;
-                if (start > max_start)
-                    max_start = start;
-
-
-                if (order < min_order)
-                    min_order = order;
-                if (start < min_start)
-                    min_start = start;
-
-                // uint32_t start_idx = allocator_stack[i*2 + 0];
-                // uint32_t order = allocator_stack[i*2 + 1];
-
-                // std::cout << i << ": " << "idx = " << start << "    " << "order = " << order << std::endl;
-            }
-            std::cout << min_order << " " << min_start << std::endl;
-        }
-
-        #define INVALID_ID 0xFFFFFFFFu
-        #define ST_MASK_BITS 4
-        #define ST_MASK (1u << ST_MASK_BITS) - 1u
-        #define HEAD_TAG_BITS 16
-        #define HEAD_TAG_MASK (1u << HEAD_TAG_BITS) - 1u
-        #define INVALID_HEAD_IDX INVALID_ID >> HEAD_TAG_BITS
-        #define HEAD_LOCK 0xFFFFFFFEu
-
         if (ImGui::Button("Print vb free list")) {
-            std::vector<uint32_t> vb_next(voxel_grid_gpu.count_vb_pages_);
-            voxel_grid_gpu.vb_next_.read_subdata(0, vb_next.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
+            std::vector<VoxelGridGPU::AllocNode> vb_nodes(voxel_grid_gpu.count_vb_nodes_);
+            voxel_grid_gpu.vb_nodes_.read_subdata(0, vb_nodes.data(), sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_vb_nodes_);
 
             std::vector<uint32_t> vb_heads(voxel_grid_gpu.vb_order_ + 1);
             voxel_grid_gpu.vb_heads_.read_subdata(0, vb_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.vb_order_ + 1));
@@ -412,13 +380,14 @@ int main() {
             for (uint32_t i = 0; i < voxel_grid_gpu.vb_order_ + 1; i++) {
                 uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
-                uint32_t head_idx = vb_heads[order] >> HEAD_TAG_BITS;
-                uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
-                while (cur_node != INVALID_ID) {
-                    uint32_t kind = vb_states[cur_node] & ST_MASK;
-                    uint32_t real_order = vb_states[cur_node] >> ST_MASK_BITS;
+                uint32_t head_idx = vb_heads[order] >> voxel_grid_gpu.HEAD_TAG_BITS;
+                uint32_t cur_node = head_idx != voxel_grid_gpu.INVALID_HEAD_IDX ? head_idx : voxel_grid_gpu.INVALID_ID;
+                while (cur_node != voxel_grid_gpu.INVALID_ID) {
+                    uint32_t page_id = vb_nodes[cur_node].page;
+                    uint32_t kind = vb_states[page_id] & voxel_grid_gpu.ST_MASK;
+                    uint32_t real_order = vb_states[page_id] >> voxel_grid_gpu.ST_MASK_BITS;
                     if (real_order == order) {
-                        std::cout << cur_node << " ";
+                        std::cout << page_id << " ";
                         if (kind == 0u) std::cout << "ST_FREE" << std::endl;
                         // else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
                         // else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
@@ -426,7 +395,7 @@ int main() {
                         // else if (kind == 4u) std::cout << "ST_READY" << std::endl;
                         // else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
                     }
-                    cur_node = vb_next[cur_node];
+                    cur_node = vb_nodes[cur_node].next;
                 }
                 
                 std::cout << std::endl;
@@ -434,8 +403,8 @@ int main() {
         }
 
         if (ImGui::Button("Print ib free list")) {
-            std::vector<uint32_t> ib_next(voxel_grid_gpu.count_ib_pages_);
-            voxel_grid_gpu.ib_next_.read_subdata(0, ib_next.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
+            std::vector<VoxelGridGPU::AllocNode> ib_nodes(voxel_grid_gpu.count_ib_nodes_);
+            voxel_grid_gpu.ib_nodes_.read_subdata(0, ib_nodes.data(), sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_ib_nodes_);
 
             std::vector<uint32_t> ib_heads(voxel_grid_gpu.ib_order_ + 1);
             voxel_grid_gpu.ib_heads_.read_subdata(0, ib_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.ib_order_ + 1));
@@ -446,43 +415,27 @@ int main() {
             for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_ + 1; i++) {
                 uint32_t order = i;
                 std::cout << "======================ORDER " << order << "======================" << std::endl;
-                uint32_t head_idx = ib_heads[order] >> HEAD_TAG_BITS;
-                uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
-                while (cur_node != INVALID_ID) {
-                    uint32_t kind = ib_states[cur_node] & ST_MASK;
-                    uint32_t real_order = ib_states[cur_node] >> ST_MASK_BITS;
-                    if (real_order == order && kind == 0u) {
-                        std::cout << cur_node << " ST_FREE" << std::endl;
-                        // if (kind == 0u) std::cout << "ST_FREE" << std::endl;
+                uint32_t head_idx = ib_heads[order] >> voxel_grid_gpu.HEAD_TAG_BITS;
+                uint32_t cur_node = head_idx != voxel_grid_gpu.INVALID_HEAD_IDX ? head_idx : voxel_grid_gpu.INVALID_ID;
+                while (cur_node != voxel_grid_gpu.INVALID_ID) {
+                    uint32_t page_id = ib_nodes[cur_node].page;
+                    uint32_t kind = ib_states[page_id] & voxel_grid_gpu.ST_MASK;
+                    uint32_t real_order = ib_states[page_id] >> voxel_grid_gpu.ST_MASK_BITS;
+                    if (real_order == order) {
+                        std::cout << page_id << " ";
+                        if (kind == 0u) std::cout << "ST_FREE" << std::endl;
                         // else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
                         // else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
                         // else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
                         // else if (kind == 4u) std::cout << "ST_READY" << std::endl;
                         // else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
                     }
-                    cur_node = ib_next[cur_node];
+                    cur_node = ib_nodes[cur_node].next;
                 }
                 
                 std::cout << std::endl;
             }
         }
-
-        if (ImGui::Button("Print ib allocator pop stack")) {
-            uint32_t stack_size = voxel_grid_gpu.debug_counters_.read_scalar<uint32_t>(sizeof(uint32_t) * 8);
-            uint32_t count_elements = stack_size / 2;
-            
-            std::vector<uint32_t> allocator_stack(stack_size);
-            voxel_grid_gpu.debug_counters_.read_subdata(sizeof(uint32_t) * 9, allocator_stack.data(), sizeof(uint32_t) * stack_size);
-            for (uint32_t i = 0; i < count_elements; i++) {
-                uint32_t start_idx = allocator_stack[i*2 + 0];
-                uint32_t order = allocator_stack[i*2 + 1];
-
-                std::cout << i << ": " << "idx = " << start_idx << "    " << "order = " << order << std::endl;
-            }
-        }
-
-
-
 
         if (ImGui::Button("Print stream_generate_terrain debug counters")) {
             uint32_t stats[2];
@@ -494,32 +447,6 @@ int main() {
 
             std::cout << "-----------------------" << std::endl << std::endl;
         }
-
-        if (ImGui::Button("Save alloc stack")) {
-            uint32_t vb_counter = voxel_grid_gpu.vb_alloc_stack_.read_scalar<uint32_t>(0);
-            
-            std::vector<uint32_t> vb_alloc_stack(vb_counter * 3);
-            voxel_grid_gpu.vb_alloc_stack_.read_subdata(sizeof(uint32_t), vb_alloc_stack.data(), sizeof(uint32_t) * 3 * vb_counter);
-            
-
-            uint32_t ib_counter = voxel_grid_gpu.ib_alloc_stack_.read_scalar<uint32_t>(0);
-            
-            std::vector<uint32_t> ib_alloc_stack(ib_counter * 3);
-            voxel_grid_gpu.ib_alloc_stack_.read_subdata(sizeof(uint32_t), ib_alloc_stack.data(), sizeof(uint32_t) * 3 * ib_counter);
-
-            std::ofstream vb_out(executable_dir() / "vb_alloc_stack.txt");
-            for (uint32_t v : vb_alloc_stack) {
-                vb_out << v << '\n';
-            }
-            vb_out.close();
-
-            std::ofstream ib_out(executable_dir() / "ib_alloc_stack.txt");
-            for (uint32_t v : ib_alloc_stack) {
-                ib_out << v << '\n';
-            }
-            ib_out.close();
-        }
-
 
         if (ImGui::Button("mark_chunk_to_generate()")) {
             voxel_grid_gpu.mark_chunk_to_generate(camera_controller.camera->position, 10);
@@ -562,8 +489,8 @@ int main() {
             vb_out << "page_id,kind,order\n";
             
             for (uint32_t page_id = 0; page_id < voxel_grid_gpu.count_vb_pages_; page_id++) {
-                uint32_t kind = vb_state[page_id] & ST_MASK;
-                uint32_t order = vb_state[page_id] >> ST_MASK_BITS;
+                uint32_t kind = vb_state[page_id] & voxel_grid_gpu.ST_MASK;
+                uint32_t order = vb_state[page_id] >> voxel_grid_gpu.ST_MASK_BITS;
                 vb_out << page_id << "," << kind << "," << order << "\n";
             }
             vb_out.close();
@@ -586,83 +513,83 @@ int main() {
             ib_out << "page_id,kind,order\n";
             
             for (uint32_t page_id = 0; page_id < voxel_grid_gpu.count_ib_pages_; page_id++) {
-                uint32_t kind = ib_state[page_id] & ST_MASK;
-                uint32_t order = ib_state[page_id] >> ST_MASK_BITS;
+                uint32_t kind = ib_state[page_id] & voxel_grid_gpu.ST_MASK;
+                uint32_t order = ib_state[page_id] >> voxel_grid_gpu.ST_MASK_BITS;
                 ib_out << page_id << "," << kind << "," << order << "\n";
             }
             ib_out.close();
         }
 
-        if (ImGui::Button("Save base dump")) {
-            voxel_grid_gpu.save_verify_mesh_buffers_dumps(base_dump_path);
+        // if (ImGui::Button("Save base dump")) {
+        //     voxel_grid_gpu.save_verify_mesh_buffers_dumps(base_dump_path);
 
-            std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
-                voxel_grid_gpu.vb_heads_, 
-                voxel_grid_gpu.vb_state_, 
-                voxel_grid_gpu.vb_next_, 
-                voxel_grid_gpu.vb_order_,
-                voxel_grid_gpu.count_vb_pages_
-            );
+        //     std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+        //         voxel_grid_gpu.vb_heads_, 
+        //         voxel_grid_gpu.vb_state_, 
+        //         voxel_grid_gpu.vb_next_, 
+        //         voxel_grid_gpu.vb_order_,
+        //         voxel_grid_gpu.count_vb_pages_
+        //     );
 
-            std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
-                voxel_grid_gpu.ib_heads_, 
-                voxel_grid_gpu.ib_state_, 
-                voxel_grid_gpu.ib_next_, 
-                voxel_grid_gpu.ib_order_,
-                voxel_grid_gpu.count_ib_pages_
-            );
+        //     std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+        //         voxel_grid_gpu.ib_heads_, 
+        //         voxel_grid_gpu.ib_state_, 
+        //         voxel_grid_gpu.ib_next_, 
+        //         voxel_grid_gpu.ib_order_,
+        //         voxel_grid_gpu.count_ib_pages_
+        //     );
 
-            std::ofstream vb_out(base_dump_path / "vb_limbo.txt");
-            for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
-            vb_out.close();
+        //     std::ofstream vb_out(base_dump_path / "vb_limbo.txt");
+        //     for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
+        //     vb_out.close();
 
-            std::ofstream ib_out(base_dump_path / "ib_limbo.txt");
-            for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
-            ib_out.close();
-        }
+        //     std::ofstream ib_out(base_dump_path / "ib_limbo.txt");
+        //     for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
+        //     ib_out.close();
+        // }
 
-        if (ImGui::Button("Save verify_mesh_allocation dump-animation")) {
-            voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
+        // if (ImGui::Button("Save verify_mesh_allocation dump-animation")) {
+        //     voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
 
-            std::string folder_name = math_utils::get_current_date_time();
-            std::filesystem::path dir = dump_animations_path / folder_name;
+        //     std::string folder_name = math_utils::get_current_date_time();
+        //     std::filesystem::path dir = dump_animations_path / folder_name;
 
-            uint32_t dirty_count = voxel_grid_gpu.frame_counters_.read_scalar<uint32_t>(sizeof(uint32_t));
-            for (uint32_t cur_dirty_count = 0; cur_dirty_count <= dirty_count; cur_dirty_count++) {
-                voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
+        //     uint32_t dirty_count = voxel_grid_gpu.frame_counters_.read_scalar<uint32_t>(sizeof(uint32_t));
+        //     for (uint32_t cur_dirty_count = 0; cur_dirty_count <= dirty_count; cur_dirty_count++) {
+        //         voxel_grid_gpu.load_verify_mesh_buffers_dumps(base_dump_path);
 
-                voxel_grid_gpu.frame_counters_.update_subdata(sizeof(uint32_t), &cur_dirty_count, sizeof(uint32_t));
-                voxel_grid_gpu.verify_mesh_allocation(cur_dirty_count);
+        //         voxel_grid_gpu.frame_counters_.update_subdata(sizeof(uint32_t), &cur_dirty_count, sizeof(uint32_t));
+        //         voxel_grid_gpu.verify_mesh_allocation(cur_dirty_count);
 
-                std::string frame_name = "frame_" + std::to_string(cur_dirty_count);
-                std::filesystem::path frame_dir = dir / frame_name;
-                voxel_grid_gpu.save_verify_mesh_buffers_dumps(frame_dir);
+        //         std::string frame_name = "frame_" + std::to_string(cur_dirty_count);
+        //         std::filesystem::path frame_dir = dir / frame_name;
+        //         voxel_grid_gpu.save_verify_mesh_buffers_dumps(frame_dir);
 
-                std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
-                    voxel_grid_gpu.vb_heads_, 
-                    voxel_grid_gpu.vb_state_, 
-                    voxel_grid_gpu.vb_next_, 
-                    voxel_grid_gpu.vb_order_,
-                    voxel_grid_gpu.count_vb_pages_
-                );
+        //         std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+        //             voxel_grid_gpu.vb_heads_, 
+        //             voxel_grid_gpu.vb_state_, 
+        //             voxel_grid_gpu.vb_next_, 
+        //             voxel_grid_gpu.vb_order_,
+        //             voxel_grid_gpu.count_vb_pages_
+        //         );
 
-                std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
-                    voxel_grid_gpu.ib_heads_, 
-                    voxel_grid_gpu.ib_state_, 
-                    voxel_grid_gpu.ib_next_, 
-                    voxel_grid_gpu.ib_order_,
-                    voxel_grid_gpu.count_ib_pages_
-                );
+        //         std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+        //             voxel_grid_gpu.ib_heads_, 
+        //             voxel_grid_gpu.ib_state_, 
+        //             voxel_grid_gpu.ib_next_, 
+        //             voxel_grid_gpu.ib_order_,
+        //             voxel_grid_gpu.count_ib_pages_
+        //         );
 
-                std::ofstream vb_out(frame_dir / "vb_limbo.txt");
-                for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
-                vb_out.close();
+        //         std::ofstream vb_out(frame_dir / "vb_limbo.txt");
+        //         for (uint32_t page_id : vb_limbo) { vb_out << page_id << "\n"; }
+        //         vb_out.close();
 
-                std::ofstream ib_out(frame_dir / "ib_limbo.txt");
-                for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
-                ib_out.close();
-            }
-        }
+        //         std::ofstream ib_out(frame_dir / "ib_limbo.txt");
+        //         for (uint32_t page_id : ib_limbo) { ib_out << page_id << "\n"; }
+        //         ib_out.close();
+        //     }
+        // }
         ImGui::Separator();
 
         ImGui::SetNextItemWidth(100);
@@ -727,51 +654,51 @@ int main() {
             voxel_grid_gpu.print_verify_debug_stack(offset_verify_stack, count_elements_verify_stack);
         }
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("Limbo", 
-        ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding)) {
-            ImGui::Text("States vs headers limbo");
-            if (ImGui::Button("vb")) {
-                std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
-                    voxel_grid_gpu.vb_heads_, 
-                    voxel_grid_gpu.vb_state_, 
-                    voxel_grid_gpu.vb_next_, 
-                    voxel_grid_gpu.vb_order_,
-                    voxel_grid_gpu.count_vb_pages_
-                );
+        // if (ImGui::CollapsingHeader("Limbo", 
+        // ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding)) {
+        //     ImGui::Text("States vs headers limbo");
+        //     if (ImGui::Button("vb")) {
+        //         std::set<uint32_t> vb_limbo = voxel_grid_gpu.find_limbo_pages(
+        //             voxel_grid_gpu.vb_heads_, 
+        //             voxel_grid_gpu.vb_state_, 
+        //             voxel_grid_gpu.vb_next_, 
+        //             voxel_grid_gpu.vb_order_,
+        //             voxel_grid_gpu.count_vb_pages_
+        //         );
 
-                std::cout << "States vs heads limbo: VB" << std::endl;
-                if (vb_limbo.size() > 0) {
-                    for (uint32_t page_id : vb_limbo) {
-                        std::cout << "PAGE_ID: " << page_id << std::endl; 
-                    }
-                } else {
-                    std::cout << "There is no VB limbo." << std::endl;
-                }
-                std::cout << std::endl;
-            }
+        //         std::cout << "States vs heads limbo: VB" << std::endl;
+        //         if (vb_limbo.size() > 0) {
+        //             for (uint32_t page_id : vb_limbo) {
+        //                 std::cout << "PAGE_ID: " << page_id << std::endl; 
+        //             }
+        //         } else {
+        //             std::cout << "There is no VB limbo." << std::endl;
+        //         }
+        //         std::cout << std::endl;
+        //     }
 
-            ImGui::SameLine();
+        //     ImGui::SameLine();
 
-            if (ImGui::Button("ib")) {
-                std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
-                    voxel_grid_gpu.ib_heads_, 
-                    voxel_grid_gpu.ib_state_, 
-                    voxel_grid_gpu.ib_next_, 
-                    voxel_grid_gpu.ib_order_,
-                    voxel_grid_gpu.count_ib_pages_
-                );
+        //     if (ImGui::Button("ib")) {
+        //         std::set<uint32_t> ib_limbo = voxel_grid_gpu.find_limbo_pages(
+        //             voxel_grid_gpu.ib_heads_, 
+        //             voxel_grid_gpu.ib_state_, 
+        //             voxel_grid_gpu.ib_next_, 
+        //             voxel_grid_gpu.ib_order_,
+        //             voxel_grid_gpu.count_ib_pages_
+        //         );
 
-                std::cout << "States vs heads limbo: IB" << std::endl;
-                if (ib_limbo.size() > 0) {
-                    for (uint32_t page_id : ib_limbo) {
-                        std::cout << "PAGE_ID: " << page_id << std::endl; 
-                    }
-                } else {
-                    std::cout << "There is no IB limbo." << std::endl;
-                }
-                std::cout << std::endl;
-            }
-        }
+        //         std::cout << "States vs heads limbo: IB" << std::endl;
+        //         if (ib_limbo.size() > 0) {
+        //             for (uint32_t page_id : ib_limbo) {
+        //                 std::cout << "PAGE_ID: " << page_id << std::endl; 
+        //             }
+        //         } else {
+        //             std::cout << "There is no IB limbo." << std::endl;
+        //         }
+        //         std::cout << std::endl;
+        //     }
+        // }
         
 
         ImGui::Separator();
@@ -901,6 +828,7 @@ int main() {
 
         if (ImGui::Button("mesh_alloc()")) {
             uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
+            std::cout << "DIRTY_COUNT: " << dirty_count << std::endl;
             voxel_grid_gpu.mesh_alloc(dirty_count);
         }
 

@@ -3,13 +3,17 @@ layout(local_size_x = 1) in;
 
 #define INVALID_ID 0xFFFFFFFFu
 
-layout(std430, binding=18) buffer VBHeads { uint vb_heads[]; };
-layout(std430, binding=19) buffer VBNext  { uint vb_next[];  };
-layout(std430, binding=20) buffer VBState { uint vb_state[]; };
+struct Node {uint page; uint next;};
 
-layout(std430, binding=21) buffer IBHeads { uint ib_heads[]; };
-layout(std430, binding=22) buffer IBNext  { uint ib_next[];  };
-layout(std430, binding=23) buffer IBState { uint ib_state[]; };
+layout(std430, binding=0) buffer VBHeads { uint vb_heads[]; };
+layout(std430, binding=1) buffer VBNodes  { Node vb_nodes[];  };
+layout(std430, binding=2) buffer VBState { uint vb_state[]; };
+layout(std430, binding=3) buffer VBFreeNodesList  { uint vb_free_nodes_counter; uint vb_free_nodes_list[];  };
+
+layout(std430, binding=4) buffer IBHeads { uint ib_heads[]; };
+layout(std430, binding=5) buffer IBNodes  { Node ib_nodes[];  };
+layout(std430, binding=6) buffer IBState { uint ib_state[]; };
+layout(std430, binding=7) buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
 
 uniform uint u_vb_max_order; // log2(u_vb_pages)
 uniform uint u_ib_max_order; // log2(u_ib_pages)
@@ -27,7 +31,7 @@ const uint ST_CONCEDED = 5u;
 const uint ST_MASK   = (1u << ST_MASK_BITS) - 1u;
 
 // ---- head state packing ----
-const uint HEAD_TAG_BITS = 16; // Чтобы точно не случилось ABA, но если что можно уменьшить
+const uint HEAD_TAG_BITS = 4u; // Чтобы точно не случилось ABA, но если что можно уменьшить
 const uint HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
 const uint INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
 const uint HEAD_LOCK = 0xFFFFFFFEu;
@@ -83,13 +87,22 @@ void main() {
     // uint vb_blockPages = 1u << vb_seed_order;
     // uint vb_blocks = 1u << (u_vb_max_order - vb_seed_order);
 
-    vb_heads[u_vb_max_order] = pack_head(0u, 0u);
-    vb_state[0u] = pack_state(u_vb_max_order, ST_FREE);
-    vb_next[0u] = INVALID_ID;
+    uint vb_node_id = vb_free_nodes_counter - 1u;
+    vb_free_nodes_counter -= 1u;
 
-    ib_heads[u_ib_max_order] = pack_head(0u, 0u);;
+    vb_nodes[vb_node_id].page = 0u;
+    vb_nodes[vb_node_id].next = INVALID_ID;
+    vb_heads[u_vb_max_order] = pack_head(vb_node_id, 0u);
+    vb_state[0u] = pack_state(u_vb_max_order, ST_FREE);
+
+    uint ib_node_id = ib_free_nodes_counter - 1u;
+    ib_free_nodes_counter -= 1u;
+
+    ib_nodes[ib_node_id].page = 0u;
+    ib_nodes[ib_node_id].next = INVALID_ID;
+    ib_heads[u_ib_max_order] = pack_head(ib_node_id, 0u);
     ib_state[0u] = pack_state(u_ib_max_order, ST_FREE);
-    ib_next[0u] = INVALID_ID;
+
     
 
 

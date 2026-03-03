@@ -39,7 +39,7 @@ public:
     const uint32_t ST_ALLOC = 1u;
     const uint32_t ST_MERGED = 2u;
     
-    const uint32_t HEAD_TAG_BITS = 16;
+    const uint32_t HEAD_TAG_BITS = 4u;
     const uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
     const uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
 
@@ -152,6 +152,11 @@ public:
         uint32_t bool_push_result;
     };
 
+    struct AllocNode {
+        uint32_t page;
+        uint32_t next;
+    };
+
 
     VoxelGridGPU(
         glm::ivec3 chunk_size, 
@@ -166,6 +171,7 @@ public:
         uint32_t bucket_step,
         uint32_t vb_page_size_order_of_two,
         uint32_t ib_page_size_order_of_two,
+        float buddy_allocator_nodes_factor,
         ShaderManager& shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
@@ -239,12 +245,16 @@ public:
     SSBO verify_debug_stack_;
 
     SSBO vb_heads_;
-    SSBO vb_next_;
     SSBO vb_state_;
+    SSBO vb_nodes_;
+    SSBO vb_free_nodes_list_;
+    SSBO vb_returned_nodes_list;
 
     SSBO ib_heads_;
-    SSBO ib_next_;
     SSBO ib_state_;
+    SSBO ib_nodes_;
+    SSBO ib_free_nodes_list_;
+    SSBO ib_returned_nodes_list;
     
     SSBO alloc_markers_;
 
@@ -252,7 +262,8 @@ public:
     SSBO chunk_mesh_alloc_;
     SSBO count_free_pages_;
 
-    SSBO debug_counters_;
+    SSBO debug_counters_vb_;
+    SSBO debug_counters_ib_;
     SSBO stream_generate_debug_counters_;
 
     SSBO vb_alloc_stack_;
@@ -265,12 +276,14 @@ public:
 
     uint32_t vb_page_size_ = 0;
     uint32_t count_vb_pages_ = 0;
+    uint32_t count_vb_nodes_ = 0;
     uint32_t vb_index_bits_ = 0;
     uint32_t vb_order_ = 0;
     uint32_t max_mesh_vertices_ = 0;
     
     uint32_t ib_page_size_ = 0;
     uint32_t count_ib_pages_ = 0;
+    uint32_t count_ib_nodes_ = 0;
     uint32_t ib_index_bits_ = 0;
     uint32_t ib_order_ = 0;
     uint32_t max_mesh_indices_ = 0;
@@ -311,6 +324,8 @@ public:
     void reset_global_mesh_counters();
     void mesh_reset(uint32_t dirty_count);
     void mesh_count(uint32_t dirty_count, uint32_t pack_bits, uint32_t pack_offset);
+    void mesh_alloc_vb(uint32_t dirty_count);
+    void mesh_alloc_ib(uint32_t dirty_count);
     void mesh_alloc(uint32_t dirty_count);
     void verify_mesh_allocation(uint32_t dirty_count);
     void mesh_emit(uint32_t dirty_count, uint32_t pack_bits, uint32_t pack_offset);

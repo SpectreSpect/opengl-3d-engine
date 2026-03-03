@@ -37,7 +37,15 @@ layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
 
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
 
-struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+struct FrameCounters {
+    uint write_count; 
+    uint dirty_count;
+    uint cmd_count;
+    uint free_count;
+    uint failed_dirty_count;
+    uint count_vb_free_pages;
+    uint count_ib_free_pages;
+};
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
 
 struct ChunkMeta {

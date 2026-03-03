@@ -42,7 +42,15 @@ layout(local_size_x = 256) in;
 #define INVALID_ID 0xFFFFFFFFu
 
 // ---- existing ----
-struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+struct FrameCounters {
+    uint write_count; 
+    uint dirty_count;
+    uint cmd_count;
+    uint free_count;
+    uint failed_dirty_count;
+    uint count_vb_free_pages;
+    uint count_ib_free_pages;
+};
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
 layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
 layout(std430, binding=11) readonly buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
@@ -67,9 +75,6 @@ layout(std430, binding=23) coherent buffer IBState { uint ib_state[]; };
 layout(std430, binding=27) buffer AllocMarkers { uint vb_alloc_maker; uint ib_alloc_maker; };
 
 layout(std430, binding=25) buffer DebugBuffer { uint stats[8]; uint allocator_stack_counter; uint allocator_stack[]; };
-
-struct CountFreePages {uint count_vb_free_pages; uint count_ib_free_pages; };
-layout(std430, binding=28) buffer CountFreePagesBuf { CountFreePages pages_counters; };
 
 uniform uint u_vb_pages;
 uniform uint u_ib_pages;
@@ -160,7 +165,7 @@ bool vb_push_free(uint order, uint startPage) {
         
         // Если никто не успел за это время поменять вершину, то можем заменять её на себя - информация будет сразу актуальной.
         if (atomicCompSwap(vb_heads[order], old_h, startPage) == old_h) {
-            atomicAdd(pages_counters.count_vb_free_pages, 1u << order);
+            atomicAdd(counters.count_vb_free_pages, 1u << order);
             return true; // Удалось вставить себя на вершину списка. Можем выходить из функции.
         }
         
@@ -196,7 +201,7 @@ uint vb_pop_free(uint order) {
         // Если страница свободна, то помечаем её как "выделенная" (ST_ALLOC).
         if (atomicCompSwap(vb_state[old_h], free_state, alloc_state) == free_state) {
             // Страница оказалась свободной и мы заменили её на состояние ST_ALLOC. Теперь можем возвращать old_h выходить из функции.
-            atomicAdd(pages_counters.count_vb_free_pages, 0u - (1u << order));
+            atomicAdd(counters.count_vb_free_pages, 0u - (1u << order));
             return old_h; 
         }
 
@@ -437,7 +442,7 @@ bool ib_push_free(uint order, uint startPage) {
         
         // Если никто не успел за это время поменять вершину, то можем заменять её на себя - информация будет сразу актуальной.
         if (atomicCompSwap(ib_heads[order], old_h, startPage) == old_h) {
-            atomicAdd(pages_counters.count_ib_free_pages, 1u << order);
+            atomicAdd(counters.count_ib_free_pages, 1u << order);
             return true; // Удалось вставить себя на вершину списка. Можем выходить из функции.
         }
         
@@ -477,7 +482,7 @@ uint ib_pop_free(uint order) {
             allocator_stack[idx] = old_h;
             allocator_stack[idx + 1u] = order;
 
-            atomicAdd(pages_counters.count_ib_free_pages, 0u - (1u << order));
+            atomicAdd(counters.count_ib_free_pages, 0u - (1u << order));
             return old_h; 
         }
 
@@ -684,7 +689,7 @@ void main() {
     // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
         uint chunkId = dirty_list[dirtyIdx];
 
-        if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages) {
+        if (counters.count_vb_free_pages < u_min_free_pages || counters.count_ib_free_pages < u_min_free_pages) {
             // chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             // chunk_alloc_local[dirtyIdx].v_order = 0u;
             // chunk_alloc_local[dirtyIdx].needV = 0u;

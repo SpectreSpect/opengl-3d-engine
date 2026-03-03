@@ -3,9 +3,9 @@
 VoxelGridGPU::VoxelGridGPU(
     glm::ivec3 chunk_size, 
     glm::vec3 voxel_size, 
-    uint32_t count_active_chunks,
-    uint32_t max_quads, 
-    float chunk_hash_table_size_factor,
+    uint32_t count_active_chunks, 
+    uint32_t max_quads,
+    float chunk_hash_table_size_factor, 
     uint32_t max_count_probing,
     uint32_t count_evict_buckets,
     uint32_t min_free_chunks,
@@ -13,8 +13,9 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t bucket_step,
     uint32_t vb_page_size_order_of_two,
     uint32_t ib_page_size_order_of_two,
-    ShaderManager& shader_manager
-) {
+    float buddy_allocator_nodes_factor,
+    ShaderManager& shader_manager)
+ {
     assert(chunk_hash_table_size_factor >= 1.0f);
 
     this->chunk_size = chunk_size;
@@ -30,7 +31,6 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t base = (raw > UINT32_MAX) ? UINT32_MAX : (uint32_t)raw;
     this->chunk_hash_table_size = math_utils::next_pow2_u32(base);
     assert((chunk_hash_table_size & (chunk_hash_table_size - 1)) == 0);
-
 
     init_programs(shader_manager);
 
@@ -61,12 +61,14 @@ VoxelGridGPU::VoxelGridGPU(
     // Например 2M quads per frame => 8M verts, 12M indices
     vb_page_size_ = 1 << vb_page_size_order_of_two;
     count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 4u), vb_page_size_));
+    count_vb_nodes_ = ceil(count_vb_pages_ * buddy_allocator_nodes_factor);
     vb_index_bits_ = math_utils::log2_ceil_u32(count_vb_pages_ + 1); // + 1 для значения INVALID_VALUE
     vb_order_ = math_utils::log2_floor_u32(count_vb_pages_);
     max_mesh_vertices_ = count_vb_pages_ * vb_page_size_;
     
     std::cout << "vb_page_size_: " << vb_page_size_ << std::endl;
     std::cout << "count_vb_pages_: " << count_vb_pages_ << std::endl;
+    std::cout << "count_vb_nodes_: " << count_vb_nodes_ << std::endl;
     std::cout << "vb_index_bits_: " << vb_index_bits_ << std::endl;
     std::cout << "vb_order_: " << vb_order_ << std::endl;
     std::cout << "max_mesh_vertices_: " << max_mesh_vertices_ << std::endl;
@@ -74,17 +76,21 @@ VoxelGridGPU::VoxelGridGPU(
 
     global_vertex_buffer_ = SSBO(sizeof(VertexGPU) * (size_t)max_mesh_vertices_, GL_DYNAMIC_DRAW);
     vb_heads_ = SSBO(sizeof(uint32_t) * (size_t)(vb_order_ + 1), GL_DYNAMIC_DRAW);
-    vb_next_ = SSBO(sizeof(uint32_t) * (size_t)count_vb_pages_, GL_DYNAMIC_DRAW);
+    vb_nodes_ = SSBO(sizeof(AllocNode) * (size_t)(count_vb_nodes_), GL_DYNAMIC_DRAW);
+    vb_free_nodes_list_ = SSBO(sizeof(uint32_t) * (size_t)(1u + count_vb_nodes_), GL_DYNAMIC_DRAW);
+    vb_returned_nodes_list = SSBO::from_fill(sizeof(uint32_t) * (size_t)(1u + count_vb_nodes_), GL_DYNAMIC_DRAW, 0u);
     vb_state_ = SSBO(sizeof(uint32_t) * (size_t)count_vb_pages_, GL_DYNAMIC_DRAW);
 
     ib_page_size_ = 1 << ib_page_size_order_of_two;
     count_ib_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 6u), ib_page_size_));
+    count_ib_nodes_ = ceil(count_ib_pages_ * buddy_allocator_nodes_factor);
     ib_index_bits_ = math_utils::log2_ceil_u32(count_ib_pages_ + 1); // + 1 для значения INVALID_VALUE
     ib_order_ = math_utils::log2_floor_u32(count_ib_pages_);
     max_mesh_indices_ = count_ib_pages_ * ib_page_size_;
 
     std::cout << "ib_page_size_: " << ib_page_size_ << std::endl;
     std::cout << "count_ib_pages_: " << count_ib_pages_ << std::endl;
+    std::cout << "count_ib_nodes_: " << count_ib_nodes_ << std::endl;
     std::cout << "ib_index_bits_: " << ib_index_bits_ << std::endl;
     std::cout << "ib_order_: " << ib_order_ << std::endl;
     std::cout << "max_mesh_indices_: " << max_mesh_indices_ << std::endl;
@@ -92,7 +98,9 @@ VoxelGridGPU::VoxelGridGPU(
     
     global_index_buffer_ = SSBO(sizeof(uint32_t) * (size_t)max_mesh_indices_, GL_DYNAMIC_DRAW);
     ib_heads_ = SSBO(sizeof(uint32_t) * (size_t)(ib_order_ + 1), GL_DYNAMIC_DRAW);
-    ib_next_ = SSBO(sizeof(uint32_t) * (size_t)count_ib_pages_, GL_DYNAMIC_DRAW);
+    ib_nodes_ = SSBO(sizeof(AllocNode) * (size_t)(count_ib_nodes_), GL_DYNAMIC_DRAW);
+    ib_free_nodes_list_ = SSBO(sizeof(uint32_t) * (size_t)(1u + count_ib_nodes_), GL_DYNAMIC_DRAW);
+    ib_returned_nodes_list = SSBO::from_fill(sizeof(uint32_t) * (size_t)(1u + count_ib_nodes_), GL_DYNAMIC_DRAW, 0u);
     ib_state_ = SSBO(sizeof(uint32_t) * (size_t)count_ib_pages_, GL_DYNAMIC_DRAW);
 
     chunk_mesh_alloc_ = SSBO(sizeof(ChunkMeshAlloc) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
@@ -103,7 +111,8 @@ VoxelGridGPU::VoxelGridGPU(
     stream_counters_ = SSBO(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW);
     load_list_       = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
-    debug_counters_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u);
+    debug_counters_vb_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u);
+    debug_counters_ib_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u);
     stream_generate_debug_counters_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)2, GL_DYNAMIC_DRAW, 0u);
     alloc_markers_ = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u);
 
@@ -178,8 +187,8 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
     std::vector<uint32_t> ib_states(count_ib_pages_);
     std::vector<uint32_t> vb_heads(vb_order_ + 1);
     std::vector<uint32_t> ib_heads(ib_order_ + 1);
-    std::vector<uint32_t> vb_next(count_vb_pages_);
-    std::vector<uint32_t> ib_next(count_ib_pages_);
+    std::vector<AllocNode> vb_nodes(count_vb_nodes_);
+    std::vector<AllocNode> ib_nodes(count_ib_nodes_);
     std::vector<uint32_t> dirty_list;
     uint32_t dirty_count;
 
@@ -188,8 +197,8 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
     ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * count_ib_pages_);
     vb_heads_.read_subdata(0, vb_heads.data(), sizeof(uint32_t) * (vb_order_ + 1));
     ib_heads_.read_subdata(0, ib_heads.data(), sizeof(uint32_t) * (ib_order_ + 1));
-    vb_next_.read_subdata(0, vb_next.data(), sizeof(uint32_t) * count_vb_pages_);
-    ib_next_.read_subdata(0, ib_next.data(), sizeof(uint32_t) * count_ib_pages_);
+    vb_nodes_.read_subdata(0, vb_nodes.data(), sizeof(AllocNode) * count_vb_nodes_);
+    ib_nodes_.read_subdata(0, ib_nodes.data(), sizeof(AllocNode) * count_ib_nodes_);
     frame_counters_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
     dirty_list.resize(dirty_count);
     dirty_list_.read_subdata(0, dirty_list.data(), sizeof(uint32_t) * dirty_count);
@@ -283,8 +292,9 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
         uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
         uint32_t order_size = 1u << order;
         while (cur_node != INVALID_ID) {
-            uint32_t kind = vb_states[cur_node] & ST_MASK;
-            uint32_t real_order = vb_states[cur_node] >> ST_MASK_BITS;
+            uint32_t page_id = vb_nodes[cur_node].page;
+            uint32_t kind = vb_states[page_id] & ST_MASK;
+            uint32_t real_order = vb_states[page_id] >> ST_MASK_BITS;
             if (kind == ST_FREE && real_order == order) {
                 count_free_states_by_vb_order[order]++;
                 count_free_pages_by_vb_order[order] += order_size;
@@ -292,7 +302,7 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
                 count_free_states_by_vb_heads++;
                 count_free_pages_by_vb_heads += order_size;
             }
-            cur_node = vb_next[cur_node];
+            cur_node = vb_nodes[cur_node].next;
         }
     }
 
@@ -305,8 +315,9 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
         uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
         uint32_t order_size = 1u << order;
         while (cur_node != INVALID_ID) {
-            uint32_t kind = ib_states[cur_node] & ST_MASK;
-            uint32_t real_order = ib_states[cur_node] >> ST_MASK_BITS;
+            uint32_t page_id = ib_nodes[cur_node].page;
+            uint32_t kind = ib_states[page_id] & ST_MASK;
+            uint32_t real_order = ib_states[page_id] >> ST_MASK_BITS;
             if (kind == ST_FREE && real_order == order) {
                 count_free_states_by_ib_order[order]++;
                 count_free_pages_by_ib_order[order] += order_size;
@@ -314,9 +325,10 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
                 count_free_states_by_ib_heads++;
                 count_free_pages_by_ib_heads += order_size;
             }
-            cur_node = ib_next[cur_node];
+            cur_node = ib_nodes[cur_node].next;
         }
     }
+
 
     std::cout << "---INTERSECTIONS---" << std::endl;
     std::cout << "==Vertex buffer==" << std::endl;
@@ -473,7 +485,6 @@ void VoxelGridGPU::world_init_gpu() {
     frame_counters_.bind_base(5);
     chunk_meta_.bind_base(6);
     equeued_.bind_base(7);
-    count_free_pages_.bind_base(8);
 
     prog_world_init_.use();
     glUniform1ui(glGetUniformLocation(prog_world_init_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -518,39 +529,44 @@ void VoxelGridGPU::clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDat
 
 void VoxelGridGPU::init_mesh_pool() {
     // Pass 1: mesh_pool_clear
-    vb_heads_.bind_base(18);
-    vb_next_.bind_base(19);
-    vb_state_.bind_base(20);
+    vb_heads_.bind_base(0);
+    vb_state_.bind_base(1);
+    vb_free_nodes_list_.bind_base(2);
 
-    ib_heads_.bind_base(21);
-    ib_next_.bind_base(22);
-    ib_state_.bind_base(23);
+    ib_heads_.bind_base(3);
+    ib_state_.bind_base(4);
+    ib_free_nodes_list_.bind_base(5);
 
-    chunk_mesh_alloc_.bind_base(24);
+    chunk_mesh_alloc_.bind_base(6);
 
     prog_mesh_pool_clear_.use();
 
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_pages"), count_vb_pages_);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_pages"), count_ib_pages_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_nodes"), count_vb_nodes_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_nodes"), count_ib_nodes_);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_heads_count"), vb_order_ + 1);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_heads_count"), ib_order_ + 1);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_max_chunks"), count_active_chunks);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_index_bits"),  vb_index_bits_);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_index_bits"),  ib_index_bits_);
 
-    uint32_t groups_x = math_utils::div_up_u32(std::max(std::max(count_vb_pages_, count_ib_pages_), count_active_chunks), 256u);
+    uint32_t max_count = std::max({count_vb_pages_, count_ib_pages_, count_active_chunks, count_vb_nodes_, count_ib_nodes_});
+    uint32_t groups_x = math_utils::div_up_u32(max_count, 256u);
     prog_mesh_pool_clear_.dispatch_compute(groups_x, 1, 1);
     
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Pass 2: mesh_pool_seed
-    vb_heads_.bind_base(18);
-    vb_next_.bind_base(19);
-    vb_state_.bind_base(20);
+    vb_heads_.bind_base(0);
+    vb_nodes_.bind_base(1);
+    vb_state_.bind_base(2);
+    vb_free_nodes_list_.bind_base(3);
 
-    ib_heads_.bind_base(21);
-    ib_next_.bind_base(22);
-    ib_state_.bind_base(23);
+    ib_heads_.bind_base(4);
+    ib_nodes_.bind_base(5);
+    ib_state_.bind_base(6);
+    ib_free_nodes_list_.bind_base(7);
 
     prog_mesh_pool_seed_.use();
 
@@ -750,48 +766,67 @@ void VoxelGridGPU::mesh_count(uint32_t dirty_count, uint32_t pack_bits, uint32_t
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_alloc(uint32_t dirty_count) {
+void VoxelGridGPU::mesh_alloc_vb(uint32_t dirty_count) {
     uint32_t groups_dirty = math_utils::div_up_u32(dirty_count, 256u);
     
     frame_counters_.bind_base(0);
     dirty_list_.bind_base(1);
     dirty_quad_count_.bind_base(2);
-
     chunk_meta_.bind_base(3);
-
     chunk_mesh_alloc_local_.bind_base(4);
     chunk_mesh_alloc_.bind_base(5);
 
     vb_heads_.bind_base(6);
-    vb_next_.bind_base(7);
-    vb_state_.bind_base(8);
+    vb_state_.bind_base(7);
+    vb_nodes_.bind_base(8);
+    vb_free_nodes_list_.bind_base(9);
+    vb_returned_nodes_list.bind_base(10);
 
-    ib_heads_.bind_base(9);
-    ib_next_.bind_base(10);
-    ib_state_.bind_base(11);
-
-    debug_counters_.bind_base(12);
-    count_free_pages_.bind_base(13);
-    vb_alloc_stack_.bind_base(14);
-    ib_alloc_stack_.bind_base(15);
+    debug_counters_vb_.bind_base(11);
 
     prog_mesh_alloc_.use();
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_max_vertices"), max_mesh_vertices_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_max_indices"),  max_mesh_indices_);
-
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_vb_pages"),  count_vb_pages_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_ib_pages"),  count_ib_pages_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_vb_page_verts"), vb_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_ib_page_inds"),  ib_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_vb_max_order"),  vb_order_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_ib_max_order"),  ib_order_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_vb_index_bits"),  vb_index_bits_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_ib_index_bits"),  ib_index_bits_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_min_free_pages"),  min_free_pages);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_vb_pages_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_page_elements"), vb_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_max_order"), vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_quad_size"), 4u);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_is_vb_phase"), 1u);
 
     prog_mesh_alloc_.dispatch_compute(groups_dirty, 1, 1);
-    // prog_mesh_alloc_.dispatch_compute(10, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT); // 2048
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::mesh_alloc_ib(uint32_t dirty_count) {
+    uint32_t groups_dirty = math_utils::div_up_u32(dirty_count, 256u);
+    
+    frame_counters_.bind_base(0);
+    dirty_list_.bind_base(1);
+    dirty_quad_count_.bind_base(2);
+    chunk_meta_.bind_base(3);
+    chunk_mesh_alloc_local_.bind_base(4);
+    chunk_mesh_alloc_.bind_base(5);
+
+    ib_heads_.bind_base(6);
+    ib_state_.bind_base(7);
+    ib_nodes_.bind_base(8);
+    ib_free_nodes_list_.bind_base(9);
+    ib_returned_nodes_list.bind_base(10);
+
+    debug_counters_ib_.bind_base(11);
+
+    prog_mesh_alloc_.use();
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_ib_pages_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_page_elements"), ib_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_max_order"), ib_order_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_quad_size"), 6u);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_is_vb_phase"), 0u);
+
+    prog_mesh_alloc_.dispatch_compute(groups_dirty, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::mesh_alloc(uint32_t dirty_count) {
+    mesh_alloc_vb(dirty_count);
+    mesh_alloc_ib(dirty_count);
 }
 
 void VoxelGridGPU::verify_mesh_allocation(uint32_t dirty_count) {
@@ -801,19 +836,23 @@ void VoxelGridGPU::verify_mesh_allocation(uint32_t dirty_count) {
 
     chunk_mesh_alloc_local_.bind_base(0);
     chunk_mesh_alloc_.bind_base(1);
-    count_free_pages_.bind_base(2);
-    dirty_list_.bind_base(3);
-    frame_counters_.bind_base(4);
+    dirty_list_.bind_base(2);
+    frame_counters_.bind_base(3);
     
-    vb_heads_.bind_base(5);
-    vb_next_.bind_base(6);
-    vb_state_.bind_base(7);
+    vb_heads_.bind_base(4);
+    vb_state_.bind_base(5);
+    vb_nodes_.bind_base(6);
+    vb_free_nodes_list_.bind_base(7);
+    vb_returned_nodes_list.bind_base(8);
     
-    ib_heads_.bind_base(8);
-    ib_next_.bind_base(9);
+    ib_heads_.bind_base(9);
     ib_state_.bind_base(10);
-    debug_counters_.bind_base(11);
-    verify_debug_stack_.bind_base(12);
+    ib_nodes_.bind_base(11);
+    ib_free_nodes_list_.bind_base(12);
+    ib_returned_nodes_list.bind_base(13);
+
+    debug_counters_vb_.bind_base(14);
+    verify_debug_stack_.bind_base(15);
 
     prog_verify_mesh_allocation_.use();
     glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_min_free_pages"),  min_free_pages);
@@ -838,10 +877,11 @@ void VoxelGridGPU::mesh_emit(uint32_t dirty_count, uint32_t pack_bits, uint32_t 
     chunk_mesh_alloc_.bind_base(6);
 
     chunk_meta_.bind_base(7);
-    count_free_pages_.bind_base(8);
 
-    global_vertex_buffer_.bind_base(9);
-    global_index_buffer_.bind_base(10);
+    global_vertex_buffer_.bind_base(8);
+    global_index_buffer_.bind_base(9);
+
+    // debug_counters_vb_.bind_base(10);
 
     prog_mesh_emit_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -855,6 +895,7 @@ void VoxelGridGPU::mesh_emit(uint32_t dirty_count, uint32_t pack_bits, uint32_t 
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_min_free_pages"),  min_free_pages);
 
     prog_mesh_emit_.dispatch_compute(groups_vox, dirty_count, 1);
+    // prog_mesh_emit_.dispatch_compute(groups_vox, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -1087,64 +1128,10 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     glFinish();
     std::cout << "MESH ALLOC" << std::endl;
 
-    // uint32_t free_pages[2] = {0};
-    // count_free_pages_.read_subdata(0, free_pages, sizeof(uint32_t) * 2);
-
-    // auto& print_diff = [&](auto& diff, auto& meta_alloc, const std::string& name) {
-    //     if (diff.different.size() > 0) {
-    //         std::cout << "==========" << name << " DIFFERENCE==========" << std::endl;
-    //         for (auto& p : diff.different) {
-    //             if (meta_alloc.find(p.first) != meta_alloc.end()) 
-    //                 std::cout << "META:    " << "start = " << p.first << "    order(META) = " << p.second.first << std::endl;
-    //             else
-    //                 std::cout << "STATE:    " << "start = " << p.first << "    order = " << p.second.second << std::endl;
-    //         }
-    //         std::cout << std::endl;
-    //     }
-    // };
-
-    // std::unordered_map<uint32_t, uint32_t> meta_alloc_vb;
-    // std::unordered_map<uint32_t, uint32_t> meta_alloc_ib;
-    // std::unordered_map<uint32_t, uint32_t> states_alloc_vb; 
-    // std::unordered_map<uint32_t, uint32_t> states_alloc_ib;
-    // read_states_data(meta_alloc_vb, meta_alloc_ib, states_alloc_vb, states_alloc_ib);
-
-    // auto diff_vb = math_utils::diff_maps(meta_alloc_vb, states_alloc_vb);
-    // auto diff_ib = math_utils::diff_maps(meta_alloc_ib, states_alloc_ib);
-
-    
-    // std::cout << "=======ALLOCATION PASS=======" << std::endl;
-
-    // if (diff_vb.different.size() > 0 || diff_ib.different.size() > 0) {
-    //     print_diff(diff_vb, meta_alloc_vb, "VB");
-    //     print_diff(diff_ib, meta_alloc_ib, "IB");
-    // } else {
-    //     std::cout << "--------" << std::endl;
-    // }
-
     // ---- Pass: verify_mesh_allocation ----
     verify_mesh_allocation(dirtyCount);
     glFinish();
     std::cout << "VERIFY_ALLOCATION" << std::endl;
-
-    // count_free_pages_.read_subdata(0, free_pages, sizeof(uint32_t) * 2);
-    // std::cout << "VB FREE PAGES[alloc+verify]: " << free_pages[0] << "    ";
-    // std::cout << "IB FREE PAGES[alloc+verify]: " << free_pages[1] << std::endl;;
-
-    // read_states_data(meta_alloc_vb, meta_alloc_ib, states_alloc_vb, states_alloc_ib);
-
-    // diff_vb = math_utils::diff_maps(meta_alloc_vb, states_alloc_vb);
-    // diff_ib = math_utils::diff_maps(meta_alloc_ib, states_alloc_ib);
-
-    
-    // std::cout << "=======VERIFICATION PASS=======" << std::endl;
-
-    // if (diff_vb.different.size() > 0 || diff_ib.different.size() > 0) {
-    //     print_diff(diff_vb, meta_alloc_vb, "VB");
-    //     print_diff(diff_ib, meta_alloc_ib, "IB");
-    // } else {
-    //     std::cout << "--------" << std::endl;
-    // }
 
     // ---- Pass: mesh_emit ----
     mesh_emit(dirtyCount, pack_bits, pack_offset);
@@ -1378,10 +1365,8 @@ void VoxelGridGPU::save_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         "dirty_list",
         "frame_counters",
         "vb_heads",
-        "vb_next",
         "vb_state",
         "ib_heads",
-        "ib_next",
         "ib_state",
         "vb_alloc_stack",
         "ib_alloc_stack",
@@ -1396,14 +1381,12 @@ void VoxelGridGPU::save_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         &dirty_list_,
         &frame_counters_,
         &vb_heads_,
-        &vb_next_,
         &vb_state_,
         &ib_heads_,
-        &ib_next_,
         &ib_state_,
         &vb_alloc_stack_,
         &ib_alloc_stack_,
-        &debug_counters_,
+        &debug_counters_vb_,
         &verify_debug_stack_
     };
 
@@ -1423,10 +1406,8 @@ void VoxelGridGPU::load_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         "dirty_list",
         "frame_counters",
         "vb_heads",
-        "vb_next",
         "vb_state",
         "ib_heads",
-        "ib_next",
         "ib_state",
         "vb_alloc_stack",
         "ib_alloc_stack",
@@ -1441,14 +1422,12 @@ void VoxelGridGPU::load_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         &dirty_list_,
         &frame_counters_,
         &vb_heads_,
-        &vb_next_,
         &vb_state_,
         &ib_heads_,
-        &ib_next_,
         &ib_state_,
         &vb_alloc_stack_,
         &ib_alloc_stack_,
-        &debug_counters_,
+        &debug_counters_vb_,
         &verify_debug_stack_
     };
 

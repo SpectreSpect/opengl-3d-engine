@@ -9,15 +9,21 @@ layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 
 layout(std430, binding=4) buffer FreeList { uint free_list[]; };
 
-struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+struct FrameCounters {
+    uint write_count; 
+    uint dirty_count;
+    uint cmd_count;
+    uint free_count;
+    uint failed_dirty_count;
+    uint count_vb_free_pages;
+    uint count_ib_free_pages;
+};
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
 layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
-
-layout(std430, binding=8) buffer CountFreePagesBuf { uvec2 count_free_pages; };
 
 uniform uint u_hash_table_size;
 uniform uint u_max_chunks;
@@ -49,7 +55,7 @@ void main() {
         counters.free_count = u_max_chunks; 
         counters.failed_dirty_count = 0u;
         
-        count_free_pages.x = u_count_vb_pages;
-        count_free_pages.y = u_count_ib_pages;
+        counters.count_vb_free_pages = u_count_vb_pages;
+        counters.count_ib_free_pages = u_count_ib_pages;
     }
 }

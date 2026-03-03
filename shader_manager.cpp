@@ -18,7 +18,6 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     roi_reduce_pairs_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "roi_reduce_pairs_cs.glsl").string());
     build_active_chunks_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "build_active_chunks_cs.glsl").string());
     roi_finalize_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "roi_finalize_cs.glsl").string());
-
     clear_chunks_cs = ComputeShader((p / "shaders" / "voxel_grid" / "clear_chunks.glsl").string());
     set_chunks_cs = ComputeShader((p / "shaders" / "voxel_grid" / "set_chunks.glsl").string());
     world_init_cs = ComputeShader((p / "shaders" / "voxel_grid" / "world_init.glsl").string());

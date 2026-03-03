@@ -25,7 +25,15 @@ struct VoxelData {
 };
 layout(std430, binding=3) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 
-struct FrameCounters {uint write_count; uint dirty_count; uint cmd_count; uint free_count; uint failed_dirty_count; };
+struct FrameCounters {
+    uint write_count; 
+    uint dirty_count;
+    uint cmd_count;
+    uint free_count;
+    uint failed_dirty_count;
+    uint count_vb_free_pages;
+    uint count_ib_free_pages;
+};
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
 layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
 
@@ -39,9 +47,6 @@ layout(std430, binding=9) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
-
-struct CountFreePages {uint count_vb_free_pages; uint count_ib_free_pages; };
-layout(std430, binding=28) readonly buffer CountFreePagesBuf { CountFreePages pages_counters; };
 
 // ===== Vertex / Index buffers =====
 struct Vertex {
@@ -386,7 +391,7 @@ void emit_quad(uint chunkId, ivec3 chunkCoord, ivec3 p, uint face, uint colorRGB
 }
 
 void main() {
-    if (pages_counters.count_vb_free_pages < u_min_free_pages || pages_counters.count_ib_free_pages < u_min_free_pages)
+    if (counters.count_vb_free_pages < u_min_free_pages || counters.count_ib_free_pages < u_min_free_pages)
         return;
 
     uint voxelId  = gl_GlobalInvocationID.x;
