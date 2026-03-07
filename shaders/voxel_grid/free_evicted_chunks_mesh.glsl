@@ -2,88 +2,28 @@
 layout(local_size_x = 256) in;
 
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
-layout(std430, binding=0) readonly buffer LocalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
-layout(std430, binding=1) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
-layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_list[]; };
-
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
-layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=0) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
 
 struct Node {uint page; uint next;};
-
 // ---- NEW: VB pool ----
-layout(std430, binding=4) coherent buffer VBHeads { uint vb_heads[]; };
-layout(std430, binding=5) coherent buffer VBState { uint vb_state[]; };
-layout(std430, binding=6) coherent buffer VBNodes  { Node vb_nodes[];  };
-layout(std430, binding=7) coherent buffer VBFreeNodesList  { uint vb_free_nodes_counter; uint vb_free_nodes_list[];  };
-layout(std430, binding=8) coherent buffer VBReturnedNodesList  { uint vb_returned_nodes_counter; uint vb_returned_nodes_list[]; };
+layout(std430, binding=1) coherent buffer VBHeads { uint vb_heads[]; };
+layout(std430, binding=2) coherent buffer VBState { uint vb_state[]; };
+layout(std430, binding=3) coherent buffer VBNodes  { Node vb_nodes[];  };
+layout(std430, binding=4) coherent buffer VBFreeNodesList  { uint vb_free_nodes_counter; uint vb_free_nodes_list[];  };
+layout(std430, binding=5) coherent buffer VBReturnedNodesList  { uint vb_returned_nodes_counter; uint vb_returned_nodes_list[]; };
 
 // ---- NEW: IB pool ----
-layout(std430, binding=9) coherent buffer IBHeads { uint ib_heads[]; };
-layout(std430, binding=10) coherent buffer IBState { uint ib_state[]; };
-layout(std430, binding=11) coherent buffer IBNodes { Node ib_nodes[];  };
-layout(std430, binding=12) coherent buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
-layout(std430, binding=13) coherent buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
+layout(std430, binding=6) coherent buffer IBHeads { uint ib_heads[]; };
+layout(std430, binding=7) coherent buffer IBState { uint ib_state[]; };
+layout(std430, binding=8) coherent buffer IBNodes { Node ib_nodes[];  };
+layout(std430, binding=9) coherent buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
+layout(std430, binding=10) coherent buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
 
-// layout(std430, binding=14) buffer DebugBuffer { uint stats[]; };
-
-struct PushLoopData {
-    uint old_h;
-    uint next_val;
-    uint old_value_of_next_val;
-    uint new_tag;
-    uint new_head;
-    uint was_head;
-};
-
-struct PushData {
-    uint input_start_page;
-    uint input_order;
-    uint old_state_of_input_start_page;
-    uint count_loop_cycles;
-    PushLoopData loop_data[32];
-};
-
-struct MergeData {
-    uint cur_start;
-    uint cur_order;
-    uint cur_state;
-    uint buddy_size;
-    uint start_buddy;
-    uint buddy_state;
-};
-
-struct DebugStackElement {
-    uint dirty_idx;
-    uint chunk_id;
-    uint a_i_startPage; 
-    uint i_order;
-    uint prev_alloc_state;
-    uint count_merges;
-    MergeData merge_data[33];
-    uint result_start;
-    uint result_order;
-    uint state_before_change;
-    uint state_after_change;
-    PushData push_data;
-    uint current_head;
-    uint bool_push_result;
-};
-
-layout(std430, binding=14) buffer VerifyDebugStack { uint debug_stack_on; uint verify_debug_stack_counter; DebugStackElement verify_debug_stack[]; };
-
+layout(std430, binding=11) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 
 uniform uint u_vb_max_order;
 uniform uint u_ib_max_order;
-uniform uint u_min_free_pages;
+uniform uint u_count_chunks_to_envict;
 
 #define INVALID_ID 0xFFFFFFFFu
 
@@ -99,17 +39,6 @@ const uint ST_MASK = (1u << ST_MASK_BITS) - 1u;
 #define HEAD_TAG_BITS 4u // Чтобы точно не случилось ABA, но если что можно уменьшить
 const uint HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
 const uint INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
-
-const uint OP_ALLOC = 0u;
-const uint OP_FREE = 1u;
-bool is_debug_stack_on;
-uint debug_stack_idx;
-
-uint div_up_u32(uint a, uint b) { return (a + b - 1u) / b; }
-
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
 
 uint pack_state(uint order, uint kind) { return (order << ST_MASK_BITS) | (kind & ST_MASK); }
 uint pack_head(uint start, uint tag) {return (start << HEAD_TAG_BITS) | (tag & HEAD_TAG_MASK); };
@@ -141,19 +70,6 @@ bool vb_push_free(uint order, uint startPage)
     vb_nodes[node_id].page = startPage;
 
     atomicExchange(vb_state[startPage], pack_state(order, ST_FREE));
-
-    // for (;;)
-    // {
-    //     uint prev_state = atomicAdd(vb_state[startPage], 0u);
-    //     uint new_state = pack_state(order, ST_FREE);
-    //     if (prev_state == new_state) {
-    //         vb_push_free_node_id(node_id);
-    //         return true; // Уже в списке 
-    //     }
-
-    //     if (atomicCompSwap(vb_state[startPage], prev_state, new_state) == prev_state)
-    //         break;
-    // }
 
     for (;;)
     {
@@ -236,9 +152,6 @@ bool vb_free_pages(uint start, uint order) {
         uint buddy_size = 1u << cur_order;
         uint start_buddy = cur_start ^ buddy_size;
 
-        // if (start_buddy > cur_start) return false;
-
-        // uint start_buddy = cur_start + buddy_size;
         if (start_buddy + buddy_size > (1u << u_vb_max_order)) break;
         
         uint buddy_state = atomicAdd(vb_state[start_buddy], 0u);
@@ -293,19 +206,6 @@ bool ib_push_free(uint order, uint startPage)
     ib_nodes[node_id].page = startPage;
 
     atomicExchange(ib_state[startPage], pack_state(order, ST_FREE));
-
-    // for (;;)
-    // {
-    //     uint prev_state = atomicAdd(ib_state[startPage], 0u);
-    //     uint new_state = pack_state(order, ST_FREE);
-    //     if (prev_state == new_state) {
-    //         ib_push_free_node_id(node_id);
-    //         return true; // Уже в списке 
-    //     }
-
-    //     if (atomicCompSwap(ib_state[startPage], prev_state, new_state) == prev_state)
-    //         break;
-    // }
 
     for (;;)
     {
@@ -388,9 +288,6 @@ bool ib_free_pages(uint start, uint order) {
         uint buddy_size = 1u << cur_order;
         uint start_buddy = cur_start ^ buddy_size;
 
-        // if (start_buddy > cur_start) return false;
-
-        // uint start_buddy = cur_start + buddy_size;
         if (start_buddy + buddy_size > (1u << u_ib_max_order)) break;
         
         uint buddy_state = atomicAdd(ib_state[start_buddy], 0u);
@@ -417,49 +314,26 @@ bool ib_free_pages(uint start, uint order) {
     return result;
 }
 
-void free_chunk_mesh(uint chunk_id_local, uint chunk_id_global) {
-    ChunkMeshAlloc a = chunk_alloc_global[chunk_id_global];
-    if (a.v_startPage != INVALID_ID) vb_free_pages(a.v_startPage, a.v_order);
-
-    if (is_debug_stack_on) verify_debug_stack[debug_stack_idx].a_i_startPage = a.i_startPage;
-    if (is_debug_stack_on) verify_debug_stack[debug_stack_idx].i_order = a.i_order;
-    if (a.i_startPage != INVALID_ID) ib_free_pages(a.i_startPage, a.i_order);
-
-    // if (a.v_startPage != INVALID_ID && a.i_startPage != INVALID_ID) {
-    //     vb_free_pages(a.v_startPage, a.v_order);
-    //     ib_free_pages(a.i_startPage, a.i_order);
-    // }
-}
-
 void main() {
-    // if (gl_GlobalInvocationID.x != 0u) return;
+    if (gl_GlobalInvocationID.x == 0u) evicted_chunks_counter = 0u;
 
-    uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.dirty_count;
-    if (dirtyIdx >= dirtyCount) return;
+    uint envicted_list_id = gl_GlobalInvocationID.x;
+    if (envicted_list_id >= u_count_chunks_to_envict) return;
 
-    // for (uint dirtyIdx = 0; dirtyIdx < dirtyCount; dirtyIdx++) {
-    // is_debug_stack_on = debug_stack_on == 1u;
-    is_debug_stack_on = debug_stack_on == 1u && dirtyIdx == (dirtyCount - 1u);
-    if (is_debug_stack_on) debug_stack_idx = atomicAdd(verify_debug_stack_counter, 1u);
-    if (is_debug_stack_on) verify_debug_stack[debug_stack_idx].dirty_idx = dirtyIdx;
+    uint chunk_id = evicted_chunks_list[envicted_list_id];
+    if (chunk_id == INVALID_ID) return;
 
+    // Отчистка памяти
+    ChunkMeshAlloc chunk_alloc = chunk_alloc_global[chunk_id];
+    if (chunk_alloc.v_startPage != INVALID_ID) vb_free_pages(chunk_alloc.v_startPage, chunk_alloc.v_order);
+    if (chunk_alloc.i_startPage != INVALID_ID) vb_free_pages(chunk_alloc.i_startPage, chunk_alloc.i_order);
 
-    if (counters.count_vb_free_pages != INVALID_ID && counters.count_ib_free_pages != INVALID_ID) {
-        uint chunkId = dirty_list[dirtyIdx];
-        if (is_debug_stack_on) verify_debug_stack[debug_stack_idx].chunk_id = chunkId;
-        
-
-        // if (chunk_alloc_global[chunkId].v_startPage != INVALID_ID && chunk_alloc_global[chunkId].v_startPage == chunk_alloc_local[dirtyIdx].v_startPage) {
-        //     atomicAdd(stats[8], 1u);
-        // }
-
-        // if (chunk_alloc_global[chunkId].i_startPage != INVALID_ID && chunk_alloc_global[chunkId].i_startPage == chunk_alloc_local[dirtyIdx].i_startPage) {
-        //     atomicAdd(stats[9], 1u);
-        // }
-
-        free_chunk_mesh(dirtyIdx, chunkId);
-        chunk_alloc_global[chunkId] = chunk_alloc_local[dirtyIdx];
-    }
-    // }
+    // Запись информации о том, что память для меша чанка chunk_id не выделенна
+    chunk_alloc_global[chunk_id].v_startPage = INVALID_ID;
+    chunk_alloc_global[chunk_id].v_order = 0u;
+    chunk_alloc_global[chunk_id].needV = 0u;
+    chunk_alloc_global[chunk_id].i_startPage = INVALID_ID;
+    chunk_alloc_global[chunk_id].i_order = 0u;
+    chunk_alloc_global[chunk_id].needI = 0u;
+    chunk_alloc_global[chunk_id].need_rebuild = 0u;
 }

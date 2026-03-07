@@ -6,6 +6,8 @@ ShaderManager::ShaderManager(const std::string& root_path) {
 
 void ShaderManager::init_shaders(const std::string& root_path) {
     fs::path p(root_path);
+    dispatch_adapter_cs = ComputeShader((p / "shaders" / "dispatch_adapter.glsl").string());
+
     count_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "count_cs.glsl").string()); 
     scan_blocks_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "scan_blocks_cs.glsl").string());
     add_block_offsets_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "add_block_offsets_cs.glsl").string());
@@ -42,6 +44,8 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     reset_load_list_counter_cs = ComputeShader((p / "shaders" / "voxel_grid" / "reset_load_list_counter.glsl").string());
     verify_mesh_allocation_cs = ComputeShader((p / "shaders" / "voxel_grid" / "verify_mesh_allocation.glsl").string());
     return_free_alloc_nodes_cs = ComputeShader((p / "shaders" / "voxel_grid" / "return_free_alloc_nodes.glsl").string());
+    return_free_alloc_nodes_dispatch_adapter_cs = ComputeShader((p / "shaders" / "voxel_grid" / "return_free_alloc_nodes_dispatch_adapter.glsl").string());
+    free_evicted_chunks_mesh_cs = ComputeShader((p / "shaders" / "voxel_grid" / "free_evicted_chunks_mesh.glsl").string());
     voxel_mesh_vs = VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string());
     voxel_mesh_fs = FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string());
 }

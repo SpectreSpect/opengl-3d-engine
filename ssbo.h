@@ -134,7 +134,7 @@ public:
 
     uint32_t read_u32(std::size_t offset_bytes = 0) const;
 
-    GLuint id();
+    GLuint id() const;
 
 
 private:

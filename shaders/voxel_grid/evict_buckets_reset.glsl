@@ -3,7 +3,7 @@ layout(local_size_x = 256) in;
 
 #define INVALID_ID 0xFFFFFFFFu
 
-layout(std430, binding=16) coherent buffer BucketHeads { uint bucket_heads[]; };
+layout(std430, binding=0) buffer BucketHeads { uint bucket_heads[]; };
 
 uniform uint u_bucket_count;
 

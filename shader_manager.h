@@ -12,6 +12,9 @@ namespace fs = std::filesystem;
 
 class ShaderManager {
 public:
+    // General
+    ComputeShader dispatch_adapter_cs;
+
     //voxelizaton
     ComputeShader count_cs;
     ComputeShader scan_blocks_cs;
@@ -51,6 +54,8 @@ public:
     ComputeShader reset_load_list_counter_cs;
     ComputeShader verify_mesh_allocation_cs;
     ComputeShader return_free_alloc_nodes_cs;
+    ComputeShader return_free_alloc_nodes_dispatch_adapter_cs;
+    ComputeShader free_evicted_chunks_mesh_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

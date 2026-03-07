@@ -1,9 +1,12 @@
 #version 430
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
+#define INVALID_ID   0xFFFFFFFFu
+
 #define SLOT_EMPTY   0xFFFFFFFFu
 #define SLOT_LOCKED  0xFFFFFFFEu
-#define INVALID_ID   0xFFFFFFFFu
+#define SLOT_TOMB    0xFFFFFFFDu
+
 #define MAX_PROBES   128u
 #define LOCK_SPINS   32u
 
@@ -96,41 +99,58 @@ uvec2 pack_key_uvec2(ivec3 c) {
 
 // ---------------- allocator ----------------
 uint pop_free_chunk_id() {
-    uint old = atomicAdd(counters.free_count, 0xFFFFFFFFu); // -1
-    if (old == 0u) {
-        atomicAdd(counters.free_count, 1u); // rollback
-        return INVALID_ID;
+    for (;;) {
+        uint old_counter = atomicAdd(counters.free_count, 0u);
+        if (old_counter == 0u) return INVALID_ID;
+        
+        if (atomicCompSwap(counters.free_count, old_counter, old_counter - 1u) == old_counter) {
+            memoryBarrierBuffer();
+            return free_list[old_counter - 1u];
+        }
     }
-    return free_list[old - 1u];
 }
+
 
 // ---------------- get_or_create ----------------
 bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
+    uint frist_tomb = INVALID_ID; // Потенциально ошибка!!!
 
     for (uint probe = 0u; probe < MAX_PROBES;) {
         uint v = atomicAdd(hash_vals[idx], 0u);
 
-        if (v == SLOT_LOCKED) {
-            uint spins = 0u;
-            while (spins++ < LOCK_SPINS) {
-                v = atomicAdd(hash_vals[idx], 0u);
-                if (v != SLOT_LOCKED) break;
-            }
-            if (v == SLOT_LOCKED) return false; 
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            if (frist_tomb == INVALID_ID) frist_tomb = idx;
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
         }
 
         if (v == SLOT_EMPTY) {
-            uint prev = atomicCompSwap(hash_vals[idx], SLOT_EMPTY, SLOT_LOCKED);
-            if (prev != SLOT_EMPTY) {
+            // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
+            uint idx_to_create = frist_tomb == INVALID_ID ? idx : frist_tomb;
+            uint slot_state = frist_tomb == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
+
+            uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
+            if (prev != slot_state) {
                 // кто-то успел — перепроверяем этот же idx
-                continue;
+
+                if (frist_tomb != INVALID_ID && prev != SLOT_LOCKED) {
+                    // Условие говорит, что мы проверяем fist_tomb слот и он оказался занят
+                    frist_tomb = INVALID_ID; // В теории можно было бы взять следующий TOMB_SLOT, но пока не обязательно
+                    continue;
+                }
+                else {
+                    continue;
+                }
             }
 
             uint id = pop_free_chunk_id();
             if (id == INVALID_ID) {
-                atomicExchange(hash_vals[idx], SLOT_EMPTY);
+                atomicExchange(hash_vals[idx_to_create], slot_state);
                 return false;
             }
 
@@ -142,30 +162,82 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             enqueued[id]        = 0u;
 
             // публикуем key
-            hash_keys[idx] = key;
+            hash_keys[idx_to_create] = key;
 
             // гарантируем, что key/meta видимы до публикации id
             memoryBarrierBuffer();
 
             // публикуем id (и одновременно "анлочим")
-            atomicExchange(hash_vals[idx], id);
+            atomicExchange(hash_vals[idx_to_create], id);
 
             outId = id;
             created = true;
             return true;
         }
 
-        if (all(equal(hash_keys[idx], key))) {
-            outId = v;
-            created = false;
-            return true;
-        }
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
 
+        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+            // Залочили слот - можем читать ключ
+            if (all(equal(hash_keys[idx], key))) {
+                outId = v;
+                created = false;
+                atomicExchange(hash_vals[idx], v); // Убираем блокировку
+                return true;
+            }
+
+            atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        } else {
+            continue; // Не получилось захватить. Попробуем ещё раз.
+        }
+        
         idx = (idx + 1u) & mask;
         probe++;
     }
 
     return false;
+}
+
+// table_is_changing = 0u позволяет ускорить работу функции. Но эту оптимизацию (как следует из названия переменной)
+// можно использовать только в том случае, если таблица одновременно не изменяется (а только читается)! Иначе всё сломается.
+uint lookup_chunk(uvec2 key, uint table_is_changing = 0u) {
+    uint mask = u_hash_table_size - 1u;
+    uint idx  = hash_uvec2(key) & mask;
+
+    for (uint probe = 0u; probe < MAX_PROBES;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
+
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
+        }
+
+        if (v == SLOT_EMPTY) return INVALID_ID;
+
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
+
+        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+            // Залочили слот - можем читать ключ
+            if (all(equal(hash_keys[idx], key))) {
+                atomicExchange(hash_vals[idx], v); // Убираем блокировку
+                return v;
+            }
+
+            atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        } else {
+            continue; // Не получилось захватить. Попробуем ещё раз.
+        }
+        
+        idx = (idx + 1u) & mask;
+        probe++;
+    }
+
+    return INVALID_ID;
 }
 
 void main() {
@@ -179,7 +251,7 @@ void main() {
     ivec3 off = ivec3(gid) - ivec3(R);
     int d2 = off.x*off.x + off.y*off.y + off.z*off.z;
     if (d2 > R*R) return;
-    // if (d2 > 4) return;
+    // if (d2 > 0.5) return;
 
     vec3 chunkWorldSize = vec3(u_chunk_dim) * u_voxel_size;
     ivec3 camChunk = ivec3(floor(u_cam_pos_local / chunkWorldSize));

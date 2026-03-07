@@ -11,8 +11,6 @@ layout(std430, binding=1) buffer VBReturnedNodesList  { uint vb_returned_nodes_c
 layout(std430, binding=2) buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
 layout(std430, binding=3) buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
 
-layout(std430, binding=4) buffer DispatchBuf { uvec3 dispatch_buf; };
-
 struct FrameCounters {
     uint write_count; 
     uint dirty_count;
@@ -22,7 +20,7 @@ struct FrameCounters {
     uint count_vb_free_pages;
     uint count_ib_free_pages;
 };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=4) buffer FrameCountersBuf { FrameCounters counters; };
 
 uniform uvec3 u3_chunk_size;
 
@@ -33,12 +31,6 @@ uint max(uint a, uint b) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x == 0) {
-        uint vox_per_chunk = u3_chunk_size.x * u3_chunk_size.y * u3_chunk_size.z;
-        uint vox_groups = div_up_u32(vox_per_chunk, 256u);
-        dispatch_buf = uvec3(vox_groups, max(counters.dirty_count, 1u), 1u);
-    }
-
     uint returned_list_id = gl_GlobalInvocationID.x;
 
     if (returned_list_id < vb_returned_nodes_counter) {

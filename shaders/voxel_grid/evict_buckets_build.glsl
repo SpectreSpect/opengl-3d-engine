@@ -4,10 +4,10 @@ layout(local_size_x = 256) in;
 #define INVALID_ID 0xFFFFFFFFu
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=0) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
-layout(std430, binding=16) coherent buffer BucketHeads { uint bucket_heads[]; };
-layout(std430, binding=17) coherent buffer BucketNext  { uint bucket_next[]; };
+layout(std430, binding=1) coherent buffer BucketHeads { uint bucket_heads[]; };
+layout(std430, binding=2) coherent buffer BucketNext  { uint bucket_next[]; };
 
 uniform uint  u_max_chunks;
 uniform uint  u_bucket_count;
@@ -22,7 +22,7 @@ uniform int  u_pack_offset;
 
 // dist2 * scale -> bucket
 // Пример: bucket_scale = 1 / (step*step), step = 32м -> scale ~ 0.0009765625
-uniform float u_bucket_scale;
+uniform float f_eviction_bucket_shell_thickness;
 
 // ---- helpers unpack uvec2 -> ivec3 ----
 uint mask_bits(uint bits) {
@@ -72,9 +72,9 @@ uint bucket_for_coord(ivec3 chunkCoord) {
     vec3 center = minP + 0.5 * chunkSize;
 
     vec3 d = center - u_cam_pos;
-    float dist2 = dot(d, d);
+    float dist = sqrt(dot(d, d));
 
-    uint b = uint(dist2 * u_bucket_scale);
+    uint b = uint(dist / f_eviction_bucket_shell_thickness);
     if (b >= u_bucket_count) b = u_bucket_count - 1u;
     return b;
 }

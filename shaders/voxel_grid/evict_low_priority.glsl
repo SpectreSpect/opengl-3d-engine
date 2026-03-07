@@ -1,5 +1,5 @@
 #version 430
-layout(local_size_x = 1) in;
+layout(local_size_x = 256) in;
 
 #define SLOT_EMPTY   0xFFFFFFFFu
 #define SLOT_LOCKED  0xFFFFFFFEu
@@ -12,7 +12,7 @@ layout(local_size_x = 1) in;
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 
-layout(std430, binding=4) buffer FreeList { uint free_list[]; };
+layout(std430, binding=2) buffer FreeList { uint free_list[]; };
 
 struct FrameCounters {
     uint write_count; 
@@ -23,42 +23,25 @@ struct FrameCounters {
     uint count_vb_free_pages;
     uint count_ib_free_pages;
 };
-layout(std430, binding=5) coherent buffer FrameCountersBuf { FrameCounters counters; }; // w=freeCount
+layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) coherent buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
-layout(std430, binding=7) coherent buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
 
-struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
-layout(std430, binding=9) coherent buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
-
-layout(std430, binding=16) coherent buffer BucketHeads { uint bucket_heads[]; };
-layout(std430, binding=17) coherent buffer BucketNext  { uint bucket_next[]; };
+layout(std430, binding=6) coherent buffer BucketHeads { uint bucket_heads[]; };
+layout(std430, binding=7) coherent buffer BucketNext  { uint bucket_next[]; };
 
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
-layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
+layout(std430, binding=8) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
 
-layout(std430, binding=18) coherent buffer VBHeads { uint vb_heads[]; };
-layout(std430, binding=19) coherent buffer VBNext  { uint vb_next[];  };
-layout(std430, binding=20) coherent buffer VBState { uint vb_state[]; };
-
-layout(std430, binding=21) coherent buffer IBHeads { uint ib_heads[]; };
-layout(std430, binding=22) coherent buffer IBNext  { uint ib_next[];  };
-layout(std430, binding=23) coherent buffer IBState { uint ib_state[]; };
-
-uniform uint u_vb_max_order;
-uniform uint u_ib_max_order;
+layout(std430, binding=9) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 
 uniform uint u_hash_table_size;
 uniform uint u_bucket_count;
 uniform uint u_min_free;    // сколько свободных хотим иметь
-uniform uint u_max_evict;   // safety limit за один вызов
-
-const uint ST_FREE   = 0u;
-const uint ST_ALLOC  = 1u;
-const uint ST_LOCKED = 2u;
-const uint ST_MASK   = 3u;
+uniform uint u_count_chunks_to_evict;
 
 uint hash_uvec2(uvec2 v) {
     uint x = v.x * 1664525u + 1013904223u;
@@ -68,79 +51,6 @@ uint hash_uvec2(uvec2 v) {
     h ^= h >> 15; h *= 0x846ca68bu;
     h ^= h >> 16;
     return h;
-}
-
-uint pack_state(uint order, uint kind) { return (order << 2u) | (kind & ST_MASK); }
-
-void vb_push_free(uint order, uint startPage) {
-    atomicExchange(vb_state[startPage], pack_state(order, ST_FREE));
-
-    for (uint it = 0u; it < 64u; ++it) {
-        uint old = atomicAdd(vb_heads[order], 0u);
-        vb_next[startPage] = old;
-        memoryBarrierBuffer(); // next видим до публикации head
-        uint prev = atomicCompSwap(vb_heads[order], old, startPage);
-        if (prev == old) return;
-    }
-}
-
-void vb_free_pages(uint start, uint order) {
-    if (start == INVALID_ID) return;
-
-    atomicExchange(vb_state[start], pack_state(order, ST_LOCKED));
-
-    uint s = start;
-    uint o = order;
-
-    for (uint it = 0u; it < 32u && o < u_vb_max_order; ++it) {
-        uint buddy = s ^ (1u << o);
-
-        // buddy должен быть стартом блока этого order и свободным
-        uint expected = pack_state(o, ST_FREE);
-        uint got = atomicCompSwap(vb_state[buddy], expected, pack_state(o, ST_LOCKED));
-        if (got != expected) break;
-
-        s = min(s, buddy);
-        o = o + 1u;
-        atomicExchange(vb_state[s], pack_state(o, ST_LOCKED));
-    }
-
-    vb_push_free(o, s);
-}
-
-void ib_push_free(uint order, uint startPage) {
-    atomicExchange(ib_state[startPage], pack_state(order, ST_FREE));
-
-    for (uint it = 0u; it < 64u; ++it) {
-        uint old = atomicAdd(ib_heads[order], 0u);
-        ib_next[startPage] = old;
-        memoryBarrierBuffer();
-        uint prev = atomicCompSwap(ib_heads[order], old, startPage);
-        if (prev == old) return;
-    }
-}
-
-void ib_free_pages(uint start, uint order) {
-    if (start == INVALID_ID) return;
-
-    atomicExchange(ib_state[start], pack_state(order, ST_LOCKED));
-
-    uint s = start;
-    uint o = order;
-
-    for (uint it = 0u; it < 32u && o < u_ib_max_order; ++it) {
-        uint buddy = s ^ (1u << o);
-
-        uint expected = pack_state(o, ST_FREE);
-        uint got = atomicCompSwap(ib_state[buddy], expected, pack_state(o, ST_LOCKED));
-        if (got != expected) break;
-
-        s = min(s, buddy);
-        o = o + 1u;
-        atomicExchange(ib_state[s], pack_state(o, ST_LOCKED));
-    }
-
-    ib_push_free(o, s);
 }
 
 bool remove_from_table(uvec2 key, uint chunkId) {
@@ -175,6 +85,7 @@ bool remove_from_table(uvec2 key, uint chunkId) {
     return false;
 }
 
+// ABA проблемы не будет, так как везде используется либо только pop, либо только push (поэтому теги на heads пока не нужны)
 uint pop_bucket(uint b) {
     for (;;) {
         uint h = atomicAdd(bucket_heads[b], 0u);
@@ -189,23 +100,18 @@ uint pop_bucket(uint b) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x != 0u) return;
+    uint enviction_id = gl_GlobalInvocationID.x;
+    if (enviction_id >= u_count_chunks_to_evict) return;
 
-    uint freeCount = atomicAdd(counters.free_count, 0u);
-    if (freeCount >= u_min_free) return;
-
-    uint evicted = 0u;
-
-    while (freeCount < u_min_free && evicted < u_max_evict) {
-        uint victim = INVALID_ID;
-
+    uint victim = INVALID_ID;
+    for (;;) {
         // худшие бакеты — с конца (больший bucket == дальше)
         for (int bi = int(u_bucket_count) - 1; bi >= 0; --bi) {
             victim = pop_bucket(uint(bi));
             if (victim != INVALID_ID) break;
         }
 
-        if (victim == INVALID_ID) break; // не нашли
+        if (victim == INVALID_ID) return; // не нашли
 
         // мог уже стать свободным/неактивным
         if (meta[victim].used == 0u) continue;
@@ -220,27 +126,12 @@ void main() {
         meta[victim].dirty_flags = 0u;
         enqueued[victim] = 0u;
 
-        mesh_meta[victim].mesh_valid = 0u;
-        mesh_meta[victim].index_count = 0u;
-
-        ChunkMeshAlloc a = chunk_alloc[victim];
-        
-        if (a.v_startPage != INVALID_ID) vb_free_pages(a.v_startPage, a.v_order);
-        if (a.i_startPage != INVALID_ID) ib_free_pages(a.i_startPage, a.i_order);
-        
-        chunk_alloc[victim].v_startPage = INVALID_ID; 
-        chunk_alloc[victim].v_order = 0u; 
-        chunk_alloc[victim].needV = 0u; 
-        chunk_alloc[victim].i_startPage = INVALID_ID; 
-        chunk_alloc[victim].i_order = 0u; 
-        chunk_alloc[victim].needI = 0u; 
-        chunk_alloc[victim].need_rebuild = 0u;
-
         // пушим обратно в free_list (stack)
         uint idx = atomicAdd(counters.free_count, 1u);
         free_list[idx] = victim;
 
-        freeCount++;
-        evicted++;
+        uint envict_list_id = atomicAdd(evicted_chunks_counter, 1u); // Позже можно оптимизировать и ложить сразу в заранее расчитанную позицию
+        evicted_chunks_list[envict_list_id] = victim;
+        return;
     }
 }

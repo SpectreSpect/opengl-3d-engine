@@ -23,6 +23,7 @@
 #include <fstream>
 #include <set>
 #include <algorithm>
+#include <limits>
 
 #define SLOT_EMPTY 0xFFFFFFFF
 #define SLOT_LOCKED 0xFFFFFFFE
@@ -30,18 +31,20 @@
 
 class VoxelGridGPU : public Transformable, public Drawable {
 public:
-    const uint32_t INVALID_ID = 0xFFFFFFFFu;
+    static constexpr uint32_t INVALID_ID = 0xFFFFFFFFu;
 
-    const uint32_t ST_MASK_BITS = 4;
-    const uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
+    static constexpr uint32_t ST_MASK_BITS = 4u;
+    static constexpr uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
     
-    const uint32_t ST_FREE = 0u;
-    const uint32_t ST_ALLOC = 1u;
-    const uint32_t ST_MERGED = 2u;
+    static constexpr uint32_t ST_FREE = 0u;
+    static constexpr uint32_t ST_ALLOC = 1u;
+    static constexpr uint32_t ST_MERGED = 2u;
     
-    const uint32_t HEAD_TAG_BITS = 4u;
-    const uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
-    const uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+    static constexpr uint32_t HEAD_TAG_BITS = 4u;
+    static constexpr uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
+    static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+
+    static constexpr uint32_t USE_DIRECT_VALUE = 0xFFFFFFFFu;
 
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
@@ -51,7 +54,7 @@ public:
     uint32_t count_evict_buckets;
     uint32_t min_free_chunks;
     uint32_t max_evict_chunks;
-    uint32_t bucket_step;
+    uint32_t eviction_bucket_shell_thickness;
 
     const uint32_t min_free_pages = 1024;
 
@@ -168,7 +171,7 @@ public:
         uint32_t count_evict_buckets,
         uint32_t min_free_chunks,
         uint32_t max_evict_chunks,
-        uint32_t bucket_step,
+        float eviction_bucket_shell_thickness,
         uint32_t vb_page_size_order_of_two,
         uint32_t ib_page_size_order_of_two,
         float buddy_allocator_nodes_factor,
@@ -192,6 +195,7 @@ public:
     void print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count, uint32_t load_list_count);
     void print_count_free_mesh_alloc();
 
+    ComputeProgram prog_dispatch_adapter_;
     ComputeProgram prog_clear_chunks_;
     ComputeProgram prog_set_chunks_;
     ComputeProgram prog_world_init_;
@@ -216,6 +220,8 @@ public:
     ComputeProgram prog_reset_load_list_counter_;
     ComputeProgram prog_verify_mesh_allocation_;
     ComputeProgram prog_return_free_alloc_nodes_;
+    ComputeProgram prog_return_free_alloc_nodes_dispatch_adapter_;
+    ComputeProgram prog_free_evicted_chunks_mesh_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO dispatch_indirect_buf_0_;
@@ -228,7 +234,7 @@ public:
     SSBO active_list_;
     SSBO frame_counters_;
     SSBO voxel_write_list_;
-    SSBO equeued_;
+    SSBO enqueued_;
     SSBO dirty_list_;
     SSBO global_vertex_buffer_;
     SSBO global_index_buffer_;
@@ -246,6 +252,7 @@ public:
     SSBO load_list_;
     SSBO failed_dirty_list_;
     SSBO verify_debug_stack_;
+    SSBO evicted_chunks_list_;
 
     SSBO vb_heads_;
     SSBO vb_state_;
@@ -320,8 +327,29 @@ public:
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
 
+    void prepare_dispatch_args(
+        SSBO& dispatch_args,
+        const SSBO* arg_buffer_0, 
+        const SSBO* arg_buffer_1, 
+        const SSBO* arg_buffer_2, 
+        uint32_t offset_0 = USE_DIRECT_VALUE,
+        uint32_t offset_1 = USE_DIRECT_VALUE,
+        uint32_t offset_2 = USE_DIRECT_VALUE,
+        uint32_t direct_value_0 = 1u,
+        uint32_t direct_value_1 = 1u,
+        uint32_t direct_value_2 = 1u,
+        uint32_t x_workgroup_size = 256u,
+        uint32_t y_workgroup_size = 1u,
+        uint32_t z_workgroup_size = 1u
+    );
+
     void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
-    void ensure_free_chunks_gpu(const glm::vec3& camPos);
+    void print_eviction_log(const glm::vec3& camera_pos);
+    void reset_heads();
+    void build_bucket_lists(const glm::vec3& cam_pos);
+    void evict_lowpriority_chunks();
+    void free_evicted_chunks_mesh();
+    void ensure_free_chunks_gpu(const glm::vec3& cam_pos);
     void ensure_voxel_write_list(size_t count);
 
     void reset_global_mesh_counters();
@@ -331,7 +359,8 @@ public:
     void mesh_alloc_ib();
     void mesh_alloc();
     void verify_mesh_allocation();
-    void return_free_alloc_nodes();
+    void prepare_return_free_alloc_nodes(SSBO& dispatch_args);
+    void return_free_alloc_nodes(const SSBO& dispatch_args);
     void mesh_emit(uint32_t pack_bits, uint32_t pack_offset);
     void mesh_finalize();
     void reset_dirty_count();

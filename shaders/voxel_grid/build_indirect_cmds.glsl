@@ -18,7 +18,6 @@ layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; /
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
-// x=v_startPage, y=v_order, z=i_startPage, w=i_order
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
 layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
 

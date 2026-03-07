@@ -224,17 +224,19 @@ int main() {
     // model.position = {chunk_render_size * 0, chunk_render_size * 5, chunk_render_size * 0};
     // model.scale = glm::vec3(5.0f);
 
+    float voxel_size = 1.0f;
+    uint32_t chunk_size = 16u;
     VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
-        {16, 16, 16}, // chunk_size
-        {1.0f, 1.0f, 1.0f}, // voxel_size
-        100'000, // count_active_chunks
+        glm::ivec3(chunk_size), // chunk_size
+        glm::vec3(voxel_size), // voxel_size
+        10'000, // count_active_chunks
         5'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         512, // max_count_probing
-        64, // count_evict_buckets
-        4'000, // min_free_chunks
+        2048, // count_evict_buckets
+        5'000, // min_free_chunks
         10'000, // max_evict_chunks
-        32, // bucket_step
+        chunk_size * voxel_size * 1, // eviction_bucket_shell_thickness
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
         1.0, // buddy_allocator_nodes_factor
@@ -247,7 +249,6 @@ int main() {
     // voxel_grid_gpu.apply_writes_to_world_from_cpu(positions, voxels);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
-
 
     std::function<void()> build_mesh_from_dirty_fn = [&](){
         voxel_grid_gpu.build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
@@ -273,6 +274,30 @@ int main() {
     bool voxel_grid_draw_streaming[3] = {false};
     std::function<void()> voxel_grid_draw_steps[3] = {build_mesh_from_dirty_fn, build_indirect_draw_commands_frustum_fn, draw_indirect_fn};
     std::string voxel_grid_draw_steps_names[3] = {"build_mesh_from_dirty()", "build_indirect_draw_commands_frustum_fn()", "draw_indirect()"};
+
+    std::function<void()> mark_chunk_to_generate_fn = [&]() {
+        int radius_chunks = 10;
+        voxel_grid_gpu.mark_chunk_to_generate(window.camera->position, radius_chunks);
+    };
+
+    std::function<void()> generate_terrain_fn = [&]() {
+        uint32_t load_count = voxel_grid_gpu.stream_counters_.read_scalar<uint32_t>(0);
+        if (load_count == 0) return;
+
+        uint32_t seed = 45345345u;
+        voxel_grid_gpu.generate_terrain(seed, load_count);
+    };
+
+    std::function<void()> reset_load_list_counter_fn = [&]() {
+        uint32_t load_count = voxel_grid_gpu.stream_counters_.read_scalar<uint32_t>(0);
+        if (load_count == 0) return;
+
+        voxel_grid_gpu.reset_load_list_counter();
+    };
+
+    bool voxel_grid_generation_streaming[3] = {false};
+    std::function<void()> voxel_grid_generation_steps[3] = {mark_chunk_to_generate_fn, generate_terrain_fn, reset_load_list_counter_fn};
+    std::string voxel_grid_generation_steps_names[3] = {"mark_chunk_to_generate()", "generate_terrain()", "reset_load_list_counter()"};
 
     std::filesystem::path state_dumps_dir = executable_dir() / "voxel_grid" / "state_dumps";
     std::filesystem::path dumps_dir = executable_dir() / "voxel_grid" / "dumps";
@@ -325,43 +350,6 @@ int main() {
         ImGui::Text("z: %.3f", camera_controller.camera->position.z);
         ImGui::PopStyleColor();
 
-        if (ImGui::Button("Temp stats")) {
-            std::vector<uint32_t> stats(5000);
-            voxel_grid_gpu.debug_counters_vb_.read_subdata(0, stats.data(), sizeof(uint32_t) * 5000);
-
-            // std::cout << "count_vb_nodes: " << voxel_grid_gpu.count_vb_nodes_ << std::endl;
-            // std::cout << std::endl;
-            // std::cout << "old_head: " << stats[0] << std::endl;
-            // std::cout << "old_head & HEAD_TAG_MASK: " << stats[1] << std::endl;
-            // std::cout << "old_head >> HEAD_TAG_BITS: " << stats[2] << std::endl;
-            // std::cout << "vb_nodes[old_head >> HEAD_TAG_BITS].page: " << stats[15] << std::endl;
-            // std::cout << "vb_nodes[old_head >> HEAD_TAG_BITS].next: " << stats[16] << std::endl;
-            // std::cout << "head_id: " << stats[3] << std::endl;
-            // std::cout << "after_pop_head: " << stats[4] << std::endl;
-            // std::cout << "after_pop_head & HEAD_TAG_MASK: " << stats[5] << std::endl;
-            // std::cout << "after_pop_head >> HEAD_TAG_BITS: " << stats[6] << std::endl;
-            // std::cout << "vb_push_free(new_order, head_id): " << stats[7] << std::endl;
-            // std::cout << "head_after_push: " << stats[8] << std::endl;
-            // std::cout << "head_after_push & HEAD_TAG_MASK: " << stats[9] << std::endl;
-            // std::cout << "head_after_push >> HEAD_TAG_BITS: " << stats[10] << std::endl;
-            // std::cout << "new_order_head_idx: " << stats[11] << std::endl;
-            // std::cout << "head_after_last_pop: " << stats[12] << std::endl;
-            // std::cout << "head_after_last_pop & HEAD_TAG_MASK: " << stats[13] << std::endl;
-            // std::cout << "head_after_last_pop >> HEAD_TAG_BITS: " << stats[14] << std::endl;
-            // std::cout << std::endl;
-
-            std::cout << "node_id[0]: " << stats[0] << std::endl;
-            std::cout << "node_id[1]: " << stats[1] << std::endl;
-            std::cout << "node_id[2]: " << stats[2] << std::endl;
-            std::cout << "node_id[3]: " << stats[3] << std::endl;
-            std::cout << "node_id[4]: " << stats[4] << std::endl;
-            std::cout << "node_id[5]: " << stats[5] << std::endl;
-            std::cout << "node_id[6]: " << stats[6] << std::endl;
-            std::cout << "node_id[7]: " << stats[7] << std::endl;
-            std::cout << std::endl;
-            
-        }
-
         if (ImGui::Button("Print counters")) {
             voxel_grid_gpu.print_counters(1, 1, 1, 1, 1);
             std::cout << "-----------------------" << std::endl << std::endl;
@@ -389,11 +377,6 @@ int main() {
                     if (real_order == order) {
                         std::cout << page_id << " ";
                         if (kind == 0u) std::cout << "ST_FREE" << std::endl;
-                        // else if (kind == 1u) std::cout << "ST_ALLOC" << std::endl;
-                        // else if (kind == 2u) std::cout << "ST_MERGED" << std::endl;
-                        // else if (kind == 3u) std::cout << "ST_MERGING" << std::endl;
-                        // else if (kind == 4u) std::cout << "ST_READY" << std::endl;
-                        // else if (kind == 5u) std::cout << "ST_CONCEDED" << std::endl;
                     }
                     cur_node = vb_nodes[cur_node].next;
                 }
@@ -437,40 +420,40 @@ int main() {
             }
         }
 
-        if (ImGui::Button("Print stream_generate_terrain debug counters")) {
-            uint32_t stats[2];
-            voxel_grid_gpu.stream_generate_debug_counters_.read_subdata(0, stats, sizeof(uint32_t) * 2);
+        // if (ImGui::Button("Print stream_generate_terrain debug counters")) {
+        //     uint32_t stats[2];
+        //     voxel_grid_gpu.stream_generate_debug_counters_.read_subdata(0, stats, sizeof(uint32_t) * 2);
 
-            std::cout << "stream_generate_terrain debug counters" << std::endl;
-            std::cout << "neighbor_lookup_invalid: " << stats[0] << std::endl;
-            std::cout << "neighbor_marked: " << stats[1] << std::endl;
+        //     std::cout << "stream_generate_terrain debug counters" << std::endl;
+        //     std::cout << "neighbor_lookup_invalid: " << stats[0] << std::endl;
+        //     std::cout << "neighbor_marked: " << stats[1] << std::endl;
 
-            std::cout << "-----------------------" << std::endl << std::endl;
-        }
+        //     std::cout << "-----------------------" << std::endl << std::endl;
+        // }
 
-        if (ImGui::Button("mark_chunk_to_generate()")) {
-            voxel_grid_gpu.mark_chunk_to_generate(camera_controller.camera->position, 10);
-            std::cout << "mark_chunk_to_generate()" << std::endl;
-        }
+        // if (ImGui::Button("mark_chunk_to_generate()")) {
+        //     voxel_grid_gpu.mark_chunk_to_generate(camera_controller.camera->position, 10);
+        //     std::cout << "mark_chunk_to_generate()" << std::endl;
+        // }
 
-        if (ImGui::Button("generate_terrain()")) {
-            uint32_t load_count = 0;
-            voxel_grid_gpu.stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
-            if (load_count != 0) {
-                voxel_grid_gpu.generate_terrain(45345345, load_count);
-                voxel_grid_gpu.reset_load_list_counter();
-                // voxel_grid_gpu.mark_all_used_chunks_as_dirty();
-                std::cout << "generate_terrain()" << std::endl;
-            } else {
-                std::cout << "load_count == 0" << std::endl;
-            }
+        // if (ImGui::Button("generate_terrain()")) {
+        //     uint32_t load_count = 0;
+        //     voxel_grid_gpu.stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
+        //     if (load_count != 0) {
+        //         voxel_grid_gpu.generate_terrain(45345345, load_count);
+        //         voxel_grid_gpu.reset_load_list_counter();
+        //         // voxel_grid_gpu.mark_all_used_chunks_as_dirty();
+        //         std::cout << "generate_terrain()" << std::endl;
+        //     } else {
+        //         std::cout << "load_count == 0" << std::endl;
+        //     }
             
-        }
+        // }
 
-        if (ImGui::Button("draw()")) {
-            std::cout << "draw()" << std::endl;
-            window.draw(&voxel_grid_gpu, &camera);
-        }
+        // if (ImGui::Button("draw()")) {
+        //     std::cout << "draw()" << std::endl;
+        //     window.draw(&voxel_grid_gpu, &camera);
+        // }
 
         if (ImGui::Button("Save VB states dump")) {
             std::vector<uint32_t> vb_state(voxel_grid_gpu.count_vb_pages_);
@@ -854,7 +837,8 @@ int main() {
         }
 
         if (ImGui::Button("return_free_alloc_nodes()")) {
-            voxel_grid_gpu.return_free_alloc_nodes();
+            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_1_);
+            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_1_);
         }
 
         if (ImGui::Button("mesh_emit()")) {
@@ -941,6 +925,65 @@ int main() {
         }
         ImGui::End();
 
+        ImGui::Begin("Chunk enviction");
+
+        if (ImGui::Button("Run all pipeline")) voxel_grid_gpu.ensure_free_chunks_gpu(window.camera->position);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Debug");
+        ImGui::Separator();
+
+        if (ImGui::Button("print eviction log")) voxel_grid_gpu.print_eviction_log(window.camera->position);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Pipeline steps");
+        ImGui::Separator();
+
+        if (ImGui::Button("reset_heads()")) voxel_grid_gpu.reset_heads();
+        if (ImGui::Button("build_bucket_lists()")) voxel_grid_gpu.build_bucket_lists(window.camera->position);
+        if (ImGui::Button("evict_lowpriority_chunks()")) voxel_grid_gpu.evict_lowpriority_chunks();
+        if (ImGui::Button("free_evicted_chunks_mesh()")) voxel_grid_gpu.free_evicted_chunks_mesh();
+        if (ImGui::Button("return_free_alloc_nodes()")) {
+            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_0_);
+            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_0_);
+        }
+
+        ImGui::End();
+
+        ImGui::Begin("Steam chunks pipeline");
+        if (ImGui::BeginTable("pipeline_table", 3, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableSetupColumn("Step");
+            ImGui::TableSetupColumn("Streaming", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("Run", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+            ImGui::TableHeadersRow();
+
+            for (uint32_t i = 0; i < 3; i++) {
+                ImGui::TableNextRow(); // ----
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(voxel_grid_generation_steps_names[i].c_str());
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(i);
+
+                ImGui::Checkbox("streaming", &voxel_grid_generation_streaming[i]);
+                
+                ImGui::TableNextColumn();
+                if (ImGui::Button("Run once")) {
+                    voxel_grid_generation_steps[i]();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+
+        for (uint32_t i = 0; i < 3; i++) {
+            if (voxel_grid_generation_streaming[i]) {
+                voxel_grid_generation_steps[i]();
+            }
+        }
+        ImGui::End();
 
         ui::end_frame();
 
