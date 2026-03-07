@@ -53,30 +53,33 @@ uint hash_uvec2(uvec2 v) {
     return h;
 }
 
-bool remove_from_table(uvec2 key, uint chunkId) {
+bool remove_from_table(uvec2 key) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
 
-    for (uint probe = 0u; probe < MAX_PROBES; ) {
+    for (uint probe = 0u; probe < MAX_PROBES;) {
         uint v = atomicAdd(hash_vals[idx], 0u);
 
-        if (v == SLOT_LOCKED) {
-            uint spins = 0u;
-            while (spins++ < 1024u) {
-                v = atomicAdd(hash_vals[idx], 0u);
-                if (v != SLOT_LOCKED) break;
-            }
-            if (v == SLOT_LOCKED) return false; 
-        }
+        if (v == SLOT_LOCKED) continue;
 
         if (v == SLOT_EMPTY) return false;
 
-        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; probe++; continue; }
-
-        if (v == chunkId && all(equal(hash_keys[idx], key))) {
-            uint prev = atomicCompSwap(hash_vals[idx], v, SLOT_TOMB);
-            if (prev == v) return true;
+        if (v == SLOT_TOMB) { 
+            idx = (idx + 1u) & mask;
+            probe++;
             continue;
+        }
+
+        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+            // Залочили слот - можем читать ключ
+            if (all(equal(hash_keys[idx], key))) {
+                atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
+                return true;
+            }
+
+            atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        } else {
+            continue; // Не получилось захватить. Попробуем ещё раз.
         }
 
         idx = (idx + 1u) & mask;
@@ -111,7 +114,11 @@ void main() {
             if (victim != INVALID_ID) break;
         }
 
-        if (victim == INVALID_ID) return; // не нашли
+        if (victim == INVALID_ID)  {
+            // не нашли
+            evicted_chunks_list[enviction_id] = INVALID_ID;
+            return;
+        }
 
         // мог уже стать свободным/неактивным
         if (meta[victim].used == 0u) continue;
@@ -119,7 +126,7 @@ void main() {
         uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
 
         // выкидываем из таблицы
-        remove_from_table(key, victim);
+        remove_from_table(key);
 
         // освобождаем метаданные
         meta[victim].used = 0u;
@@ -129,9 +136,8 @@ void main() {
         // пушим обратно в free_list (stack)
         uint idx = atomicAdd(counters.free_count, 1u);
         free_list[idx] = victim;
-
-        uint envict_list_id = atomicAdd(evicted_chunks_counter, 1u); // Позже можно оптимизировать и ложить сразу в заранее расчитанную позицию
-        evicted_chunks_list[envict_list_id] = victim;
+        
+        evicted_chunks_list[enviction_id] = victim;
         return;
     }
 }
