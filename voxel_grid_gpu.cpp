@@ -1346,7 +1346,6 @@ void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radi
 
     ensure_free_chunks_gpu(cam_world_pos);
 
-
     mark_chunk_to_generate(cam_world_pos, radius_chunks);
     // glFinish();
     

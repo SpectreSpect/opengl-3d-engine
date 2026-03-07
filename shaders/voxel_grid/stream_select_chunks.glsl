@@ -10,6 +10,9 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 #define MAX_PROBES   128u
 #define LOCK_SPINS   32u
 
+#define TOMB_CHECK_LIST_SIZE 32u
+const uint TOMB_LIST_MASK = TOMB_CHECK_LIST_SIZE - 1u;
+
 // --- hash table ---
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
@@ -49,6 +52,47 @@ uniform int   u_radius_chunks;    // R в чанках
 
 uniform uint u_pack_bits;
 uniform int  u_pack_offset;
+
+uint tomb_check_list[TOMB_CHECK_LIST_SIZE];
+uint tomb_list_head_id = INVALID_ID;
+uint tomb_list_tail_id = INVALID_ID;
+uint tomb_list_count_elements = 0u;
+
+bool push_tomb_id(uint slot_id) {
+    if (tomb_list_count_elements >= TOMB_CHECK_LIST_SIZE)
+        return false;
+
+    if (tomb_list_count_elements == 0u) {
+        tomb_list_head_id = 0u;
+        tomb_list_tail_id = 0u;
+    }
+    else  {
+        tomb_list_head_id = (tomb_list_head_id + 1u) & TOMB_LIST_MASK;
+     }
+
+    tomb_check_list[tomb_list_head_id] = slot_id;
+    tomb_list_count_elements++;
+    return true;
+}
+
+uint pop_tail_tomb_id() {
+    if (tomb_list_count_elements == 0u)
+        return INVALID_ID;
+
+    uint result = tomb_check_list[tomb_list_tail_id];
+    tomb_list_count_elements--;
+
+    if (tomb_list_count_elements == 0u) {
+        // Когда элементов нет, не может существовать id элемента головы и хвоста - это логически корректно.
+        // В теории можно было бы обойтись другими путями, но кажется так всех проще и логичнее.
+        tomb_list_head_id = INVALID_ID;
+        tomb_list_tail_id = INVALID_ID;
+    } else {
+        tomb_list_tail_id = (tomb_list_tail_id + 1u) & TOMB_LIST_MASK;
+    }
+
+    return result;
+}
 
 // ---------------- hash ----------------
 uint hash_uvec2(uvec2 v) {
@@ -115,7 +159,7 @@ uint pop_free_chunk_id() {
 bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
-    uint frist_tomb = INVALID_ID; // Потенциально ошибка!!!
+    uint last_tomb_id = INVALID_ID;
 
     for (uint probe = 0u; probe < MAX_PROBES;) {
         uint v = atomicAdd(hash_vals[idx], 0u);
@@ -123,7 +167,7 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
         if (v == SLOT_LOCKED) continue;
 
         if (v == SLOT_TOMB) {
-            if (frist_tomb == INVALID_ID) frist_tomb = idx;
+            push_tomb_id(idx);
             idx = (idx + 1u) & mask;
             probe++;
             continue;
@@ -131,16 +175,18 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
 
         if (v == SLOT_EMPTY) {
             // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
-            uint idx_to_create = frist_tomb == INVALID_ID ? idx : frist_tomb;
-            uint slot_state = frist_tomb == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
+            if (last_tomb_id == INVALID_ID) last_tomb_id = pop_tail_tomb_id();
+
+            uint idx_to_create = last_tomb_id == INVALID_ID ? idx : last_tomb_id;
+            uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
 
             uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
             if (prev != slot_state) {
                 // кто-то успел — перепроверяем этот же idx
 
-                if (frist_tomb != INVALID_ID && prev != SLOT_LOCKED) {
-                    // Условие говорит, что мы проверяем fist_tomb слот и он оказался занят
-                    frist_tomb = INVALID_ID; // В теории можно было бы взять следующий TOMB_SLOT, но пока не обязательно
+                if (last_tomb_id != INVALID_ID && prev != SLOT_LOCKED) {
+                    // Условие говорит, что мы проверяем tomb_check_list_counter - 1u слот и он оказался занят
+                    last_tomb_id = INVALID_ID;
                     continue;
                 }
                 else {
