@@ -10,7 +10,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 #define MAX_PROBES   128u
 #define LOCK_SPINS   32u
 
-#define TOMB_CHECK_LIST_SIZE 32u
+#define TOMB_CHECK_LIST_SIZE 0u
 const uint TOMB_LIST_MASK = TOMB_CHECK_LIST_SIZE - 1u;
 
 // --- hash table ---
@@ -161,24 +161,23 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     uint idx  = hash_uvec2(key) & mask;
     uint last_tomb_id = INVALID_ID;
 
-    for (uint probe = 0u; probe < MAX_PROBES;) {
+    tomb_list_head_id = INVALID_ID;
+    tomb_list_tail_id = INVALID_ID;
+    tomb_list_count_elements = 0u;
+
+    for (uint probe = 0u; probe < MAX_PROBES + 1u;) {
         uint v = atomicAdd(hash_vals[idx], 0u);
 
-        if (v == SLOT_LOCKED) continue;
+        if (v == SLOT_EMPTY || probe == MAX_PROBES) {
+            if (probe >= MAX_PROBES) idx = INVALID_ID;
 
-        if (v == SLOT_TOMB) {
-            push_tomb_id(idx);
-            idx = (idx + 1u) & mask;
-            probe++;
-            continue;
-        }
-
-        if (v == SLOT_EMPTY) {
             // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
             if (last_tomb_id == INVALID_ID) last_tomb_id = pop_tail_tomb_id();
 
             uint idx_to_create = last_tomb_id == INVALID_ID ? idx : last_tomb_id;
             uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
+
+            if (idx_to_create == INVALID_ID) return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
 
             uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
             if (prev != slot_state) {
@@ -219,6 +218,15 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             outId = id;
             created = true;
             return true;
+        }
+
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            push_tomb_id(idx);
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
         }
 
         // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ

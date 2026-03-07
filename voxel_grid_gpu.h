@@ -25,8 +25,6 @@
 #include <algorithm>
 #include <limits>
 
-#define SLOT_EMPTY 0xFFFFFFFF
-#define SLOT_LOCKED 0xFFFFFFFE
 #define DONT_CHANGE 0xFFFFFFFF
 
 class VoxelGridGPU : public Transformable, public Drawable {
@@ -45,6 +43,10 @@ public:
     static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
 
     static constexpr uint32_t USE_DIRECT_VALUE = 0xFFFFFFFFu;
+
+    static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
+    static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
+    static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
 
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
@@ -326,6 +328,7 @@ public:
     void init_chunks_hash_table();
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
+    void print_chunks_hash_table_log();
 
     void prepare_dispatch_args(
         SSBO& dispatch_args,

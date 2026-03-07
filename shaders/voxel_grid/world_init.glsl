@@ -35,6 +35,7 @@ void main() {
 
     if (i < u_hash_table_size) {
         hash_vals[i] = SLOT_EMPTY;
+        // hash_vals[i] = SLOT_TOMB;
         hash_keys[i] = uvec2(0u, 0u);
     }
 

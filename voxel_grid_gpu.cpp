@@ -661,6 +661,38 @@ void VoxelGridGPU::set_chunks(const std::vector<uint32_t>& chunk_ids,
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
+void VoxelGridGPU::print_chunks_hash_table_log() {
+    std::vector<uint32_t> hash_table_vals(chunk_hash_table_size);
+
+    chunk_hash_vals_.read_subdata(0, hash_table_vals.data(), sizeof(uint32_t) * chunk_hash_table_size);
+
+    uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_alloc_slots = 0u;
+    for (uint32_t slot_id = 0u; slot_id < chunk_hash_table_size; slot_id++) {
+        uint32_t v = hash_table_vals[slot_id];
+
+        if (v == SLOT_EMPTY) count_empty_slots++;
+        else if (v == SLOT_LOCKED) count_lock_slots++;
+        else if (v == SLOT_TOMB) count_tomb_slots++;
+        else count_alloc_slots++;
+    }
+
+    std::cout << "======= CHUNKS HASH TABLE LOG =======" << std::endl;
+    std::cout << "Total count hash table slots: " << chunk_hash_table_size << std::endl;
+    std::cout << "SLOT_EMPTY: " << count_empty_slots << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_empty_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    
+    std::cout << "SLOT_LOCKED: " << count_lock_slots << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_lock_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    
+    std::cout << "SLOT_TOMB: " << count_tomb_slots << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_tomb_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    
+    std::cout << "SLOT_ALLOC: " << count_alloc_slots << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_alloc_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
+
+    std::cout << std::endl;
+}
+
 void VoxelGridGPU::prepare_dispatch_args(
         SSBO& dispatch_args,
         const SSBO* arg_buffer_0, 

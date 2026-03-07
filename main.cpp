@@ -355,6 +355,10 @@ int main() {
             std::cout << "-----------------------" << std::endl << std::endl;
         }
 
+        if (ImGui::Button("Print chunks hash table log")) {
+            voxel_grid_gpu.print_chunks_hash_table_log();
+        }
+
         if (ImGui::Button("Print vb free list")) {
             std::vector<VoxelGridGPU::AllocNode> vb_nodes(voxel_grid_gpu.count_vb_nodes_);
             voxel_grid_gpu.vb_nodes_.read_subdata(0, vb_nodes.data(), sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_vb_nodes_);
