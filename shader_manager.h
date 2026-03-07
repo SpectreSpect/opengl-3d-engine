@@ -56,6 +56,8 @@ public:
     ComputeShader return_free_alloc_nodes_cs;
     ComputeShader return_free_alloc_nodes_dispatch_adapter_cs;
     ComputeShader free_evicted_chunks_mesh_cs;
+    ComputeShader fill_chunk_hash_table_cs;
+    ComputeShader clear_chunk_hash_table_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

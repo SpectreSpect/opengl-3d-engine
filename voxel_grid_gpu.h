@@ -224,6 +224,8 @@ public:
     ComputeProgram prog_return_free_alloc_nodes_;
     ComputeProgram prog_return_free_alloc_nodes_dispatch_adapter_;
     ComputeProgram prog_free_evicted_chunks_mesh_;
+    ComputeProgram prog_fill_chunk_hash_table_;
+    ComputeProgram prog_clear_chunk_hash_table_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO dispatch_indirect_buf_0_;
@@ -330,6 +332,10 @@ public:
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
     void print_chunks_hash_table_log();
 
+    void clear_chunk_hash_table();
+    void fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset);
+    void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset);
+
     void prepare_dispatch_args(
         SSBO& dispatch_args,
         const SSBO* arg_buffer_0, 
@@ -352,7 +358,7 @@ public:
     void build_bucket_lists(const glm::vec3& cam_pos);
     void evict_lowpriority_chunks();
     void free_evicted_chunks_mesh();
-    void ensure_free_chunks_gpu(const glm::vec3& cam_pos);
+    void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset);
     void ensure_voxel_write_list(size_t count);
 
     void reset_global_mesh_counters();

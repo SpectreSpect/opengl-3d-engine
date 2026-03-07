@@ -931,7 +931,7 @@ int main() {
 
         ImGui::Begin("Chunk enviction");
 
-        if (ImGui::Button("Run all pipeline")) voxel_grid_gpu.ensure_free_chunks_gpu(window.camera->position);
+        if (ImGui::Button("Run all pipeline")) voxel_grid_gpu.ensure_free_chunks_gpu(window.camera->position, math_utils::BITS, math_utils::OFFSET);
 
         ImGui::Spacing();
         ImGui::Separator();

@@ -46,6 +46,8 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     return_free_alloc_nodes_cs = ComputeShader((p / "shaders" / "voxel_grid" / "return_free_alloc_nodes.glsl").string());
     return_free_alloc_nodes_dispatch_adapter_cs = ComputeShader((p / "shaders" / "voxel_grid" / "return_free_alloc_nodes_dispatch_adapter.glsl").string());
     free_evicted_chunks_mesh_cs = ComputeShader((p / "shaders" / "voxel_grid" / "free_evicted_chunks_mesh.glsl").string());
+    fill_chunk_hash_table_cs = ComputeShader((p / "shaders" / "voxel_grid" / "fill_chunk_hash_table.glsl").string());
+    clear_chunk_hash_table_cs = ComputeShader((p / "shaders" / "voxel_grid" / "clear_chunk_hash_table.glsl").string());
     voxel_mesh_vs = VertexShader((p / "shaders" / "voxel_grid" / "voxel_mesh.vert").string());
     voxel_mesh_fs = FragmentShader((p / "shaders" / "voxel_grid" / "voxel_mesh.frag").string());
 }
