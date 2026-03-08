@@ -257,7 +257,6 @@ public:
     SSBO failed_dirty_list_;
     SSBO verify_debug_stack_;
     SSBO evicted_chunks_list_;
-    SSBO count_chunks_to_evict_;
 
     SSBO vb_heads_;
     SSBO vb_state_;
@@ -358,11 +357,11 @@ public:
 
     void reset_heads(); // ++++++++++++++++++++
     void build_bucket_lists(const glm::vec3& cam_pos); // ++++++++++++++++++++
-    void prepare_evict_lowpriority_chunks(const SSBO& dispatch_args);
-    void evict_lowpriority_chunks(const SSBO& dispatch_args);
-    void free_evicted_chunks_mesh();
-    void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset);
-    void ensure_voxel_write_list(size_t count);
+    void prepare_evict_lowpriority_chunks(const SSBO& dispatch_args); // ++++++++++++++++++++
+    void evict_lowpriority_chunks(const SSBO& dispatch_args); // ++++++++++++++++++++
+    void free_evicted_chunks_mesh(const SSBO& dispatch_args); // ++++++++++++++++++++
+    void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); // ++++++++++++++++++++
+    void ensure_voxel_write_list(size_t count); // ++++++++++++++++++++
 
     void reset_global_mesh_counters();
     void mesh_reset(const SSBO& dispatch_args);

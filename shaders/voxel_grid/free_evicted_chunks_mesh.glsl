@@ -23,7 +23,6 @@ layout(std430, binding=11) buffer EvictedChunksList { uint evicted_chunks_counte
 
 uniform uint u_vb_max_order;
 uniform uint u_ib_max_order;
-uniform uint u_count_chunks_to_envict;
 
 #define INVALID_ID 0xFFFFFFFFu
 
@@ -315,10 +314,8 @@ bool ib_free_pages(uint start, uint order) {
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x == 0u) evicted_chunks_counter = 0u;
-
     uint envicted_list_id = gl_GlobalInvocationID.x;
-    if (envicted_list_id >= u_count_chunks_to_envict) return;
+    if (envicted_list_id >= evicted_chunks_counter) return;
 
     uint chunk_id = evicted_chunks_list[envicted_list_id];
     if (chunk_id == INVALID_ID) return;
@@ -326,7 +323,7 @@ void main() {
     // Отчистка памяти
     ChunkMeshAlloc chunk_alloc = chunk_alloc_global[chunk_id];
     if (chunk_alloc.v_startPage != INVALID_ID) vb_free_pages(chunk_alloc.v_startPage, chunk_alloc.v_order);
-    if (chunk_alloc.i_startPage != INVALID_ID) vb_free_pages(chunk_alloc.i_startPage, chunk_alloc.i_order);
+    if (chunk_alloc.i_startPage != INVALID_ID) ib_free_pages(chunk_alloc.i_startPage, chunk_alloc.i_order);
 
     // Запись информации о том, что память для меша чанка chunk_id не выделенна
     chunk_alloc_global[chunk_id].v_startPage = INVALID_ID;

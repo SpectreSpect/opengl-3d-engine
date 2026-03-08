@@ -130,8 +130,6 @@ VoxelGridGPU::VoxelGridGPU(
     chunk_hash_keys_ = SSBO(sizeof(glm::uvec2) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
     chunk_hash_vals_ = SSBO(sizeof(uint32_t) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
 
-    count_chunks_to_evict_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW);
-
     // init_active_chunks(chunk_size, count_active_chunks, init_chunk_voxel_prifab);
     // init_chunks_hash_table();
     world_init_gpu();
@@ -913,7 +911,7 @@ void VoxelGridGPU::build_bucket_lists(const glm::vec3& cam_pos) {
 
 void VoxelGridGPU::prepare_evict_lowpriority_chunks(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
-    count_chunks_to_evict_.bind_base(1);
+    evicted_chunks_list_.bind_base(1);
     dispatch_args.bind_base(2);
     
     prog_evict_low_priority_dispatch_adapter_.use();
@@ -934,7 +932,6 @@ void VoxelGridGPU::evict_lowpriority_chunks(const SSBO& dispatch_args) {
     bucket_next_.bind_base(7);
     chunk_mesh_alloc_.bind_base(8);
     evicted_chunks_list_.bind_base(9);
-    count_chunks_to_evict_.bind_base(10);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
@@ -959,7 +956,7 @@ void VoxelGridGPU::evict_lowpriority_chunks(const SSBO& dispatch_args) {
     // }
 }
 
-void VoxelGridGPU::free_evicted_chunks_mesh() {
+void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
     chunk_mesh_alloc_.bind_base(0);
 
     vb_heads_.bind_base(1);
@@ -976,20 +973,26 @@ void VoxelGridGPU::free_evicted_chunks_mesh() {
 
     evicted_chunks_list_.bind_base(11);
 
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_vb_max_order"), vb_order_);
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_ib_max_order"), ib_order_);
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
-    uint32_t count_chunks_to_envict = evicted_chunks_list_.read_scalar<uint32_t>(sizeof(uint32_t));
+    prog_free_evicted_chunks_mesh_.use();
+    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "u_vb_max_order"), vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "u_ib_max_order"), ib_order_);
 
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_count_chunks_to_envict"), count_chunks_to_envict);
+    glDispatchComputeIndirect(0);
 
-    if (count_chunks_to_envict > 0) {
-        uint32_t evicted_groups = math_utils::div_up_u32(count_chunks_to_envict, 256u);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // uint32_t count_chunks_to_envict = evicted_chunks_list_.read_scalar<uint32_t>(sizeof(uint32_t));
 
-        prog_free_evicted_chunks_mesh_.dispatch_compute(evicted_groups, 1u, 1u);    
+    // glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_count_chunks_to_envict"), count_chunks_to_envict);
 
-        glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-    }
+    // if (count_chunks_to_envict > 0) {
+    //     uint32_t evicted_groups = math_utils::div_up_u32(count_chunks_to_envict, 256u);
+
+    //     prog_free_evicted_chunks_mesh_.dispatch_compute(evicted_groups, 1u, 1u);    
+
+    //     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    // }
 }
 
 void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset) {
@@ -999,7 +1002,10 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
     prepare_evict_lowpriority_chunks(dispatch_args);
     evict_lowpriority_chunks(dispatch_args);
 
-    free_evicted_chunks_mesh();
+    free_evicted_chunks_mesh(dispatch_args); // dispatch_args здесь уже подготовлен
+    
+    evicted_chunks_list_.update_subdata_fill<uint32_t>(0, 0u, sizeof(uint32_t));
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     prepare_return_free_alloc_nodes(dispatch_args);
     return_free_alloc_nodes(dispatch_args);

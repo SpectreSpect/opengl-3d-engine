@@ -11,7 +11,7 @@ struct FrameCounters {
     uint count_ib_free_pages;
 };
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
-layout(std430, binding=1) buffer CountChunksToEvictBuf { uint count_chunks_to_evict_buf; };
+layout(std430, binding=1) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
 
 uniform uint u_min_free;
@@ -29,12 +29,12 @@ void main() {
 
     if (counters.free_count < u_min_free) {
         uint count_chunks_to_envict = u_min_free - counters.free_count;
-        count_chunks_to_evict_buf = count_chunks_to_envict;
+        evicted_chunks_counter = count_chunks_to_envict;
 
         uint count_groups_to_envict = div_up_u32(count_chunks_to_envict, 256u);
         dispatch_args = uvec3(count_groups_to_envict, 1u, 1u);
     } else {
-        count_chunks_to_evict_buf = 0u;
+        evicted_chunks_counter = 0u;
         dispatch_args = uvec3(0u, 0u, 0u); // Это означает, что шейдер запускаться не будет - то что и нужно
     }
 }

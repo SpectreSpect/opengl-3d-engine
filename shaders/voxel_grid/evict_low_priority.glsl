@@ -37,7 +37,6 @@ struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startP
 layout(std430, binding=8) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
 
 layout(std430, binding=9) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
-layout(std430, binding=10) buffer CountChunksToEvictBuf { uint count_chunks_to_evict; };
 
 uniform uint u_hash_table_size;
 uniform uint u_bucket_count;
@@ -104,7 +103,7 @@ uint pop_bucket(uint b) {
 
 void main() {
     uint enviction_id = gl_GlobalInvocationID.x;
-    if (enviction_id >= count_chunks_to_evict) return;
+    if (enviction_id >= evicted_chunks_counter) return;
 
     uint victim = INVALID_ID;
     for (;;) {
