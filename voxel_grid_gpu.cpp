@@ -34,8 +34,7 @@ VoxelGridGPU::VoxelGridGPU(
 
     init_programs(shader_manager);
 
-    dispatch_indirect_buf_0_ = SSBO::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u);
-    dispatch_indirect_buf_1_ = SSBO::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u);
+    dispatch_args = SSBO::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u);
     
     chunk_meta_ = SSBO(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     free_list_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
@@ -935,10 +934,6 @@ void VoxelGridGPU::evict_lowpriority_chunks() {
     }
 }
 
-    // НЕ ЗАБЫТЬ ОЧИЩАТЬ RETURNED NODES!!!
-        // НЕ ЗАБЫТЬ ОЧИЩАТЬ RETURNED NODES!!!
-            // НЕ ЗАБЫТЬ ОЧИЩАТЬ RETURNED NODES!!!
-                // НЕ ЗАБЫТЬ ОЧИЩАТЬ RETURNED NODES!!!
 void VoxelGridGPU::free_evicted_chunks_mesh() {
     chunk_mesh_alloc_.bind_base(0);
 
@@ -978,8 +973,8 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
     evict_lowpriority_chunks();
     free_evicted_chunks_mesh();
 
-    prepare_return_free_alloc_nodes(dispatch_indirect_buf_0_);
-    return_free_alloc_nodes(dispatch_indirect_buf_0_);
+    prepare_return_free_alloc_nodes(dispatch_args);
+    return_free_alloc_nodes(dispatch_args);
 
     static double t0 = math_utils::ms_now() / 1000.0;
     double t1 = math_utils::ms_now() / 1000.0;
@@ -1001,22 +996,20 @@ void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
 
 void VoxelGridGPU::reset_global_mesh_counters() {
     mesh_counters_.bind_base(0);
-    dispatch_indirect_buf_0_.bind_base(1);
-    frame_counters_.bind_base(2);
+    frame_counters_.bind_base(1);
 
     prog_mesh_counters_reset_.use();
     prog_mesh_counters_reset_.dispatch_compute(1, 1, 1);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_reset() {
+void VoxelGridGPU::mesh_reset(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
     dirty_list_.bind_base(1);
     dirty_quad_count_.bind_base(2);
     emit_counter_.bind_base(3);
-    dispatch_indirect_buf_1_.bind_base(4);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_reset_.use();
     glUniform3ui(glGetUniformLocation(prog_mesh_reset_.id, "u3_chunk_size"), chunk_size.x, chunk_size.y, chunk_size.z);
@@ -1027,7 +1020,7 @@ void VoxelGridGPU::mesh_reset() {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_count(uint32_t pack_bits, uint32_t pack_offset) {
+void VoxelGridGPU::mesh_count(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
     uint32_t vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
 
     chunk_hash_keys_.bind_base(0);
@@ -1038,7 +1031,7 @@ void VoxelGridGPU::mesh_count(uint32_t pack_bits, uint32_t pack_offset) {
     dirty_quad_count_.bind_base(5);
     chunk_meta_.bind_base(6);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_1_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_count_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -1056,7 +1049,7 @@ void VoxelGridGPU::mesh_count(uint32_t pack_bits, uint32_t pack_offset) {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_alloc_vb() {
+void VoxelGridGPU::mesh_alloc_vb(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
     dirty_list_.bind_base(1);
     dirty_quad_count_.bind_base(2);
@@ -1072,7 +1065,7 @@ void VoxelGridGPU::mesh_alloc_vb() {
 
     debug_counters_vb_.bind_base(11);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_alloc_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_vb_pages_);
@@ -1090,7 +1083,7 @@ void VoxelGridGPU::mesh_alloc_vb() {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_alloc_ib() {
+void VoxelGridGPU::mesh_alloc_ib(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
     dirty_list_.bind_base(1);
     dirty_quad_count_.bind_base(2);
@@ -1106,7 +1099,7 @@ void VoxelGridGPU::mesh_alloc_ib() {
 
     debug_counters_ib_.bind_base(11);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_alloc_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_ib_pages_);
@@ -1124,12 +1117,12 @@ void VoxelGridGPU::mesh_alloc_ib() {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_alloc() {
-    mesh_alloc_vb();
-    mesh_alloc_ib();
+void VoxelGridGPU::mesh_alloc(const SSBO& dispatch_args) {
+    mesh_alloc_vb(dispatch_args);
+    mesh_alloc_ib(dispatch_args);
 }
 
-void VoxelGridGPU::verify_mesh_allocation() {
+void VoxelGridGPU::verify_mesh_allocation(const SSBO& dispatch_args) {
     // verify_debug_stack_.update_subdata_fill(sizeof(uint32_t) * 1, 0u, sizeof(uint32_t));
 
     chunk_mesh_alloc_local_.bind_base(0);
@@ -1151,7 +1144,7 @@ void VoxelGridGPU::verify_mesh_allocation() {
 
     verify_debug_stack_.bind_base(14);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_verify_mesh_allocation_.use();
     glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_min_free_pages"),  min_free_pages);
@@ -1202,7 +1195,7 @@ void VoxelGridGPU::return_free_alloc_nodes(const SSBO& dispatch_args) {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_emit(uint32_t pack_bits, uint32_t pack_offset) {
+void VoxelGridGPU::mesh_emit(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
     uint32_t vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
 
     chunk_hash_keys_.bind_base(0);
@@ -1219,9 +1212,7 @@ void VoxelGridGPU::mesh_emit(uint32_t pack_bits, uint32_t pack_offset) {
     global_vertex_buffer_.bind_base(8);
     global_index_buffer_.bind_base(9);
 
-    dispatch_indirect_buf_1_.bind_base(10);
-
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_0_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_emit_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -1243,7 +1234,7 @@ void VoxelGridGPU::mesh_emit(uint32_t pack_bits, uint32_t pack_offset) {
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::mesh_finalize() {
+void VoxelGridGPU::mesh_finalize(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
     dirty_list_.bind_base(1);
     enqueued_.bind_base(2);
@@ -1251,7 +1242,7 @@ void VoxelGridGPU::mesh_finalize() {
     chunk_mesh_alloc_.bind_base(4);
     failed_dirty_list_.bind_base(5);
 
-    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_indirect_buf_1_.id());
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_finalize_.use();
     glUniform1ui(glGetUniformLocation(prog_mesh_finalize_.id, "u_dirty_flag_bits"), 1u);
@@ -1470,42 +1461,72 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // std::cout << "REST GLOBAL COUNTERS" << std::endl;
 
     // ---- Pass: mesh_reset ----
-    mesh_reset();
+    prepare_dispatch_args(
+        dispatch_args, 
+        &frame_counters_, nullptr, nullptr,
+        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+        1u, 1u, 1u
+    );
+    mesh_reset(dispatch_args);
     // glFinish();
     // std::cout << "MESH RESET" << std::endl;
 
     // ---- Pass: mesh_count ----
-    mesh_count(pack_bits, pack_offset);
+    prepare_dispatch_args(
+        dispatch_args, 
+        nullptr, &frame_counters_, nullptr,
+        USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
+        vox_per_chunk, 1u, 1u
+    );
+    mesh_count(dispatch_args, pack_bits, pack_offset);
     // glFinish();
     // std::cout << "MESH COUNT" << std::endl;
 
     // ---- Pass: mesh_alloc ----
-    mesh_alloc();
+    prepare_dispatch_args(
+        dispatch_args, 
+        &frame_counters_, nullptr, nullptr,
+        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+        1u, 1u, 1u
+    );
+    mesh_alloc(dispatch_args);
     // glFinish();
     // std::cout << "MESH ALLOC" << std::endl;
 
     // ---- Pass: verify_mesh_allocation ----
-    verify_mesh_allocation();
+    prepare_dispatch_args(
+        dispatch_args, 
+        &frame_counters_, nullptr, nullptr,
+        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+        1u, 1u, 1u
+    );
+    verify_mesh_allocation(dispatch_args);
     // glFinish();
     // std::cout << "VERIFY_ALLOCATION" << std::endl;
-    prepare_return_free_alloc_nodes(dispatch_indirect_buf_1_);
-    return_free_alloc_nodes(dispatch_indirect_buf_1_);
+    prepare_return_free_alloc_nodes(dispatch_args);
+    return_free_alloc_nodes(dispatch_args);
 
     // prog_mesh_emit_.dispatch_compute(groups_vox, dirty_count, 1);
 
     // ---- Pass: mesh_emit ----
     prepare_dispatch_args(
-        dispatch_indirect_buf_0_, 
+        dispatch_args, 
         nullptr, &frame_counters_, nullptr,
         USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
         vox_per_chunk, 1u, 1u
     );
-    mesh_emit(pack_bits, pack_offset);
+    mesh_emit(dispatch_args, pack_bits, pack_offset);
     // glFinish();
     // std::cout << "MESH EMIT" << std::endl;
 
     // ---- Pass: mesh_finalize ----
-    mesh_finalize();
+    prepare_dispatch_args(
+        dispatch_args, 
+        &frame_counters_, nullptr, nullptr,
+        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+        1u, 1u, 1u
+    );
+    mesh_finalize(dispatch_args);
     // glFinish();
     // std::cout << "MESH FINALIZE" << std::endl;
 

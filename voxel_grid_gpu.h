@@ -228,8 +228,7 @@ public:
     ComputeProgram prog_clear_chunk_hash_table_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
-    SSBO dispatch_indirect_buf_0_;
-    SSBO dispatch_indirect_buf_1_;
+    SSBO dispatch_args;
     SSBO voxels_;
     SSBO chunk_meta_;
     SSBO chunk_hash_keys_;
@@ -362,16 +361,16 @@ public:
     void ensure_voxel_write_list(size_t count);
 
     void reset_global_mesh_counters();
-    void mesh_reset();
-    void mesh_count(uint32_t pack_bits, uint32_t pack_offset);
-    void mesh_alloc_vb();
-    void mesh_alloc_ib();
-    void mesh_alloc();
-    void verify_mesh_allocation();
+    void mesh_reset(const SSBO& dispatch_args);
+    void mesh_count(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset);
+    void mesh_alloc_vb(const SSBO& dispatch_args);
+    void mesh_alloc_ib(const SSBO& dispatch_args);
+    void mesh_alloc(const SSBO& dispatch_args);
+    void verify_mesh_allocation(const SSBO& dispatch_args);
     void prepare_return_free_alloc_nodes(SSBO& dispatch_args);
     void return_free_alloc_nodes(const SSBO& dispatch_args);
-    void mesh_emit(uint32_t pack_bits, uint32_t pack_offset);
-    void mesh_finalize();
+    void mesh_emit(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset);
+    void mesh_finalize(const SSBO& dispatch_args);
     void reset_dirty_count();
     void build_mesh_from_dirty(uint32_t pack_bits, int pack_offset);
 

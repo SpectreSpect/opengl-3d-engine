@@ -2,7 +2,6 @@
 layout(local_size_x = 1) in;
 
 layout(std430, binding=0) buffer MeshCounters { uvec2 meshCounters; };
-layout(std430, binding=1) buffer DispatchBuf { uvec3 dispatch_buf; };
 
 struct FrameCounters {
     uint write_count; 
@@ -13,7 +12,7 @@ struct FrameCounters {
     uint count_vb_free_pages;
     uint count_ib_free_pages;
 };
-layout(std430, binding=2) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=1) buffer FrameCountersBuf { FrameCounters counters; };
 
 uint div_up_u32(uint a, uint b) { 
     return (a + b - 1u) / b; 
@@ -25,7 +24,4 @@ uint max(uint a, uint b) {
 
 void main() {
     meshCounters = uvec2(0u, 0u);
-
-    uint dirty_groups = max(div_up_u32(counters.dirty_count, 256u), 1u);
-    dispatch_buf = uvec3(dirty_groups, 1u, 1u); 
 }

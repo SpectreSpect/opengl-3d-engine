@@ -804,64 +804,73 @@ int main() {
         }
 
         if (ImGui::Button("mesh_reset()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
-            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+                1u, 1u, 1u
+            );
             
-            voxel_grid_gpu.mesh_reset();
+            voxel_grid_gpu.mesh_reset(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("mesh_count()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
             uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
-            uint32_t vox_groups = math_utils::div_up_u32(vox_per_chunk, 256u);
-            uint32_t dispatch_args[3] = {vox_groups, dirty_count, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_1_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
-
-            voxel_grid_gpu.mesh_count(math_utils::BITS, math_utils::OFFSET);
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
+                voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
+                vox_per_chunk, 1u, 1u
+            );
+            voxel_grid_gpu.mesh_count(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_alloc()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
-            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+                1u, 1u, 1u
+            );
             
-            voxel_grid_gpu.mesh_alloc();
+            voxel_grid_gpu.mesh_alloc(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("verify_mesh_allocation()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
-            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
-
-            voxel_grid_gpu.verify_mesh_allocation();
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+                1u, 1u, 1u
+            );
+            voxel_grid_gpu.verify_mesh_allocation(voxel_grid_gpu.frame_counters_);
         }
 
         if (ImGui::Button("return_free_alloc_nodes()")) {
-            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_1_);
-            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_1_);
+            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.frame_counters_);
+            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.frame_counters_);
         }
 
         if (ImGui::Button("mesh_emit()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
             uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
-            uint32_t vox_groups = math_utils::div_up_u32(vox_per_chunk, 256u);
-            uint32_t dispatch_args[3] = {vox_groups, dirty_count, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_1_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
+                voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
+                vox_per_chunk, 1u, 1u
+            );
 
-            voxel_grid_gpu.mesh_emit(math_utils::BITS, math_utils::OFFSET);
+            voxel_grid_gpu.mesh_emit(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_finalize()")) {
-            uint32_t dirty_count = voxel_grid_gpu.read_dirty_count_cpu();
-            uint32_t dirty_groups = math_utils::div_up_u32(dirty_count, 256u);
-            uint32_t dispatch_args[3] = {dirty_groups, 1u, 1u};
-            voxel_grid_gpu.dispatch_indirect_buf_0_.update_subdata(0, dispatch_args, sizeof(uint32_t) * 3);
-            
-            voxel_grid_gpu.mesh_finalize();
+            voxel_grid_gpu.prepare_dispatch_args(
+                voxel_grid_gpu.dispatch_args, 
+                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+                1u, 1u, 1u
+            );
+            voxel_grid_gpu.mesh_finalize(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("reset_dirty_count()")) {
@@ -950,8 +959,8 @@ int main() {
         if (ImGui::Button("evict_lowpriority_chunks()")) voxel_grid_gpu.evict_lowpriority_chunks();
         if (ImGui::Button("free_evicted_chunks_mesh()")) voxel_grid_gpu.free_evicted_chunks_mesh();
         if (ImGui::Button("return_free_alloc_nodes()")) {
-            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_0_);
-            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.dispatch_indirect_buf_0_);
+            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_args);
+            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.dispatch_args);
         }
 
         ImGui::End();

@@ -59,8 +59,6 @@ struct Vertex {
 layout(std430, binding=8) buffer GlobalVB { Vertex vb[]; };
 layout(std430, binding=9) buffer GlobalIB { uint ib[]; };
 
-layout(std430, binding=10) buffer DispatchBuf { uvec3 dispatch_buf; };
-
 // ===== uniforms =====
 uniform uint  u_hash_table_size;
 uniform ivec3 u_chunk_dim;
@@ -399,10 +397,10 @@ void emit_quad(uint chunkId, ivec3 chunkCoord, ivec3 p, uint face, uint colorRGB
 }
 
 void main() {
-    if (gl_GlobalInvocationID.x == 0u && gl_GlobalInvocationID.y == 0u) {
-        uint dirty_groups = div_up_u32(counters.dirty_count, 256u);
-        dispatch_buf = uvec3(max(dirty_groups, 1u), 1u, 1u);
-    }
+    // if (gl_GlobalInvocationID.x == 0u && gl_GlobalInvocationID.y == 0u) {
+    //     uint dirty_groups = div_up_u32(counters.dirty_count, 256u);
+    //     dispatch_buf = uvec3(max(dirty_groups, 1u), 1u, 1u);
+    // }
 
     if (counters.count_vb_free_pages == INVALID_ID || counters.count_ib_free_pages == INVALID_ID)
         return;
