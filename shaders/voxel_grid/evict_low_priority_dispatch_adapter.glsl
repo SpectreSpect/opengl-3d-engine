@@ -1,0 +1,40 @@
+#version 430
+layout(local_size_x = 1) in;
+
+struct FrameCounters {
+    uint write_count; 
+    uint dirty_count;
+    uint cmd_count;
+    uint free_count;
+    uint failed_dirty_count;
+    uint count_vb_free_pages;
+    uint count_ib_free_pages;
+};
+layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=1) buffer CountChunksToEvictBuf { uint count_chunks_to_evict_buf; };
+layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
+
+uniform uint u_min_free;
+
+uint div_up_u32(uint a, uint b) { 
+    return (a + b - 1u) / b; 
+}
+
+uint max(uint a, uint b) {
+    return a > b ? a : b;
+}
+
+void main() {
+    if (gl_GlobalInvocationID.x != 0u) return;
+
+    if (counters.free_count < u_min_free) {
+        uint count_chunks_to_envict = u_min_free - counters.free_count;
+        count_chunks_to_evict_buf = count_chunks_to_envict;
+
+        uint count_groups_to_envict = div_up_u32(count_chunks_to_envict, 256u);
+        dispatch_args = uvec3(count_groups_to_envict, 1u, 1u);
+    } else {
+        count_chunks_to_evict_buf = 0u;
+        dispatch_args = uvec3(0u, 0u, 0u); // Это означает, что шейдер запускаться не будет - то что и нужно
+    }
+}

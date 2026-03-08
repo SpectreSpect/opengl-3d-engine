@@ -46,6 +46,7 @@ public:
     ComputeShader bucket_reset_cs;
     ComputeShader bucket_build_cs;
     ComputeShader evict_lowprio_cs;
+    ComputeShader evict_low_priority_dispatch_adapter_cs;
     ComputeShader stream_select_chunks_cs;
     ComputeShader stream_generate_terrain_cs;
     ComputeShader mark_all_user_chunks_as_dirty_cs;

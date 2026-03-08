@@ -956,7 +956,10 @@ int main() {
 
         if (ImGui::Button("reset_heads()")) voxel_grid_gpu.reset_heads();
         if (ImGui::Button("build_bucket_lists()")) voxel_grid_gpu.build_bucket_lists(window.camera->position);
-        if (ImGui::Button("evict_lowpriority_chunks()")) voxel_grid_gpu.evict_lowpriority_chunks();
+        if (ImGui::Button("evict_lowpriority_chunks()")) {
+            voxel_grid_gpu.prepare_evict_lowpriority_chunks(voxel_grid_gpu.dispatch_args);
+            voxel_grid_gpu.evict_lowpriority_chunks(voxel_grid_gpu.dispatch_args);
+        }
         if (ImGui::Button("free_evicted_chunks_mesh()")) voxel_grid_gpu.free_evicted_chunks_mesh();
         if (ImGui::Button("return_free_alloc_nodes()")) {
             voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.dispatch_args);

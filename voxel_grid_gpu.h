@@ -214,6 +214,7 @@ public:
     ComputeProgram prog_bucket_reset_;
     ComputeProgram prog_bucket_build_;
     ComputeProgram prog_evict_lowprio_;
+    ComputeProgram prog_evict_low_priority_dispatch_adapter_;
     ComputeProgram prog_stream_select_chunks_;
     ComputeProgram prog_stream_generate_terrain_;
     ComputeProgram prog_mark_all_user_chunks_as_dirty_;
@@ -256,6 +257,7 @@ public:
     SSBO failed_dirty_list_;
     SSBO verify_debug_stack_;
     SSBO evicted_chunks_list_;
+    SSBO count_chunks_to_evict_;
 
     SSBO vb_heads_;
     SSBO vb_state_;
@@ -326,14 +328,14 @@ public:
     // void clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDataGPU& init_voxel_prifab);
     // void init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab);
 
-    void init_chunks_hash_table();
-    void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);
-    void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
-    void print_chunks_hash_table_log();
+    // void init_chunks_hash_table();
+    // void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);
+    // void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys, bool set_with_replace);
+    void print_chunks_hash_table_log(); // ++++++++++++++++++++
 
-    void clear_chunk_hash_table();
-    void fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset);
-    void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset);
+    void clear_chunk_hash_table(); // ++++++++++++++++++++
+    void fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); // ++++++++++++++++++++
+    void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); // ++++++++++++++++++++
 
     void prepare_dispatch_args(
         SSBO& dispatch_args,
@@ -349,13 +351,15 @@ public:
         uint32_t x_workgroup_size = 256u,
         uint32_t y_workgroup_size = 1u,
         uint32_t z_workgroup_size = 1u
-    );
+    ); // ++++++++++++++++++++
 
-    void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
-    void print_eviction_log(const glm::vec3& camera_pos);
-    void reset_heads();
-    void build_bucket_lists(const glm::vec3& cam_pos);
-    void evict_lowpriority_chunks();
+    // void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
+    void print_eviction_log(const glm::vec3& camera_pos); // ++++++++++++++++++++
+
+    void reset_heads(); // ++++++++++++++++++++
+    void build_bucket_lists(const glm::vec3& cam_pos); // ++++++++++++++++++++
+    void prepare_evict_lowpriority_chunks(const SSBO& dispatch_args);
+    void evict_lowpriority_chunks(const SSBO& dispatch_args);
     void free_evicted_chunks_mesh();
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset);
     void ensure_voxel_write_list(size_t count);

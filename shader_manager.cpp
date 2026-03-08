@@ -36,6 +36,7 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     bucket_reset_cs = ComputeShader((p / "shaders" / "voxel_grid" / "evict_buckets_reset.glsl").string());
     bucket_build_cs = ComputeShader((p / "shaders" / "voxel_grid" / "evict_buckets_build.glsl").string());
     evict_lowprio_cs = ComputeShader((p / "shaders" / "voxel_grid" / "evict_low_priority.glsl").string());
+    evict_low_priority_dispatch_adapter_cs = ComputeShader((p / "shaders" / "voxel_grid" / "evict_low_priority_dispatch_adapter.glsl").string());
     stream_select_chunks_cs = ComputeShader((p / "shaders" / "voxel_grid" / "stream_select_chunks.glsl").string());
     stream_generate_terrain_cs = ComputeShader((p / "shaders" / "voxel_grid" / "stream_generate_terrain.glsl").string());
     mark_all_user_chunks_as_dirty_cs = ComputeShader((p / "shaders" / "voxel_grid" / "mark_all_user_chunks_as_dirty.glsl").string());
