@@ -13,13 +13,13 @@ struct FrameCounters {
     uint count_vb_free_pages;
     uint count_ib_free_pages;
 };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // z = cmdCount
+layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
 
 struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=1) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
 struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
-layout(std430, binding=24) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
+layout(std430, binding=2) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
 
 struct DrawElementsIndirectCommand {
     uint count;
@@ -28,7 +28,7 @@ struct DrawElementsIndirectCommand {
     int  baseVertex;
     uint baseInstance;
 };
-layout(std430, binding=15) buffer IndirectCmdBuf { DrawElementsIndirectCommand cmds[]; };
+layout(std430, binding=3) buffer IndirectCmdBuf { DrawElementsIndirectCommand cmds[]; };
 
 uniform uint  u_max_chunks;
 

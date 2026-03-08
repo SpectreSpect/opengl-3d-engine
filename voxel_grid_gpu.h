@@ -319,12 +319,12 @@ public:
     uint32_t read_dirty_count_cpu();
 
 
-    void world_init_gpu();
+    void world_init_gpu(); // ++++++++++++++++++++
 
-    void init_mesh_pool();
+    void init_mesh_pool(); // ++++++++++++++++++++
 
-    void clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDataGPU& init_voxel_prifab);
-    void init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab);
+    // void clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDataGPU& init_voxel_prifab);
+    // void init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab);
 
     void init_chunks_hash_table();
     void set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace);

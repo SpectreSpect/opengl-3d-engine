@@ -10,8 +10,7 @@ struct FrameCounters {
     uint count_vb_free_pages;
     uint count_ib_free_pages;
 };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
-// counters = { voxelWriteCount, dirtyCount, cmdCount, freeCount }
+layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
 
 uniform uint u_min_free_pages;
 
