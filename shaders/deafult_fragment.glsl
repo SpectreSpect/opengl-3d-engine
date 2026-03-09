@@ -30,6 +30,8 @@ uniform sampler2D  uBrdfLUT;
 // uniform int   uUseNormalTexture = 1;
 // uniform int   uUseORMTexture    = 0;
 
+uniform vec3 uEnvironmentMultiplier = vec3(1.0);
+
 uniform float uNormalStrength   = 1.0;
 uniform float uPrefilterMaxMip;
 
@@ -186,26 +188,12 @@ void accumulateLight(
 
 void main()
 {
-    // vec3 vertexAlbedo = clamp(vColor, 0.0, 1.0);
-    // vec3 texAlbedo    = texture(uAlbedo, vUV).rgb;
-    // vec3 albedo       = (uUseAlbedoTexture != 0) ? (vertexAlbedo * texAlbedo) : vertexAlbedo;
-
     vec3 albedo = clamp(vColor, 0.0, 1.0);
+    float metallic = 0.0;
+    float roughness = 0.3;
+    float ao = 1.0;
 
-    float metallic  = 1.0;
-    float roughness = 0.05;
-    float ao        = 1.0;
-
-    // Leave this off unless your uORM really is packed as:
-    // R = AO, G = roughness, B = metallic
-    // if (uUseORMTexture != 0) {
-    //     vec3 orm = texture(uORM, vUV).rgb;
-    //     ao        = orm.r;
-    //     roughness = orm.g;
-    //     metallic  = orm.b;
-    // }
-
-    roughness = clamp(roughness, 0.04, 1.0);
+    roughness = clamp(roughness, 0.0005, 1.0);
     metallic  = clamp(metallic, 0.0, 1.0);
     ao        = clamp(ao, 0.0, 1.0);
 
@@ -219,7 +207,8 @@ void main()
     vec3 Lo = vec3(0.0);
 
     vec3 global_light_dir   = normalize(vec3(1.0, 1.5, 1.3));
-    vec3 global_light_color = vec3(0.15);
+    // vec3 global_light_color = vec3(0.15);
+    vec3 global_light_color = vec3(0.0);
 
     accumulateLight(
         N, V, albedo, metallic, roughness, F0,
@@ -262,14 +251,15 @@ void main()
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-    vec3 irradiance = texture(irradianceMap, N).rgb;
+    vec3 irradiance = texture(irradianceMap, N).rgb * uEnvironmentMultiplier;
     vec3 diffuseIBL = irradiance * albedo;
 
+    float lod = roughness * min(uPrefilterMaxMip, 4.0);
     vec3 prefilteredColor = textureLod(
         prefilterMap,
         normalize(R),
-        roughness * uPrefilterMaxMip
-    ).rgb;
+        lod
+    ).rgb * uEnvironmentMultiplier;
 
     vec2 brdf = texture(uBrdfLUT, vec2(NdotV, roughness)).rg;
     vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
@@ -277,6 +267,12 @@ void main()
     vec3 ambient = (kD * diffuseIBL + specularIBL) * ao;
 
     vec3 color = ambient + Lo;
+
+    // color = color / (color + vec3(1.0));
+    // color = pow(color, vec3(1.0 / 2.2));
+
+    float exposure = 0.5;
+    color *= exposure;
 
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0 / 2.2));

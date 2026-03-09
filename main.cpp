@@ -60,7 +60,8 @@
 #include "texture_manager.h"
 #include "pbr_skybox.h"
 
-float clear_col[4] = {0.15f, 0.15f, 0.18f, 1.0f};
+// float clear_col[4] = {0.15f, 0.15f, 0.18f, 1.0f};
+float clear_col[4] = {0, 0, 0, 1.0f};
 
 void set_light_position(SSBO& light_source_ssbo, size_t index, const glm::vec4 &pos) {
     size_t offset = index * sizeof(LightSource);
@@ -98,7 +99,7 @@ int main() {
 
     CirlceInstance circle_instance;
     // circle_instance.color = glm::vec4(1, 1, 1, 1);
-    circle_instance.color = glm::vec4(1, 1, 1, 1);
+    circle_instance.color = glm::vec4(0.8, 0.8, 0.2, 1);
 
     std::vector<CirlceInstance> instances;
 
@@ -108,7 +109,7 @@ int main() {
             circle_instance.position_radius.x = (x + 0.5) * 2;
             circle_instance.position_radius.z = (z + 0.5) * 2;
 
-            // circle_instance.color = glm::vec4((float)x / (float)row_size, 0, (float)z / (float)row_size, 1);
+            circle_instance.color = glm::vec4((float)x / (float)row_size, 0, (float)z / (float)row_size, 1);
 
             instances.push_back(circle_instance);
         }
@@ -116,8 +117,28 @@ int main() {
     CircleCloud circle_cloud = CircleCloud();
     circle_cloud.set_instances(instances);
 
+    LightSource light_source;
+    light_source.position = glm::vec4(-15, 2, 2, 8);
+    light_source.color = glm::vec4(1, 0, 0, 1);
+    engine.lighting_system.set_light_source(0, light_source);
+
+    light_source.position = glm::vec4(-15, 2, -2, 8);
+    light_source.color = glm::vec4(0, 1, 0, 1);
+    engine.lighting_system.set_light_source(1, light_source);
+
+    light_source.position = glm::vec4(-13, 2, 0, 8);
+    light_source.color = glm::vec4(0, 0, 1, 1);
+    engine.lighting_system.set_light_source(2, light_source);
+
+    light_source.position = glm::vec4(-17, 2, 0, 8);
+    light_source.color = glm::vec4(1, 1, 1, 1);
+    engine.lighting_system.set_light_source(3, light_source);
+
     Sphere sphere = Sphere();
-    PBRSkybox skybox = PBRSkybox(engine.texture_manager->citrus_orchard_puresky_4k);
+    sphere.mesh->position.x = -14;
+    sphere.mesh->position.y = 1;
+
+    PBRSkybox skybox = PBRSkybox(engine.texture_manager->st_peters_square_night_4k);
         
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
@@ -138,10 +159,12 @@ int main() {
 
         skybox.attach_environment(*engine.default_program);
         skybox.attach_environment(*engine.default_circle_program);
-        
 
-        // voxel_grid->update(&window, &camera);
-        // window.draw(voxel_grid, &camera);
+        sphere.mesh->position.x = -14 + cos(timer) * 4;
+        sphere.mesh->position.z = 0 + sin(timer) * 4;
+
+        voxel_grid->update(&window, &camera);
+        window.draw(voxel_grid, &camera);
 
         window.draw(&point_cloud_mesh, &camera);
         

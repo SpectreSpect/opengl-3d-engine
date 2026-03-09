@@ -25,4 +25,10 @@ void TextureManager::init_textures(Engine3D& engine, const std::string& root_pat
 
     citrus_orchard_puresky_4k = PBREnvironment(engine, (p / "assets/hdr/citrus_orchard_puresky_4k.hdr").string(),
                                                brdf_lut, capture_fbo, cube.mesh, size);
+    studio_kominka_02_4k = PBREnvironment(engine, (p / "assets/hdr/studio_kominka_02_4k.hdr").string(),
+                                               brdf_lut, capture_fbo, cube.mesh, size);
+    st_peters_square_night_4k = PBREnvironment(engine, (p / "assets/hdr/st_peters_square_night_4k.hdr").string(),
+                                               brdf_lut, capture_fbo, cube.mesh, size);
+    qwantani_moonrise_puresky_4k = PBREnvironment(engine, (p / "assets/hdr/qwantani_moonrise_puresky_4k.hdr").string(),
+                                               brdf_lut, capture_fbo, cube.mesh, size);
 }

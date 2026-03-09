@@ -29,7 +29,7 @@ PBREnvironment::PBREnvironment(Engine3D& engine, const std::string& filepath, Te
     
     environment = generate_environment_map(engine, captureProj, equirectangular, capture_fbo, captureViews, cube_mesh, size);
     irradiance = generate_irradiance_map(engine, environment, cube_mesh, captureViews, captureProj);
-    prefilter = generate_irradiance_map(engine, environment, cube_mesh, captureViews, captureProj);
+    prefilter = generate_prefilter_map(engine, environment, cube_mesh, captureViews, captureProj);
 }
 
 Cubemap PBREnvironment::generate_environment_map(Engine3D& engine, glm::mat4& captureProj, 
@@ -134,7 +134,8 @@ Cubemap PBREnvironment::generate_irradiance_map(Engine3D& engine, const Cubemap&
 Cubemap PBREnvironment::generate_prefilter_map(Engine3D& engine, const Cubemap& environment_map, 
                                                const Mesh* cube_mesh, std::array<glm::mat4, 6> captureViews, glm::mat4 captureProj) {
     Cubemap prefilterMap;
-    int prefilterSize = 128;
+    int prefilterSize = 2048;
+    // int prefilterSize = 256;
 
     prefilterMap.createEmpty(
         prefilterSize,

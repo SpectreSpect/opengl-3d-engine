@@ -3,7 +3,7 @@
 
 
 void LightingSystem::init(ShaderManager& shader_manager) {
-    light_sources = std::vector<LightSource>(max_num_light_sources);
+    light_sources = std::vector<LightSource>(max_num_light_sources, {glm::vec4(0.0f), glm::vec4(0.0f)});
 
     lights_in_clusters = std::vector<std::vector<size_t>>(num_clusters.x * num_clusters.y * num_clusters.z);
     for (auto &v : lights_in_clusters) {
@@ -28,22 +28,18 @@ void LightingSystem::set_light_source(size_t id, LightSource light_source) {
 void LightingSystem::update_light_sources() {
     if (dirty_lights.empty())
         return;
-    
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, light_source_ssbo.id_);
 
-    LightSource* gpu_lights = (LightSource*)glMapBufferRange(
-        GL_SHADER_STORAGE_BUFFER,
-        0,
-        light_sources.size() * sizeof(LightSource),
-        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT
-    );
-    
     for (size_t light_id : dirty_lights) {
-        gpu_lights[light_id] = light_sources[light_id];
+        glBufferSubData(
+            GL_SHADER_STORAGE_BUFFER,
+            light_id * sizeof(LightSource),
+            sizeof(LightSource),
+            &light_sources[light_id]
+        );
     }
 
-    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-    
     dirty_lights.clear();
 }
 
