@@ -32,6 +32,7 @@
 #include "math_utils.h"
 #include "compute_program.h"
 #include "lighting_system.h"
+#include "texture_manager.h"
 
 class Window;
 
@@ -45,6 +46,7 @@ public:
     MeshManager* mesh_manager;
     MaterialManager* material_manager;
     ShaderManager* shader_manager;
+    TextureManager* texture_manager;
     LightingSystem lighting_system;
 
     VfProgram* default_line_program;

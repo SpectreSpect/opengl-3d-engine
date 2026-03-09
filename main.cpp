@@ -74,8 +74,6 @@ int main() {
     engine.set_window(&window);
     ui::init(window.window);
 
-    TextureManager texture_manager = TextureManager(engine, executable_dir_str());
-    
     Camera camera;
     window.set_camera(&camera);
     FPSCameraController camera_controller = FPSCameraController(&camera);
@@ -99,6 +97,7 @@ int main() {
     Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh_gpu(rings_count, ring_size, 1.5);
 
     CirlceInstance circle_instance;
+    // circle_instance.color = glm::vec4(1, 1, 1, 1);
     circle_instance.color = glm::vec4(1, 1, 1, 1);
 
     std::vector<CirlceInstance> instances;
@@ -118,7 +117,7 @@ int main() {
     circle_cloud.set_instances(instances);
 
     Sphere sphere = Sphere();
-    PBRSkybox skybox = PBRSkybox(texture_manager.citrus_orchard_puresky_4k);
+    PBRSkybox skybox = PBRSkybox(engine.texture_manager->citrus_orchard_puresky_4k);
         
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
@@ -141,8 +140,8 @@ int main() {
         skybox.attach_environment(*engine.default_circle_program);
         
 
-        voxel_grid->update(&window, &camera);
-        window.draw(voxel_grid, &camera);
+        // voxel_grid->update(&window, &camera);
+        // window.draw(voxel_grid, &camera);
 
         window.draw(&point_cloud_mesh, &camera);
         

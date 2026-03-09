@@ -268,7 +268,8 @@ std::shared_ptr<std::vector<Voxel>> VoxelGrid::generate_chunk(glm::ivec3 chunk_p
     const float cos_flat_start = 0.92f;
     const float cos_steep_end  = 0.75f;
 
-    const glm::vec3 road_color = {0.2f, 0.2f, 0.2f};
+    // const glm::vec3 road_color = {0.2f, 0.2f, 0.2f};
+    const glm::vec3 road_color = {0, 0, 0};
     // const glm::vec3 road_color = {1.0f, 1.0f, 1.0f};
     const glm::vec3 curvature_color = {1.0f, 0.0f, 0.0f};
     // const glm::vec3 curvature_color = {0.0f, 0.0f, 1.0f};

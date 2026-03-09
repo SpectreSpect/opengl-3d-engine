@@ -192,8 +192,8 @@ void main()
 
     vec3 albedo = clamp(vColor, 0.0, 1.0);
 
-    float metallic  = 0.0;
-    float roughness = 1.0;
+    float metallic  = 1.0;
+    float roughness = 0.05;
     float ao        = 1.0;
 
     // Leave this off unless your uORM really is packed as:
@@ -281,5 +281,6 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0 / 2.2));
 
-    FragColor = vec4(color, 1.0);
+    // FragColor = vec4(color, 1.0);
+    FragColor = vec4(specularIBL, 1.0);
 }

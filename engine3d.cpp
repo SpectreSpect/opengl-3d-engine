@@ -42,6 +42,7 @@ int Engine3D::init_glew() {
     material_manager->load_blinn_phong();
 
     shader_manager = new ShaderManager(executable_dir_str());
+    
 
     // default_vertex_shader = new VertexShader(default_vertex_shader_path);
     // default_fragment_shader = new FragmentShader(default_fragment_shader_path);
@@ -57,6 +58,8 @@ int Engine3D::init_glew() {
 
     lighting_system.init(*shader_manager);
 
+
+    texture_manager = new TextureManager(*this, executable_dir_str());
     return 1;
 }
 
