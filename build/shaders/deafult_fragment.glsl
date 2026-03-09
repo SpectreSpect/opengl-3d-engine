@@ -22,13 +22,13 @@ layout(std430, binding=7) buffer LightsInClusters { uint lights_in_clusters[]; }
 uniform samplerCube irradianceMap;
 uniform samplerCube prefilterMap;
 uniform sampler2D  uBrdfLUT;
-uniform sampler2D  uAlbedo;
-uniform sampler2D  uNormal;
-uniform sampler2D  uORM;
+// uniform sampler2D  uAlbedo;
+// uniform sampler2D  uNormal;
+// uniform sampler2D  uORM;
 
-uniform int   uUseAlbedoTexture = 1;
-uniform int   uUseNormalTexture = 1;
-uniform int   uUseORMTexture    = 1;
+// uniform int   uUseAlbedoTexture = 1;
+// uniform int   uUseNormalTexture = 1;
+// uniform int   uUseORMTexture    = 0;
 
 uniform float uNormalStrength   = 1.0;
 uniform float uPrefilterMaxMip;
@@ -130,29 +130,29 @@ mat3 cotangentFrame(vec3 N, vec3 p, vec2 uv)
     return mat3(T * invMax, B * invMax, N);
 }
 
-vec3 getShadingNormal()
-{
-    vec3 N = normalize(vNormal);
+// vec3 getShadingNormal()
+// {
+//     vec3 N = normalize(vNormal);
 
-    if (uUseNormalTexture == 0)
-        return N;
+//     if (uUseNormalTexture == 0)
+//         return N;
 
-    vec3 T = normalize(vTangent);
-    vec3 B = normalize(cross(N, T)) * vTangentSign;
+//     vec3 T = normalize(vTangent);
+//     vec3 B = normalize(cross(N, T)) * vTangentSign;
 
-    mat3 TBN = mat3(T, B, N);
+//     mat3 TBN = mat3(T, B, N);
 
-    vec3 tangentNormal = texture(uNormal, vUV).xyz * 2.0 - 1.0;
+//     vec3 tangentNormal = texture(uNormal, vUV).xyz * 2.0 - 1.0;
 
-    // For *_nor_gl_* keep this as-is.
-    // If it ever looks inverted, then try:
-    // tangentNormal.y = -tangentNormal.y;
+//     // For *_nor_gl_* keep this as-is.
+//     // If it ever looks inverted, then try:
+//     // tangentNormal.y = -tangentNormal.y;
 
-    tangentNormal.xy *= uNormalStrength;
-    tangentNormal = normalize(tangentNormal);
+//     tangentNormal.xy *= uNormalStrength;
+//     tangentNormal = normalize(tangentNormal);
 
-    return normalize(TBN * tangentNormal);
-}
+//     return normalize(TBN * tangentNormal);
+// }
 
 void accumulateLight(
     in vec3 N,
@@ -186,9 +186,11 @@ void accumulateLight(
 
 void main()
 {
-    vec3 vertexAlbedo = clamp(vColor, 0.0, 1.0);
-    vec3 texAlbedo    = texture(uAlbedo, vUV).rgb;
-    vec3 albedo       = (uUseAlbedoTexture != 0) ? (vertexAlbedo * texAlbedo) : vertexAlbedo;
+    // vec3 vertexAlbedo = clamp(vColor, 0.0, 1.0);
+    // vec3 texAlbedo    = texture(uAlbedo, vUV).rgb;
+    // vec3 albedo       = (uUseAlbedoTexture != 0) ? (vertexAlbedo * texAlbedo) : vertexAlbedo;
+
+    vec3 albedo = clamp(vColor, 0.0, 1.0);
 
     float metallic  = 0.0;
     float roughness = 1.0;
@@ -196,18 +198,19 @@ void main()
 
     // Leave this off unless your uORM really is packed as:
     // R = AO, G = roughness, B = metallic
-    if (uUseORMTexture != 0) {
-        vec3 orm = texture(uORM, vUV).rgb;
-        ao        = orm.r;
-        roughness = orm.g;
-        metallic  = orm.b;
-    }
+    // if (uUseORMTexture != 0) {
+    //     vec3 orm = texture(uORM, vUV).rgb;
+    //     ao        = orm.r;
+    //     roughness = orm.g;
+    //     metallic  = orm.b;
+    // }
 
     roughness = clamp(roughness, 0.04, 1.0);
     metallic  = clamp(metallic, 0.0, 1.0);
     ao        = clamp(ao, 0.0, 1.0);
 
-    vec3 N = getShadingNormal();
+    // vec3 N = getShadingNormal();
+    vec3 N = normalize(vNormal);
     vec3 V = normalize(uViewPos - vFragPos);
     vec3 R = reflect(-V, N);
 

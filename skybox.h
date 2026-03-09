@@ -8,8 +8,7 @@ class Skybox : public Drawable {
 public:
     const Cubemap* cubemap;
     Mesh* mesh;
-    
-
+    Skybox() = default;
     Skybox(const Cubemap &cubemap);
     // Skybox();
     virtual void draw(RenderState state);

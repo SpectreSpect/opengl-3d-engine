@@ -71,6 +71,11 @@ add_executable(app
   cubemap.cpp
   skybox.cpp
   framebuffer.cpp
+  sphere.cpp
+  quad.cpp
+  texture_manager.cpp
+  pbr_environment.cpp
+  pbr_skybox.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
