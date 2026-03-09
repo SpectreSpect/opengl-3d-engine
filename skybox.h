@@ -1,8 +1,16 @@
 #pragma once
 #include "transformable.h"
 #include "drawable.h"
+#include "cubemap.h"
+#include "mesh.h"
 
-class SkyBox : public Drawable {
+class Skybox : public Drawable {
 public:
-    SkyBox();
+    const Cubemap* cubemap;
+    Mesh* mesh;
+    
+
+    Skybox(const Cubemap &cubemap);
+    // Skybox();
+    virtual void draw(RenderState state);
 };

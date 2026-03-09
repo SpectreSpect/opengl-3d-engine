@@ -66,7 +66,24 @@ add_executable(app
   point_cloud/point_cloud.cpp
   point_cloud/point_cloud_video.cpp
   lighting_system.cpp
+  circle_cloud.cpp
+  texture.cpp
+  cubemap.cpp
+  skybox.cpp
+  framebuffer.cpp
 )
+
+set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
+
+add_custom_target(copy_assets ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${ASSETS_SRC}"
+          "$<TARGET_FILE_DIR:app>/assets"
+  COMMENT "Copying assets next to app"
+)
+
+add_dependencies(copy_assets app)
+
 
 set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
 
@@ -77,8 +94,8 @@ add_custom_target(copy_shaders ALL
   COMMENT "Copying shaders next to app"
 )
 
-# Make sure the executable dir exists first (and avoid cycles)
 add_dependencies(copy_shaders app)
+
 
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------

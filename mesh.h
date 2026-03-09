@@ -16,7 +16,7 @@ public:
     EBO* ebo;
     VertexLayout* vertex_layout;
     
-    
+    Mesh() = default;
     Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, VertexLayout* vertex_layout);
     Mesh(const SSBO& vertex_buffer, const SSBO& index_buffer, VertexLayout* vertex_layout);
     ~Mesh();

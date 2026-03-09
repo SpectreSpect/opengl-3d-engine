@@ -48,6 +48,12 @@ int Engine3D::init_glew() {
     default_program = new VfProgram(&shader_manager->default_vertex_shader, &shader_manager->default_fragment_shader);
     default_line_program = new VfProgram(&shader_manager->default_line_vertex_shader, &shader_manager->default_line_fragment_shader);
     default_point_program = new VfProgram(&shader_manager->default_point_vertex_shader, &shader_manager->default_point_fragment_shader);
+    default_circle_program = new VfProgram(&shader_manager->default_cirlce_vertex_shader, &shader_manager->default_fragment_shader);
+    skybox_program = new VfProgram(&shader_manager->skybox_vs, &shader_manager->skybox_fs);
+    equirect_to_cubemap_program = new VfProgram(&shader_manager->equirect_to_cubemap_vs, &shader_manager->equirect_to_cubemap_fs);
+    irradiance_program = new VfProgram(&shader_manager->irradiance_vs, &shader_manager->irradiance_fs);
+    prefilter_program = new VfProgram(&shader_manager->prefilter_vs, &shader_manager->prefilter_fs);
+    brdf_lut_program = new VfProgram(&shader_manager->brdf_lut_vs, &shader_manager->brdf_lut_fs);
 
     lighting_system.init(*shader_manager);
 

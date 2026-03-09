@@ -20,6 +20,23 @@ void ShaderManager::init_shaders(const std::string& root_path) {
     add_shader(default_point_vertex_shader, VertexShader((p / "shaders" / "point_vs.glsl").string())); 
     add_shader(default_point_fragment_shader, FragmentShader((p / "shaders" / "point_fs.glsl").string())); 
 
+    add_shader(default_cirlce_vertex_shader, VertexShader((p / "shaders" / "circle_vs.glsl").string())); 
+
+    add_shader(skybox_vs, VertexShader((p / "shaders" / "skybox_vs.glsl").string())); 
+    add_shader(skybox_fs, FragmentShader((p / "shaders" / "skybox_fs.glsl").string())); 
+
+    add_shader(equirect_to_cubemap_vs, VertexShader((p / "shaders" / "equirect_to_cubemap_vs.glsl").string())); 
+    add_shader(equirect_to_cubemap_fs, FragmentShader((p / "shaders" / "equirect_to_cubemap_fs.glsl").string())); 
+
+    add_shader(irradiance_vs, VertexShader((p / "shaders" / "pbr" / "irradiance_vs.glsl").string())); 
+    add_shader(irradiance_fs, FragmentShader((p / "shaders" / "pbr" / "irradiance_fs.glsl").string())); 
+    
+    add_shader(prefilter_vs, VertexShader((p / "shaders" / "pbr" / "prefilter_vs.glsl").string())); 
+    add_shader(prefilter_fs, FragmentShader((p / "shaders" / "pbr" / "prefilter_fs.glsl").string())); 
+
+    add_shader(brdf_lut_vs, VertexShader((p / "shaders" / "pbr" / "brdf_vs.glsl").string())); 
+    add_shader(brdf_lut_fs, FragmentShader((p / "shaders" / "pbr" / "brdf_fs.glsl").string())); 
+    
     add_shader(count_cs, ComputeShader((p / "shaders" / "voxel_rasterization" / "count_cs.glsl").string())); 
     add_shader(scan_blocks_cs, ComputeShader((p / "shaders" / "voxel_rasterization" / "scan_blocks_cs.glsl").string()));
     add_shader(add_block_offsets_cs, ComputeShader((p / "shaders" / "voxel_rasterization" / "add_block_offsets_cs.glsl").string()));

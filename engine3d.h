@@ -49,6 +49,15 @@ public:
 
     VfProgram* default_line_program;
     VfProgram* default_point_program;
+    VfProgram* default_circle_program;
+    VfProgram* skybox_program;
+    VfProgram* equirect_to_cubemap_program;
+    VfProgram* irradiance_program;
+    VfProgram* prefilter_program;
+    VfProgram* brdf_lut_program;
+    
+    
+    
 
     // std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
     // std::string default_fragment_shader_path = (executable_dir() / "shaders" / "deafult_fragment.glsl").string();

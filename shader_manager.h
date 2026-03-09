@@ -22,6 +22,27 @@ public:
     VertexShader default_point_vertex_shader;
     FragmentShader default_point_fragment_shader;
 
+    VertexShader default_cirlce_vertex_shader;
+
+    VertexShader skybox_vs;
+    FragmentShader skybox_fs;
+
+    VertexShader equirect_to_cubemap_vs;
+    FragmentShader equirect_to_cubemap_fs;
+
+    VertexShader irradiance_vs;
+    FragmentShader irradiance_fs;
+
+    VertexShader prefilter_vs;
+    FragmentShader prefilter_fs;
+
+    VertexShader brdf_lut_vs;
+    FragmentShader brdf_lut_fs;
+
+    
+
+    
+
     // std::string default_vertex_shader_path = (executable_dir() / "shaders" / "deafult_vertex.glsl").string();
     // std::string default_fragment_shader_path = (executable_dir() / "shaders" / "deafult_fragment.glsl").string();
 
