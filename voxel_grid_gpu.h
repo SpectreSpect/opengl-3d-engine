@@ -71,6 +71,27 @@ public:
     struct alignas(8) VoxelDataGPU {
         uint32_t type_vis_flags;
         uint32_t color;
+
+        VoxelDataGPU() = default;
+
+        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
+            init(type, visability, flags, color);
+        }
+
+        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec4 color) {
+            uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | (color.w & 0xFFu);
+            init(type, visability, flags, packed_color);
+        }
+
+        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec3 color) {
+            uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | 0xFFu;
+            init(type, visability, flags, packed_color);
+        }
+
+        inline void init(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
+            this->type_vis_flags = ((type & 0xFFu) << 16) | ((visability & 0xFFu) << 8) | (flags & 0xFFu); // Тип 0
+            this->color = color;
+        }
     };
     static_assert(sizeof(VoxelDataGPU) == 8);
     static_assert(alignof(VoxelDataGPU) == 8);

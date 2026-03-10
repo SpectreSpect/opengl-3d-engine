@@ -120,13 +120,9 @@ VoxelGridGPU::VoxelGridGPU(
     stream_generate_debug_counters_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)2, GL_DYNAMIC_DRAW, 0u, shader_manager);
     alloc_markers_ = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, shader_manager);
 
-    VoxelDataGPU init_chunk_voxel_prifab = {0};
-    init_chunk_voxel_prifab.type_vis_flags |= (0u & 0xFFu) << 16; // Тип 0
-    init_chunk_voxel_prifab.type_vis_flags |= (0u & 0xFFu) << 8; // Прозрачный
-    init_chunk_voxel_prifab.color = 0xffffffff; // Белый
-
+    VoxelDataGPU voxel_prifab(0u, 0u, 0u, glm::ivec3(255));
     uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
-    voxels_ = SSBO::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, init_chunk_voxel_prifab, shader_manager);
+    voxels_ = SSBO::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, shader_manager);
 
     chunk_hash_keys_ = SSBO(sizeof(glm::uvec2) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
     chunk_hash_vals_ = SSBO(sizeof(uint32_t) * chunk_hash_table_size, GL_DYNAMIC_DRAW);

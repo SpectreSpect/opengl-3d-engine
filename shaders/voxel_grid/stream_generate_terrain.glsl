@@ -196,7 +196,7 @@ uint pack_color(vec3 rgb) {
     uint r = uint(rgb.r * 255.0 + 0.5);
     uint g = uint(rgb.g * 255.0 + 0.5);
     uint b = uint(rgb.b * 255.0 + 0.5);
-    return (r) | (g<<8) | (b<<16) | (0xFFu<<24);
+    return (r << 24) | (g<<16) | (b<<8) | 0xFFu;
 }
 
 // table_is_changing = 0u позволяет ускорить работу функции. Но эту оптимизацию (как следует из названия переменной)

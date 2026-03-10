@@ -114,10 +114,7 @@ void create_occlusion_test(
             for (uint32_t i = 0; i < count_changing_voxels; i++) {
                 uint32_t vis = (id >> i) & 1u; // узнаём бит
 
-                VoxelGridGPU::VoxelDataGPU side_voxel = {0};
-                side_voxel.color = (255 << 24) | (color.z << 16) | (color.y << 8) | color.x;
-                side_voxel.type_vis_flags |= (vis & 0xFFu) << 16; // тип 1
-                side_voxel.type_vis_flags |= (vis & 0xFFu) << 8; // не прозрачный
+                VoxelGridGPU::VoxelDataGPU side_voxel(1, 1, 0, color);
                 
                 glm::ivec3 local_offset = local_offsets[i];
                 glm::ivec3 side_voxel_position = glm::ivec3(x * 4, y * 4, 0) + local_offset;
@@ -128,11 +125,8 @@ void create_occlusion_test(
                 positions_out.push_back(side_voxel_position_in_new_basis);
             }
             
-            VoxelGridGPU::VoxelDataGPU center_voxel = {0};
-            center_voxel.color = (255 << 24) | (color.z << 16) | (color.y << 8) | color.x;
-            center_voxel.type_vis_flags |= (1u & 0xFFu) << 16; // тип 1
-            center_voxel.type_vis_flags |= (1u & 0xFFu) << 8; // не прозрачный
-
+            VoxelGridGPU::VoxelDataGPU center_voxel(1, 1, 0, color);
+            
             glm::ivec3 center_voxel_position = glm::ivec3(x * 4 + 1, y * 4 + 1, 1);
             glm::ivec3 center_voxel_position_in_new_basis = origin + transform * center_voxel_position;
 
