@@ -13,6 +13,9 @@ layout(local_size_x = 256) in;
 #define MAX_PROBES   128u
 #define LOCK_SPINS   5u
 
+#define TOMB_CHECK_LIST_SIZE 32u
+const uint TOMB_LIST_MASK = TOMB_CHECK_LIST_SIZE - 1u;
+
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 
@@ -69,6 +72,47 @@ const uint  BITS   = 21u;
 const int   OFFSET = 1 << 20;
 const uint  MASK   = (1u << BITS) - 1u;
 uint firstTomb = 0xFFFFFFFFu;
+
+uint tomb_check_list[TOMB_CHECK_LIST_SIZE];
+uint tomb_list_head_id = INVALID_ID;
+uint tomb_list_tail_id = INVALID_ID;
+uint tomb_list_count_elements = 0u;
+
+bool push_tomb_id(uint slot_id) {
+    if (tomb_list_count_elements >= TOMB_CHECK_LIST_SIZE)
+        return false;
+
+    if (tomb_list_count_elements == 0u) {
+        tomb_list_head_id = 0u;
+        tomb_list_tail_id = 0u;
+    }
+    else  {
+        tomb_list_head_id = (tomb_list_head_id + 1u) & TOMB_LIST_MASK;
+     }
+
+    tomb_check_list[tomb_list_head_id] = slot_id;
+    tomb_list_count_elements++;
+    return true;
+}
+
+uint pop_tail_tomb_id() {
+    if (tomb_list_count_elements == 0u)
+        return INVALID_ID;
+
+    uint result = tomb_check_list[tomb_list_tail_id];
+    tomb_list_count_elements--;
+
+    if (tomb_list_count_elements == 0u) {
+        // Когда элементов нет, не может существовать id элемента головы и хвоста - это логически корректно.
+        // В теории можно было бы обойтись другими путями, но кажется так всех проще и логичнее.
+        tomb_list_head_id = INVALID_ID;
+        tomb_list_tail_id = INVALID_ID;
+    } else {
+        tomb_list_tail_id = (tomb_list_tail_id + 1u) & TOMB_LIST_MASK;
+    }
+
+    return result;
+}
 
 // ---------- helpers ----------
 uint hash_uvec2(uvec2 v) {
@@ -332,7 +376,11 @@ void main() {
     );
 
     uvec2 key = pack_key_uvec2(chunkCoord);
-    uint chunkId = get_or_create_chunk(key);
+
+    uint chunkId;
+    bool created;
+
+    if (!get_or_create_chunk(key, chunkId, created)) return;
     if (chunkId == INVALID_ID) return;
 
     uint vi = voxel_index_in_chunk(local);
