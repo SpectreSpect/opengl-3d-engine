@@ -62,31 +62,46 @@ uint read_hash_val(uint idx) {
     return atomicAdd(hash_vals[idx], 0u);
 }
 
-uint lookup_chunk(uvec2 key) {
+// table_is_changing = 0u позволяет ускорить работу функции. Но эту оптимизацию (как следует из названия переменной)
+// можно использовать только в том случае, если таблица одновременно не изменяется (а только читается)! Иначе всё сломается.
+uint lookup_chunk(uvec2 key, uint table_is_changing = 0u) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
 
-    for (uint visited = 0u; visited < MAX_PROBES; ++visited) {
-        uint v = read_hash_val(idx);
+    for (uint probe = 0u; probe < MAX_PROBES;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
 
-        if (v == SLOT_LOCKED) {
-            uint spins = 0u;
-            while (spins++ < 1024u) {
-                v = atomicAdd(hash_vals[idx], 0u);
-                if (v != SLOT_LOCKED) break;
-            }
-            if (v == SLOT_LOCKED) return INVALID_ID; 
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
         }
 
         if (v == SLOT_EMPTY) return INVALID_ID;
 
-        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; continue; }
-
-        // v = chunkId, гарантируем видимость hash_keys
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
         memoryBarrierBuffer();
-        if (all(equal(hash_keys[idx], key))) return v;
 
+        if (all(equal(hash_keys[idx], key))) 
+            return v;
+
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return v;
+        //     }
+
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
+        
         idx = (idx + 1u) & mask;
+        probe++;
     }
 
     return INVALID_ID;

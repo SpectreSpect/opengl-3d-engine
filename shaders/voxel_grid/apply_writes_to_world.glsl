@@ -144,104 +144,155 @@ uint read_hash_val(uint idx) {
     return atomicAdd(hash_vals[idx], 0u);
 }
 
-uint lookup_chunk(uvec2 key) {
+// table_is_changing = 0u позволяет ускорить работу функции. Но эту оптимизацию (как следует из названия переменной)
+// можно использовать только в том случае, если таблица одновременно не изменяется (а только читается)! Иначе всё сломается.
+uint lookup_chunk(uvec2 key, uint table_is_changing = 0u) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
 
-    for (uint visited = 0u; visited < MAX_PROBES; ++visited) {
-        uint v = read_hash_val(idx);
+    for (uint probe = 0u; probe < MAX_PROBES;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
 
-        if (v == SLOT_LOCKED) {
-            uint spins = 0u;
-            while (spins++ < 1024u) {
-                v = atomicAdd(hash_vals[idx], 0u);
-                if (v != SLOT_LOCKED) break;
-            }
-            if (v == SLOT_LOCKED) return INVALID_ID; 
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
         }
 
         if (v == SLOT_EMPTY) return INVALID_ID;
 
-        if (v == SLOT_TOMB) { idx = (idx + 1u) & mask; continue; }
-
-        // v = chunkId, гарантируем видимость hash_keys
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
         memoryBarrierBuffer();
-        if (all(equal(hash_keys[idx], key))) return v;
 
+        if (all(equal(hash_keys[idx], key))) 
+            return v;
+
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return v;
+        //     }
+
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
+        
         idx = (idx + 1u) & mask;
+        probe++;
     }
 
     return INVALID_ID;
 }
 
-uint get_or_create_chunk(uvec2 key) {
+// ---------------- get_or_create ----------------
+bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
+    uint last_tomb_id = INVALID_ID;
 
-    for (uint visited = 0u; visited < MAX_PROBES; /* visited++ делаем только когда реально двигаем idx */) {
-        uint v = read_hash_val(idx);
+    tomb_list_head_id = INVALID_ID;
+    tomb_list_tail_id = INVALID_ID;
+    tomb_list_count_elements = 0u;
 
-        if (v == SLOT_LOCKED) {
-            uint spins = 0u;
-            while (spins++ < 1024u) {
-                v = atomicAdd(hash_vals[idx], 0u);
-                if (v != SLOT_LOCKED) break;
+    for (uint probe = 0u; probe < MAX_PROBES + 1u;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
+
+        if (v == SLOT_EMPTY || probe == MAX_PROBES) {
+            if (probe >= MAX_PROBES) idx = INVALID_ID;
+
+            // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
+            if (last_tomb_id == INVALID_ID) last_tomb_id = pop_tail_tomb_id();
+
+            uint idx_to_create = last_tomb_id == INVALID_ID ? idx : last_tomb_id;
+            uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
+
+            if (idx_to_create == INVALID_ID) return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
+
+            uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
+            if (prev != slot_state) {
+                // кто-то успел — перепроверяем этот же idx
+
+                if (last_tomb_id != INVALID_ID && prev != SLOT_LOCKED) {
+                    // Условие говорит, что мы проверяем tomb_check_list_counter - 1u слот и он оказался занят
+                    last_tomb_id = INVALID_ID;
+                    continue;
+                }
+                else {
+                    continue;
+                }
             }
-            if (v == SLOT_LOCKED) return INVALID_ID; 
-        }
 
-        if (v == SLOT_TOMB && firstTomb == 0xFFFFFFFFu) {
-            firstTomb = idx;
-            idx = (idx + 1u) & mask;
-            visited++;
-            continue;
-        }
-
-        if (v == SLOT_EMPTY) {
-            uint useIdx = (firstTomb != 0xFFFFFFFFu) ? firstTomb : idx;
-
-            uint prev = atomicCompSwap(hash_vals[useIdx],
-                                    (firstTomb != 0xFFFFFFFFu) ? SLOT_TOMB : SLOT_EMPTY,
-                                    SLOT_LOCKED);
-            if (prev == ((firstTomb != 0xFFFFFFFFu) ? SLOT_TOMB : SLOT_EMPTY)) {
-                uint id = pop_free_chunk_id();
-                if (id == INVALID_ID) { atomicExchange(hash_vals[useIdx], prev); return INVALID_ID; }
-
-                hash_keys[useIdx] = key;
-                memoryBarrierBuffer();
-                atomicExchange(hash_vals[useIdx], id);
-
-                meta[id].used = 1u;
-                meta[id].key_lo = key.x;
-                meta[id].key_hi = key.y;
-                meta[id].dirty_flags = u_set_dirty_flag_bits;
-                return id;
+            uint id = pop_free_chunk_id();
+            if (id == INVALID_ID) {
+                atomicExchange(hash_vals[idx_to_create], slot_state);
+                return false;
             }
-            continue;
-        }
 
-        // v = chunkId, key может быть ещё не виден без coherent/barrier
-        memoryBarrierBuffer();
-        if (all(equal(hash_keys[idx], key))) return v;
+            // meta подготовим ДО публикации id
+            meta[id].used       = 1u;
+            meta[id].key_lo     = key.x;
+            meta[id].key_hi     = key.y;
+            meta[id].dirty_flags= 0u;
+            enqueued[id]        = 0u;
 
-        // защитный "повтор" на случай, если key ещё не успел стать видимым
-        // (после coherent обычно уже не надо, но как страховка от драйверных нюансов — полезно)
-        uint retry = 0u;
-        while (retry++ < 8u) {
+            // публикуем key
+            hash_keys[idx_to_create] = key;
+
+            // гарантируем, что key/meta видимы до публикации id
             memoryBarrierBuffer();
-            if (all(equal(hash_keys[idx], key))) return v;
 
-            // если вдруг слот снова залочился/изменился — выходим
-            uint v2 = read_hash_val(idx);
-            if (v2 != v) break;
+            // публикуем id (и одновременно "анлочим")
+            atomicExchange(hash_vals[idx_to_create], id);
+
+            outId = id;
+            created = true;
+            return true;
         }
 
-        // реально другой ключ → двигаемся дальше и увеличиваем visited
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            push_tomb_id(idx);
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
+        }
+
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
+        memoryBarrierBuffer();
+
+        if (all(equal(hash_keys[idx], key))) {
+            outId = v;
+            created = false;
+            return true;
+        }
+            
+
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         outId = v;
+        //         created = false;
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return true;
+        //     }
+
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
+        
         idx = (idx + 1u) & mask;
-        visited++;
+        probe++;
     }
 
-    return INVALID_ID;
+    return false;
 }
 
 

@@ -231,20 +231,28 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
 
         // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
         // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
+        memoryBarrierBuffer();
 
-        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
-            // Залочили слот - можем читать ключ
-            if (all(equal(hash_keys[idx], key))) {
-                outId = v;
-                created = false;
-                atomicExchange(hash_vals[idx], v); // Убираем блокировку
-                return true;
-            }
-
-            atomicExchange(hash_vals[idx], v); // Убираем блокировку
-        } else {
-            continue; // Не получилось захватить. Попробуем ещё раз.
+        if (all(equal(hash_keys[idx], key))) {
+            outId = v;
+            created = false;
+            return true;
         }
+            
+
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         outId = v;
+        //         created = false;
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return true;
+        //     }
+
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
         
         idx = (idx + 1u) & mask;
         probe++;
@@ -274,18 +282,22 @@ uint lookup_chunk(uvec2 key, uint table_is_changing = 0u) {
 
         // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
         // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
+        memoryBarrierBuffer();
 
-        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
-            // Залочили слот - можем читать ключ
-            if (all(equal(hash_keys[idx], key))) {
-                atomicExchange(hash_vals[idx], v); // Убираем блокировку
-                return v;
-            }
+        if (all(equal(hash_keys[idx], key))) 
+            return v;
 
-            atomicExchange(hash_vals[idx], v); // Убираем блокировку
-        } else {
-            continue; // Не получилось захватить. Попробуем ещё раз.
-        }
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return v;
+        //     }
+
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
         
         idx = (idx + 1u) & mask;
         probe++;
