@@ -19,7 +19,7 @@ uniform uint u_x_workgroup_size;
 uniform uint u_y_workgroup_size;
 uniform uint u_z_workgroup_size;
 
-#define USE_UNIFORM 0xFFFFFFFFu
+#define USE_DIRECT_VALUE 0xFFFFFFFFu
 
 uint div_up_u32(uint a, uint b) { 
     return (a + b - 1u) / b; 
@@ -28,9 +28,9 @@ uint div_up_u32(uint a, uint b) {
 void main() {
     if (gl_GlobalInvocationID.x != 0u) return;
 
-    uint x = u_offset_0 != USE_UNIFORM ? data_0[u_offset_0] : u_direct_value_0;
-    uint y = u_offset_1 != USE_UNIFORM ? data_1[u_offset_1] : u_direct_value_1;
-    uint z = u_offset_2 != USE_UNIFORM ? data_2[u_offset_2] : u_direct_value_2;
+    uint x = u_offset_0 != USE_DIRECT_VALUE ? data_0[u_offset_0] : u_direct_value_0;
+    uint y = u_offset_1 != USE_DIRECT_VALUE ? data_1[u_offset_1] : u_direct_value_1;
+    uint z = u_offset_2 != USE_DIRECT_VALUE ? data_2[u_offset_2] : u_direct_value_2;
 
     uint x_groups = div_up_u32(x, u_x_workgroup_size);
     uint y_groups = div_up_u32(y, u_y_workgroup_size);

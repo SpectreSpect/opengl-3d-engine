@@ -7,6 +7,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <cstdint>
+#include <unordered_set>
+#include <fstream>
+#include <set>
+#include <algorithm>
+#include <limits>
 
 #include "ssbo.h"
 #include "shader_manager.h"
@@ -19,11 +24,8 @@
 #include "vbo.h"
 #include "ebo.h"
 #include "path_utils.h"
-#include <unordered_set>
-#include <fstream>
-#include <set>
-#include <algorithm>
-#include <limits>
+#include "buffer_dispatch_arg.h"
+#include "value_dispatch_arg.h"
 
 #define DONT_CHANGE 0xFFFFFFFF
 
@@ -41,8 +43,6 @@ public:
     static constexpr uint32_t HEAD_TAG_BITS = 4u;
     static constexpr uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
     static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
-
-    static constexpr uint32_t USE_DIRECT_VALUE = 0xFFFFFFFFu;
 
     static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
     static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
@@ -361,19 +361,10 @@ public:
 
     void prepare_dispatch_args(
         SSBO& dispatch_args,
-        const SSBO* arg_buffer_0, 
-        const SSBO* arg_buffer_1, 
-        const SSBO* arg_buffer_2, 
-        uint32_t offset_0 = USE_DIRECT_VALUE,
-        uint32_t offset_1 = USE_DIRECT_VALUE,
-        uint32_t offset_2 = USE_DIRECT_VALUE,
-        uint32_t direct_value_0 = 1u,
-        uint32_t direct_value_1 = 1u,
-        uint32_t direct_value_2 = 1u,
-        uint32_t x_workgroup_size = 256u,
-        uint32_t y_workgroup_size = 1u,
-        uint32_t z_workgroup_size = 1u
-    ); // ++++++++++++++++++++
+        const DispatchArg& arg_x = ValueDispatchArg(1u),
+        const DispatchArg& arg_y = ValueDispatchArg(1u),
+        const DispatchArg& arg_z = ValueDispatchArg(1u)
+    );
 
     // void ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys);
     void print_eviction_log(const glm::vec3& camera_pos); // ++++++++++++++++++++

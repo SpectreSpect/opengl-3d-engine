@@ -735,35 +735,26 @@ void VoxelGridGPU::rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_of
     fill_chunk_hash_table(pack_bits, pack_offset);
 }
 
-void VoxelGridGPU::prepare_dispatch_args(
-        SSBO& dispatch_args,
-        const SSBO* arg_buffer_0, 
-        const SSBO* arg_buffer_1, 
-        const SSBO* arg_buffer_2,
-        uint32_t offset_0,
-        uint32_t offset_1,
-        uint32_t offset_2,
-        uint32_t direct_value_0,
-        uint32_t direct_value_1,
-        uint32_t direct_value_2,
-        uint32_t x_workgroup_size,
-        uint32_t y_workgroup_size,
-        uint32_t z_workgroup_size
-) {
-    if (arg_buffer_0 != nullptr) arg_buffer_0->bind_base(0);
-    if (arg_buffer_1 != nullptr) arg_buffer_1->bind_base(1);
-    if (arg_buffer_2 != nullptr) arg_buffer_2->bind_base(2);
+void VoxelGridGPU::prepare_dispatch_args(SSBO& dispatch_args, const DispatchArg& arg_x, const DispatchArg& arg_y, const DispatchArg& arg_z)
+{
+    if (arg_x.arg_buffer != nullptr) arg_x.arg_buffer->bind_base(0);
+    if (arg_y.arg_buffer != nullptr) arg_y.arg_buffer->bind_base(1);
+    if (arg_z.arg_buffer != nullptr) arg_z.arg_buffer->bind_base(2);
 
     dispatch_args.bind_base(3);
 
     prog_dispatch_adapter_.use();
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_0"), offset_0);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_1"), offset_1);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_2"), offset_2);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_0"), arg_x.offset);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_1"), arg_y.offset);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_2"), arg_z.offset);
 
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_0"), direct_value_0);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_1"), direct_value_1);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_2"), direct_value_2);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_0"), arg_x.direct_value);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_1"), arg_y.direct_value);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_2"), arg_z.direct_value);
+
+    uint32_t x_workgroup_size = arg_x.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 256u : arg_x.workgroup_size;
+    uint32_t y_workgroup_size = arg_y.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 1u : arg_y.workgroup_size;
+    uint32_t z_workgroup_size = arg_z.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 1u : arg_z.workgroup_size;
 
     glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_x_workgroup_size"), x_workgroup_size);
     glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_y_workgroup_size"), y_workgroup_size);
@@ -1492,45 +1483,50 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // std::cout << "REST GLOBAL COUNTERS" << std::endl;
 
     // ---- Pass: mesh_reset ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        &frame_counters_, nullptr, nullptr,
-        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
-        1u, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     &frame_counters_, nullptr, nullptr,
+    //     1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+    //     1u, 1u, 1u
+    // );
+
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
     mesh_reset(dispatch_args);
     // glFinish();
     // std::cout << "MESH RESET" << std::endl;
 
     // ---- Pass: mesh_count ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        nullptr, &frame_counters_, nullptr,
-        USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
-        vox_per_chunk, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     nullptr, &frame_counters_, nullptr,
+    //     USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
+    //     vox_per_chunk, 1u, 1u
+    // );
+    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&frame_counters_, 1u));
     mesh_count(dispatch_args, pack_bits, pack_offset);
     // glFinish();
     // std::cout << "MESH COUNT" << std::endl;
 
     // ---- Pass: mesh_alloc ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        &frame_counters_, nullptr, nullptr,
-        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
-        1u, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     &frame_counters_, nullptr, nullptr,
+    //     1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+    //     1u, 1u, 1u
+    // );
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
     mesh_alloc(dispatch_args);
     // glFinish();
     // std::cout << "MESH ALLOC" << std::endl;
 
     // ---- Pass: verify_mesh_allocation ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        &frame_counters_, nullptr, nullptr,
-        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
-        1u, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     &frame_counters_, nullptr, nullptr,
+    //     1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+    //     1u, 1u, 1u
+    // );
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
     verify_mesh_allocation(dispatch_args);
     // glFinish();
     // std::cout << "VERIFY_ALLOCATION" << std::endl;
@@ -1540,23 +1536,25 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // prog_mesh_emit_.dispatch_compute(groups_vox, dirty_count, 1);
 
     // ---- Pass: mesh_emit ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        nullptr, &frame_counters_, nullptr,
-        USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
-        vox_per_chunk, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     nullptr, &frame_counters_, nullptr,
+    //     USE_DIRECT_VALUE, 1u, USE_DIRECT_VALUE,
+    //     vox_per_chunk, 1u, 1u
+    // );
+    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&frame_counters_, 1u));
     mesh_emit(dispatch_args, pack_bits, pack_offset);
     // glFinish();
     // std::cout << "MESH EMIT" << std::endl;
 
     // ---- Pass: mesh_finalize ----
-    prepare_dispatch_args(
-        dispatch_args, 
-        &frame_counters_, nullptr, nullptr,
-        1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
-        1u, 1u, 1u
-    );
+    // prepare_dispatch_args(
+    //     dispatch_args, 
+    //     &frame_counters_, nullptr, nullptr,
+    //     1u, USE_DIRECT_VALUE, USE_DIRECT_VALUE,
+    //     1u, 1u, 1u
+    // );
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
     mesh_finalize(dispatch_args);
     // glFinish();
     // std::cout << "MESH FINALIZE" << std::endl;

@@ -126,7 +126,7 @@ void create_occlusion_test(
             }
             
             VoxelGridGPU::VoxelDataGPU center_voxel(1, 1, 0, color);
-            
+
             glm::ivec3 center_voxel_position = glm::ivec3(x * 4 + 1, y * 4 + 1, 1);
             glm::ivec3 center_voxel_position_in_new_basis = origin + transform * center_voxel_position;
 
@@ -800,45 +800,52 @@ int main() {
         }
 
         if (ImGui::Button("mesh_reset()")) {
-            voxel_grid_gpu.prepare_dispatch_args(
-                voxel_grid_gpu.dispatch_args, 
-                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
-                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
-                1u, 1u, 1u
-            );
-            
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+            //     1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     1u, 1u, 1u
+            // );
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
             voxel_grid_gpu.mesh_reset(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("mesh_count()")) {
             uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
+            //     voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     vox_per_chunk, 1u, 1u
+            // );
             voxel_grid_gpu.prepare_dispatch_args(
                 voxel_grid_gpu.dispatch_args, 
-                nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
-                voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
-                vox_per_chunk, 1u, 1u
+                ValueDispatchArg(vox_per_chunk), 
+                BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u)
             );
             voxel_grid_gpu.mesh_count(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_alloc()")) {
-            voxel_grid_gpu.prepare_dispatch_args(
-                voxel_grid_gpu.dispatch_args, 
-                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
-                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
-                1u, 1u, 1u
-            );
-            
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+            //     1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     1u, 1u, 1u
+            // );
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
             voxel_grid_gpu.mesh_alloc(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("verify_mesh_allocation()")) {
-            voxel_grid_gpu.prepare_dispatch_args(
-                voxel_grid_gpu.dispatch_args, 
-                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
-                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
-                1u, 1u, 1u
-            );
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+            //     1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     1u, 1u, 1u
+            // );
+
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
             voxel_grid_gpu.verify_mesh_allocation(voxel_grid_gpu.frame_counters_);
         }
 
@@ -849,23 +856,28 @@ int main() {
 
         if (ImGui::Button("mesh_emit()")) {
             uint32_t vox_per_chunk = (uint32_t)(voxel_grid_gpu.chunk_size.x * voxel_grid_gpu.chunk_size.y * voxel_grid_gpu.chunk_size.z);
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
+            //     voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     vox_per_chunk, 1u, 1u
+            // );
             voxel_grid_gpu.prepare_dispatch_args(
                 voxel_grid_gpu.dispatch_args, 
-                nullptr, &voxel_grid_gpu.frame_counters_, nullptr,
-                voxel_grid_gpu.USE_DIRECT_VALUE, 1u, voxel_grid_gpu.USE_DIRECT_VALUE,
-                vox_per_chunk, 1u, 1u
+                ValueDispatchArg(vox_per_chunk), 
+                BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u)
             );
-
             voxel_grid_gpu.mesh_emit(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_finalize()")) {
-            voxel_grid_gpu.prepare_dispatch_args(
-                voxel_grid_gpu.dispatch_args, 
-                &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
-                1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
-                1u, 1u, 1u
-            );
+            // voxel_grid_gpu.prepare_dispatch_args(
+            //     voxel_grid_gpu.dispatch_args, 
+            //     &voxel_grid_gpu.frame_counters_, nullptr, nullptr,
+            //     1u, voxel_grid_gpu.USE_DIRECT_VALUE, voxel_grid_gpu.USE_DIRECT_VALUE,
+            //     1u, 1u, 1u
+            // );
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
             voxel_grid_gpu.mesh_finalize(voxel_grid_gpu.dispatch_args);
         }
 

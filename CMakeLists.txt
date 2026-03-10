@@ -52,6 +52,9 @@ add_executable(app
   voxel_rasterizator_gpu.cpp
   voxel_grid_gpu.cpp
   shader_manager.cpp
+  dispatch_arg.cpp
+  buffer_dispatch_arg.cpp
+  value_dispatch_arg.cpp
 )
 
 
