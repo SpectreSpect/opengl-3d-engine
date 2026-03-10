@@ -1,5 +1,7 @@
 // main.cpp
 
+#define ALLOW_LOCK_SSBO
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -230,7 +232,7 @@ int main() {
         glm::ivec3(chunk_size), // chunk_size
         glm::vec3(voxel_size), // voxel_size
         10'000, // count_active_chunks
-        5'000'000, // max_quads
+        1'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         512, // max_count_probing
         2048, // count_evict_buckets
@@ -583,7 +585,7 @@ int main() {
         ImGui::InputInt("dirty_count", &dirty_count_to_set);
         ImGui::SameLine();
         if (ImGui::Button("Set dirty count")) {
-            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1, (uint32_t)(dirty_count_to_set), sizeof(uint32_t));
+            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1, (uint32_t)(dirty_count_to_set), sizeof(uint32_t), shader_manager);
             std::cout << "Dirty count has been set to " << dirty_count_to_set << "." << std::endl;
         }
 
@@ -625,7 +627,7 @@ int main() {
         if (use_verify_stack != use_verify_stack_local) {
             use_verify_stack = use_verify_stack_local;
             
-            voxel_grid_gpu.verify_debug_stack_.update_subdata_fill<uint32_t>(0, (use_verify_stack ? 1u : 0u), sizeof(uint32_t));
+            voxel_grid_gpu.verify_debug_stack_.update_subdata_fill<uint32_t>(0, (use_verify_stack ? 1u : 0u), sizeof(uint32_t), shader_manager);
 
             if (use_verify_stack)
                 std::cout << "Verify stack is enable." << std::endl;
@@ -893,7 +895,7 @@ int main() {
         ImGui::Separator();
 
         if (ImGui::Button("reset_cmd_count()")) {
-            voxel_grid_gpu.reset_cmd_count();
+            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(2, 0u, sizeof(uint32_t), shader_manager);
         }
 
         if (ImGui::Button("build_draw_commands()")) {

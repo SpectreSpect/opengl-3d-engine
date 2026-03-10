@@ -7,6 +7,8 @@ ShaderManager::ShaderManager(const std::string& root_path) {
 void ShaderManager::init_shaders(const std::string& root_path) {
     fs::path p(root_path);
     dispatch_adapter_cs = ComputeShader((p / "shaders" / "dispatch_adapter.glsl").string());
+    clear_buffer_cs = ComputeShader((p / "shaders" / "clear_buffer.glsl").string());
+    clear_buffer_prog = ComputeProgram(&clear_buffer_cs);
 
     count_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "count_cs.glsl").string()); 
     scan_blocks_cs = ComputeShader((p / "shaders" / "voxel_rasterization" / "scan_blocks_cs.glsl").string());

@@ -5,6 +5,9 @@
 #include <cstring>
 #include <stdexcept>
 
+SSBO SSBO::prefab_buffer;
+std::mutex SSBO::prefab_buffer_mutex;
+
 static void require_gl_buffer_storage() {
     // Для persistent нужен OpenGL 4.4 или расширение ARB_buffer_storage
     if (!(GLEW_VERSION_4_4 || GLEW_ARB_buffer_storage)) {

@@ -6,6 +6,7 @@
 #include "compute_shader.h"
 #include "vertex_shader.h"
 #include "fragment_shader.h"
+#include "compute_program.h"
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -14,6 +15,8 @@ class ShaderManager {
 public:
     // General
     ComputeShader dispatch_adapter_cs;
+    ComputeShader clear_buffer_cs;
+    ComputeProgram clear_buffer_prog;
 
     //voxelizaton
     ComputeShader count_cs;
