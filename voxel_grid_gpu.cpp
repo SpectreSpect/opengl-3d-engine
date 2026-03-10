@@ -464,11 +464,11 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_mesh_emit_ = ComputeProgram(&shader_manager.mesh_emit_cs);
     prog_mesh_finalize_ = ComputeProgram(&shader_manager.mesh_finalize_cs);
     prog_cmdcount_reset_ = ComputeProgram(&shader_manager.cmdcount_reset_cs);
-    prog_build_indirect_ = ComputeProgram(&shader_manager.build_indirect_cmds_cs);
+    prog_build_indirect_cmds_ = ComputeProgram(&shader_manager.build_indirect_cmds_cs);
     prog_reset_dirty_count_ = ComputeProgram(&shader_manager.reset_dirty_count_cs);
-    prog_bucket_reset_ = ComputeProgram(&shader_manager.bucket_reset_cs);
-    prog_bucket_build_ = ComputeProgram(&shader_manager.bucket_build_cs);
-    prog_evict_lowprio_ = ComputeProgram(&shader_manager.evict_lowprio_cs);
+    prog_evict_buckets_reset_ = ComputeProgram(&shader_manager.evict_buckets_reset_cs);
+    prog_evict_buckets_build_ = ComputeProgram(&shader_manager.evict_buckets_build_cs);
+    prog_evict_low_priority_ = ComputeProgram(&shader_manager.evict_low_priority_cs);
     prog_evict_low_priority_dispatch_adapter_ = ComputeProgram(&shader_manager.evict_low_priority_dispatch_adapter_cs);
     prog_stream_select_chunks_ = ComputeProgram(&shader_manager.stream_select_chunks_cs);
     prog_stream_generate_terrain_ = ComputeProgram(&shader_manager.stream_generate_terrain_cs);
@@ -880,11 +880,11 @@ void VoxelGridGPU::print_eviction_log(const glm::vec3& camera_pos) {
 void VoxelGridGPU::reset_heads() {
     bucket_heads_.bind_base(0);
 
-    prog_bucket_reset_.use();
-    glUniform1ui(glGetUniformLocation(prog_bucket_reset_.id, "u_bucket_count"), count_evict_buckets);
+    prog_evict_buckets_reset_.use();
+    glUniform1ui(glGetUniformLocation(prog_evict_buckets_reset_.id, "u_bucket_count"), count_evict_buckets);
 
     uint32_t gx = math_utils::div_up_u32(count_evict_buckets, 256u);
-    prog_bucket_reset_.dispatch_compute(gx, 1, 1);
+    prog_evict_buckets_reset_.dispatch_compute(gx, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -893,20 +893,20 @@ void VoxelGridGPU::build_bucket_lists(const glm::vec3& cam_pos) {
     bucket_heads_.bind_base(1);
     bucket_next_.bind_base(2);
 
-    prog_bucket_build_.use();
-    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_max_chunks"), count_active_chunks);
-    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_bucket_count"), this->count_evict_buckets);
-    glUniform3f(glGetUniformLocation(prog_bucket_build_.id, "u_cam_pos"), cam_pos.x, cam_pos.y, cam_pos.z);
-    glUniform3i(glGetUniformLocation(prog_bucket_build_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
-    glUniform3f(glGetUniformLocation(prog_bucket_build_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+    prog_evict_buckets_build_.use();
+    glUniform1ui(glGetUniformLocation(prog_evict_buckets_build_.id, "u_max_chunks"), count_active_chunks);
+    glUniform1ui(glGetUniformLocation(prog_evict_buckets_build_.id, "u_bucket_count"), this->count_evict_buckets);
+    glUniform3f(glGetUniformLocation(prog_evict_buckets_build_.id, "u_cam_pos"), cam_pos.x, cam_pos.y, cam_pos.z);
+    glUniform3i(glGetUniformLocation(prog_evict_buckets_build_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    glUniform3f(glGetUniformLocation(prog_evict_buckets_build_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
 
-    glUniform1ui(glGetUniformLocation(prog_bucket_build_.id, "u_pack_bits"), math_utils::BITS);
-    glUniform1i(glGetUniformLocation(prog_bucket_build_.id, "u_pack_offset"), math_utils::OFFSET);
+    glUniform1ui(glGetUniformLocation(prog_evict_buckets_build_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform1i(glGetUniformLocation(prog_evict_buckets_build_.id, "u_pack_offset"), math_utils::OFFSET);
 
-    glUniform1f(glGetUniformLocation(prog_bucket_build_.id, "f_eviction_bucket_shell_thickness"), eviction_bucket_shell_thickness);
+    glUniform1f(glGetUniformLocation(prog_evict_buckets_build_.id, "f_eviction_bucket_shell_thickness"), eviction_bucket_shell_thickness);
 
     uint32_t gx = math_utils::div_up_u32(count_active_chunks, 256u);
-    prog_bucket_build_.dispatch_compute(gx, 1, 1);
+    prog_evict_buckets_build_.dispatch_compute(gx, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -936,10 +936,10 @@ void VoxelGridGPU::evict_lowpriority_chunks(const SSBO& dispatch_args) {
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
-    prog_evict_lowprio_.use();
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_hash_table_size"), chunk_hash_table_size);
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_bucket_count"), count_evict_buckets);
-    glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_min_free"), min_free_chunks);
+    prog_evict_low_priority_.use();
+    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_bucket_count"), count_evict_buckets);
+    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_min_free"), min_free_chunks);
 
     glDispatchComputeIndirect(0);
 
@@ -1586,24 +1586,24 @@ void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack
     chunk_mesh_alloc_.bind_base(2);
     indirect_cmds_.bind_base(3);
 
-    prog_build_indirect_.use();
+    prog_build_indirect_cmds_.use();
 
-    glUniform1ui(glGetUniformLocation(prog_build_indirect_.id, "u_max_chunks"), count_active_chunks);
-    glUniform3i(glGetUniformLocation(prog_build_indirect_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
-    glUniform3f(glGetUniformLocation(prog_build_indirect_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+    glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_max_chunks"), count_active_chunks);
+    glUniform3i(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    glUniform3f(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
 
-    glUniform1ui(glGetUniformLocation(prog_build_indirect_.id, "u_pack_bits"), pack_bits);
-    glUniform1i(glGetUniformLocation(prog_build_indirect_.id, "u_pack_offset"), pack_offset);
+    glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_pack_bits"), pack_bits);
+    glUniform1i(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_pack_offset"), pack_offset);
 
-    glUniform1ui(glGetUniformLocation(prog_build_indirect_.id, "u_vb_page_verts"), vb_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_build_indirect_.id, "u_ib_page_inds"), ib_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_vb_page_verts"), vb_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_ib_page_inds"), ib_page_size_);
 
     // u_frustum_planes[6]
-    GLint loc = glGetUniformLocation(prog_build_indirect_.id, "u_frustum_planes");
+    GLint loc = glGetUniformLocation(prog_build_indirect_cmds_.id, "u_frustum_planes");
     glUniform4fv(loc, 6, &planes[0].x);
 
     uint32_t chunk_groups = math_utils::div_up_u32(count_active_chunks, 256u);
-    prog_build_indirect_.dispatch_compute(chunk_groups, 1, 1);
+    prog_build_indirect_cmds_.dispatch_compute(chunk_groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 

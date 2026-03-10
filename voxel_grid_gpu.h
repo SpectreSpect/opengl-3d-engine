@@ -211,11 +211,11 @@ public:
     ComputeProgram prog_mesh_emit_;
     ComputeProgram prog_mesh_finalize_;
     ComputeProgram prog_cmdcount_reset_;
-    ComputeProgram prog_build_indirect_;
+    ComputeProgram prog_build_indirect_cmds_;
     ComputeProgram prog_reset_dirty_count_;
-    ComputeProgram prog_bucket_reset_;
-    ComputeProgram prog_bucket_build_;
-    ComputeProgram prog_evict_lowprio_;
+    ComputeProgram prog_evict_buckets_reset_;
+    ComputeProgram prog_evict_buckets_build_;
+    ComputeProgram prog_evict_low_priority_;
     ComputeProgram prog_evict_low_priority_dispatch_adapter_;
     ComputeProgram prog_stream_select_chunks_;
     ComputeProgram prog_stream_generate_terrain_;
@@ -400,5 +400,5 @@ public:
     void load_verify_mesh_buffers_dumps(std::filesystem::path dir); // ++++++++++++++++++++
     
     std::set<uint32_t> find_limbo_pages(SSBO& heads_buffer, SSBO& states_buffer, SSBO& next_buffer, uint32_t max_order_in_heads_buffer, uint32_t count_pages_in_states_buffer); // ++++++++++++++++++++
-    void print_verify_debug_stack(uint32_t offset, int count_elements_to_print = -1); // ++++++++++++++++++++
+    void print_verify_debug_stack(uint32_t offset, int count_elements_to_print = -1);
 };

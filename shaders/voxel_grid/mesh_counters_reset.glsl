@@ -14,14 +14,6 @@ struct FrameCounters {
 };
 layout(std430, binding=1) buffer FrameCountersBuf { FrameCounters counters; };
 
-uint div_up_u32(uint a, uint b) { 
-    return (a + b - 1u) / b; 
-}
-
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
-
 void main() {
     meshCounters = uvec2(0u, 0u);
 }

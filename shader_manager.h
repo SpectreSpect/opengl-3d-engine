@@ -19,14 +19,14 @@ public:
     ComputeProgram clear_buffer_prog;
 
     //voxelizaton
-    ComputeShader count_cs;
+    ComputeShader count_triangles_in_chunks_cs;
     ComputeShader scan_blocks_cs;
     ComputeShader add_block_offsets_cs;
     ComputeShader fix_last_cs;
     ComputeShader copy_offsets_to_cursor_cs;
-    ComputeShader fill_cs;
+    ComputeShader fill_triangle_indices_cs;
     ComputeShader voxelize_cs;
-    ComputeShader clear_cs;
+    ComputeShader clear_voxels_cs;
     ComputeShader roi_reduce_indices_cs;
     ComputeShader roi_reduce_pairs_cs;
     ComputeShader build_active_chunks_cs;
@@ -46,9 +46,9 @@ public:
     ComputeShader cmdcount_reset_cs;
     ComputeShader build_indirect_cmds_cs;
     ComputeShader reset_dirty_count_cs;
-    ComputeShader bucket_reset_cs;
-    ComputeShader bucket_build_cs;
-    ComputeShader evict_lowprio_cs;
+    ComputeShader evict_buckets_reset_cs;
+    ComputeShader evict_buckets_build_cs;
+    ComputeShader evict_low_priority_cs;
     ComputeShader evict_low_priority_dispatch_adapter_cs;
     ComputeShader stream_select_chunks_cs;
     ComputeShader stream_generate_terrain_cs;
