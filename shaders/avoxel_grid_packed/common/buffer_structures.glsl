@@ -40,3 +40,18 @@ struct VoxelData {
     uint type_vis_flags;
     uint color;
 };
+
+struct VoxelWrite {
+    ivec4    world_voxel; // xyz use, w unused
+    VoxelData voxel_data;
+    uint     _pad0;
+    uint     _pad1;
+};
+
+struct Vertex {
+    vec4 pos;
+    uint color;
+    uint face;
+    uint pad0;
+    uint pad1;
+};

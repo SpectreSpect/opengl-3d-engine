@@ -18,13 +18,22 @@ buffer ChunkMetaBuf { ChunkMeta meta[]; }; (только если подключ
 uniform uint u_hash_table_size;
 */
 
+#ifndef HASH_TABLE_COMMON
+#define HASH_TABLE_COMMON
+
 #define SLOT_EMPTY   0xFFFFFFFFu
 #define SLOT_LOCKED  0xFFFFFFFEu
 #define SLOT_TOMB    0xFFFFFFFDu
 
+#endif
+
 #define MAX_PROBES   128u
 
 #ifndef NOT_INCLUDE_GET_OR_CREATE
+#ifndef HASH_TABLE_GET_OR_CREATE
+#define HASH_TABLE_GET_OR_CREATE
+
+
 #ifndef TOMB_CHECK_LIST_SIZE
 #define TOMB_CHECK_LIST_SIZE 32u
 #endif
@@ -174,7 +183,10 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     return false;
 }
 #endif
+#endif
 
+#ifndef HASH_TABLE_LOOKUP_CHUNK
+#define HASH_TABLE_LOOKUP_CHUNK
 uint lookup_chunk(uvec2 key) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
@@ -205,3 +217,4 @@ uint lookup_chunk(uvec2 key) {
 
     return INVALID_ID;
 }
+#endif

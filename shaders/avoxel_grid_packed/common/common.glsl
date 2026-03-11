@@ -21,6 +21,18 @@ uint ceil_log2_u32(uint x) {
     return uint(findMSB(x - 1u) + 1);
 }
 
+int floor_div(int a, int d) {
+    int q = a / d;
+    int r = a - q * d;
+    if (r != 0 && a < 0) q -= 1;
+    return q;
+}
+
+int floor_mod(int a, int d) {
+    int q = floor_div(a, d);
+    return a - q * d; // [0..d-1]
+}
+
 uint mask_bits(uint bits) { 
     return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u); 
 }

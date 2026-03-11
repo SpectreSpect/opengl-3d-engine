@@ -1236,11 +1236,12 @@ void VoxelGridGPU::mesh_emit(const SSBO& dispatch_args, uint32_t pack_bits, uint
     glUniform3i(glGetUniformLocation(prog_mesh_emit_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_voxels_per_chunk"), vox_per_chunk);
     glUniform3f(glGetUniformLocation(prog_mesh_emit_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
+
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_pack_bits"), pack_bits);
     glUniform1i(glGetUniformLocation(prog_mesh_emit_.id, "u_pack_offset"), pack_offset);
+
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_vb_page_verts"), vb_page_size_);
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_ib_page_inds"), ib_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_min_free_pages"),  min_free_pages);
 
     glDispatchComputeIndirect(0);
 
@@ -1311,6 +1312,9 @@ void VoxelGridGPU::apply_writes_to_world_gpu(uint32_t write_count) {
     uint32_t vox_per_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
     glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_voxels_per_chunk"), vox_per_chunk);
     glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_set_dirty_flag_bits"), 1u);
+    glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform1i(glGetUniformLocation(prog_apply_writes_.id, "u_pack_offset"), math_utils::OFFSET);
+
 
     uint32_t groups_x = math_utils::div_up_u32(write_count, 256u);
     prog_apply_writes_.dispatch_compute(groups_x, 1, 1);

@@ -29,7 +29,10 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     clear_chunks_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunks.glsl", include_directories); // ПОЗЖЕ УБРАТЬ!!!
     set_chunks_cs = ComputeShader(p / "shaders" / "voxel_grid" / "set_chunks.glsl", include_directories);
     world_init_cs = ComputeShader(p / "shaders" / "voxel_grid" / "world_init.glsl", include_directories);
-    apply_writes_to_world_cs = ComputeShader(p / "shaders" / "voxel_grid" / "apply_writes_to_world.glsl", include_directories);
+    
+    // apply_writes_to_world_cs = ComputeShader(p / "shaders" / "voxel_grid" / "apply_writes_to_world.glsl", include_directories);
+    apply_writes_to_world_cs = ComputeShader(p / "shaders" / "avoxel_grid_packed" / "apply_writes_to_world.glsl", include_directories);
+
     mesh_counters_reset_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_counters_reset.glsl", include_directories); // ПОЗЖЕ УБРАТЬ!!!
     mesh_reset_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_reset.glsl", include_directories);
     mesh_count_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_count.glsl", include_directories);
@@ -37,7 +40,9 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     // mesh_alloc_cs = ComputeShader((p / "shaders" / "voxel_grid" / "mesh_alloc.glsl").string());
     mesh_alloc_cs = ComputeShader(p / "shaders" / "avoxel_grid_packed" / "mesh_alloc.glsl", include_directories);
 
-    mesh_emit_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_emit.glsl", include_directories);
+    // mesh_emit_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_emit.glsl", include_directories);
+    mesh_emit_cs = ComputeShader(p / "shaders" / "avoxel_grid_packed" / "mesh_emit.glsl", include_directories);
+
     mesh_finalize_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_finalize.glsl", include_directories);
     cmdcount_reset_cs = ComputeShader(p / "shaders" / "voxel_grid" / "cmdcount_reset.glsl", include_directories); // ПОЗЖЕ УБРАТЬ!!!
     build_indirect_cmds_cs = ComputeShader(p / "shaders" / "voxel_grid" / "build_indirect_cmds.glsl", include_directories);
