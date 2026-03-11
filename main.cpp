@@ -12,6 +12,7 @@
 #include <string>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 
 #include <functional>
 
@@ -40,6 +41,8 @@
 #include "voxel_grid_gpu.h"
 #include "fstream"
 #include "path_utils.h"
+
+#include "glsl_linker.h"
 
 void create_voxels_box(
     glm::ivec3 box_origin, 
@@ -207,6 +210,13 @@ int main() {
 
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 50;
+
+    GlslLinker glsl_linker;
+    std::string linked_file = glsl_linker.load(executable_dir() / "shaders" / "for_include_test" / "file1.glsl");
+    
+    std::ofstream linked_file_out(executable_dir() / "linked_file.glsl");
+    linked_file_out << linked_file;
+    linked_file_out.close();
 
     // VoxelGrid voxel_grid = VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
     // float chunk_render_size = voxel_grid.chunk_size.x * voxel_grid.voxel_size;

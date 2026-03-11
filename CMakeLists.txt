@@ -55,6 +55,7 @@ add_executable(app
   dispatch_arg.cpp
   buffer_dispatch_arg.cpp
   value_dispatch_arg.cpp
+  glsl_preprocessor.cpp
 )
 
 
