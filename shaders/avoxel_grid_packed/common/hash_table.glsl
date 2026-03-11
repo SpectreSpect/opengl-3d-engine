@@ -3,14 +3,15 @@
 /*
 Для настройки #include можно определить следующие дефайны (не обязательно):
 #define TOMB_CHECK_LIST_SIZE n (число n должно быть n = 2^i)
+#define NOT_INCLUDE_GET_OR_CREATE (позволяет не подключить get_or_create_chunk())
 
 Также необходимо наличие следующих данных (названия обязательно должны соответсвовать указанным).
 
 Буфферы:
 coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 coherent buffer ChunkHashVals { uint  hash_vals[]; };
-buffer FreeList { uint free_list[]; };
-buffer ChunkMetaBuf { ChunkMeta meta[]; };
+buffer FreeList { uint free_list[]; }; (только если подключён get_or_create_chunk())
+buffer ChunkMetaBuf { ChunkMeta meta[]; }; (только если подключён get_or_create_chunk())
 
 
 Юниформы:
@@ -23,6 +24,7 @@ uniform uint u_hash_table_size;
 
 #define MAX_PROBES   128u
 
+#ifndef NOT_INCLUDE_GET_OR_CREATE
 #ifndef TOMB_CHECK_LIST_SIZE
 #define TOMB_CHECK_LIST_SIZE 32u
 #endif
@@ -171,6 +173,7 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
 
     return false;
 }
+#endif
 
 uint lookup_chunk(uvec2 key) {
     uint mask = u_hash_table_size - 1u;

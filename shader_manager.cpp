@@ -50,10 +50,9 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
 
     // stream_select_chunks_cs = ComputeShader(p / "shaders" / "voxel_grid" / "stream_select_chunks.glsl", include_directories);
     stream_select_chunks_cs = ComputeShader(p / "shaders" / "avoxel_grid_packed" / "stream_select_chunks.glsl", include_directories);
+    stream_generate_terrain_cs = ComputeShader(p / "shaders" / "avoxel_grid_packed" / "stream_generate_terrain.glsl", include_directories);
 
 
-
-    stream_generate_terrain_cs = ComputeShader(p / "shaders" / "voxel_grid" / "stream_generate_terrain.glsl", include_directories);
     mark_all_user_chunks_as_dirty_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mark_all_user_chunks_as_dirty.glsl", include_directories);
     mesh_pool_clear_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_pool_clear.glsl", include_directories);
     mesh_pool_seed_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mesh_pool_seed.glsl", include_directories);

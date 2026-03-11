@@ -31,3 +31,12 @@ struct Node {
     uint page;
     uint next;
 };
+
+#define TYPE_SHIFT 16u
+#define VIS_SHIFT  8u
+#define TYPE_MASK  0xFFu
+
+struct VoxelData {
+    uint type_vis_flags;
+    uint color;
+};

@@ -25,6 +25,15 @@ uint mask_bits(uint bits) {
     return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u); 
 }
 
+uint hash_u32(uint x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
 uint hash_uvec2(uvec2 v) {
     uint x = v.x * 1664525u + 1013904223u;
     uint y = v.y * 22695477u + 1u;
@@ -33,6 +42,15 @@ uint hash_uvec2(uvec2 v) {
     h ^= h >> 15; h *= 0x846ca68bu;
     h ^= h >> 16;
     return h;
+}
+
+float hash_ivec2(ivec2 p, uint seed) {
+    uint h = uint(p.x) * 374761393u
+           + uint(p.y) * 668265263u
+           + seed     * 2246822519u;
+
+    h = hash_u32(h);
+    return float(h) * (1.0 / 4294967295.0);
 }
 
 uvec2 pack_key_uvec2(ivec3 c, uint pack_offset, uint pack_bits) {
@@ -66,4 +84,44 @@ uvec2 pack_key_uvec2(ivec3 c, uint pack_offset, uint pack_bits) {
     }
 
     return uvec2(lo, hi);
+}
+
+uint extract_bits_uvec2(uvec2 k, uint shift, uint bits) {
+    uint m = mask_bits(bits);
+    if (bits == 0u) return 0u;
+
+    if (shift < 32u) {
+        uint lo_part = k.x >> shift;
+        uint res = lo_part;
+        uint rem = 32u - shift;
+        if (rem < bits) res |= (k.y << rem);
+        return res & m;
+    } else {
+        uint s = shift - 32u;
+        return (k.y >> s) & m;
+    }
+}
+
+ivec3 unpack_key_to_coord(uvec2 key2, uint pack_offset, uint pack_bits) {
+    uint B = pack_bits;
+    uint ux = extract_bits_uvec2(key2, 2u * B, B);
+    uint uy = extract_bits_uvec2(key2, 1u * B, B);
+    uint uz = extract_bits_uvec2(key2, 0u * B, B);
+
+    return ivec3(int(ux) - pack_offset,
+                 int(uy) - pack_offset,
+                 int(uz) - pack_offset);
+}
+
+uint pack_color(vec4 rgba) {
+    rgba = clamp(rgba, 0.0, 1.0);
+    uint r = uint(rgba.r * 255.0 + 0.5);
+    uint g = uint(rgba.g * 255.0 + 0.5);
+    uint b = uint(rgba.b * 255.0 + 0.5);
+    uint a = uint(rgba.a * 255.0 + 0.5);
+    return (r << 24) | (g<<16) | (b<<8) | a;
+}
+
+uint pack_color(vec3 rgb) {
+    return pack_color(vec4(rgb, 1u));
 }

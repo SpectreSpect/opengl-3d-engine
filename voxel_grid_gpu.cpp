@@ -1393,22 +1393,19 @@ void VoxelGridGPU::generate_terrain(uint32_t seed, uint32_t load_count) {
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
 
-    stream_counters_.bind_base(16);
-    load_list_.bind_base(17);
+    stream_counters_.bind_base(2);
+    load_list_.bind_base(3);
 
-    voxels_.bind_base(3);
-    chunk_meta_.bind_base(6);
-    enqueued_.bind_base(7);
-    dirty_list_.bind_base(8);
-    frame_counters_.bind_base(5);
-
-    stream_generate_debug_counters_.bind_base(25);
+    voxels_.bind_base(4);
+    chunk_meta_.bind_base(5);
+    enqueued_.bind_base(6);
+    dirty_list_.bind_base(7);
+    frame_counters_.bind_base(8);
 
     prog_stream_generate_terrain_.use();
     glUniform3i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     uint32_t vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_voxels_per_chunk"), vox_per_chunk);
-    glUniform3f(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
     glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_bits"), math_utils::BITS);
     glUniform1i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_offset"), math_utils::OFFSET);
     glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_set_dirty_flag_bits"), 1u);
