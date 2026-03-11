@@ -41,8 +41,7 @@
 #include "voxel_grid_gpu.h"
 #include "fstream"
 #include "path_utils.h"
-
-#include "glsl_linker.h"
+#include "glsl_preprocessor.h"
 
 void create_voxels_box(
     glm::ivec3 box_origin, 
@@ -203,7 +202,8 @@ int main() {
     
     window.disable_cursor();
 
-    ShaderManager shader_manager = ShaderManager(executable_dir_str());
+    std::vector<std::filesystem::path> shaders_inlude_directories = {}; // Искать относительно executable_dir()
+    ShaderManager shader_manager = ShaderManager(executable_dir(), shaders_inlude_directories);
 
     Camera camera;
     window.set_camera(&camera);
@@ -211,12 +211,13 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 50;
 
-    GlslLinker glsl_linker;
-    std::string linked_file = glsl_linker.load(executable_dir() / "shaders" / "for_include_test" / "file1.glsl");
+    // GlslPreprocessor preprocessor;
+    // std::string file_str = preprocessor.load(executable_dir() / "shaders" / "avoxel_grid_packed" / "mesh_alloc.glsl");
     
-    std::ofstream linked_file_out(executable_dir() / "linked_file.glsl");
-    linked_file_out << linked_file;
-    linked_file_out.close();
+    // std::ofstream out("linked_file.glsl");
+    // out << file_str;
+    // out.close();
+    
 
     // VoxelGrid voxel_grid = VoxelGrid({16, 16, 16}, 1.0f, {24, 6, 24});
     // float chunk_render_size = voxel_grid.chunk_size.x * voxel_grid.voxel_size;
@@ -248,6 +249,8 @@ int main() {
         1.0, // buddy_allocator_nodes_factor
         shader_manager
     );
+
+    
 
     // std::vector<glm::ivec3> positions;
     // std::vector<VoxelGridGPU::VoxelDataGPU> voxels;

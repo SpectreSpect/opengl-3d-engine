@@ -4,15 +4,25 @@
 #include <sstream>
 #include <algorithm>
 
-std::string GlslPreprocessor::load(const std::filesystem::path& file_path) {
+std::string GlslPreprocessor::load(const std::filesystem::path& file_path, const std::vector<std::filesystem::path>& additional_include_directories) {
     std::vector<std::filesystem::path> include_stack;
     std::unordered_set<std::filesystem::path> pragma_once_included;
+
+    include_directories.insert(
+        include_directories.begin(),
+        additional_include_directories.begin(),
+        additional_include_directories.end()  
+    );
 
     return load_file_recursive(
         std::filesystem::absolute(file_path),
         include_stack,
         pragma_once_included
     );
+}
+
+void GlslPreprocessor::add_include_directory(const std::filesystem::path& dir) {
+    include_directories.push_back(std::filesystem::absolute(dir));
 }
 
 std::string GlslPreprocessor::load_file_recursive(
@@ -24,10 +34,9 @@ std::string GlslPreprocessor::load_file_recursive(
 
     for (const auto& p : include_stack) {
         if (p == normalized) {
-            throw std::runtime_error(
-                "Cyclic GLSL include detected:\n" +
-                make_include_trace(include_stack, normalized)
-            );
+            std::string message = "Cyclic GLSL include detected:\n" + make_include_trace(include_stack, normalized);
+            std::cout << message << std::endl;
+            throw std::runtime_error(message);
         }
     }
 
@@ -74,15 +83,15 @@ std::string GlslPreprocessor::load_file_recursive(
         if (starts_with(trimmed, "#include")) {
             const std::string include_name = extract_include_path(trimmed);
             if (include_name.empty()) {
-                throw std::runtime_error(
-                    "Invalid #include syntax in file:\n  " + normalized.string() +
+                std::string message = "Invalid #include syntax in file:\n  " + normalized.string() +
                     "\nat line " + std::to_string(line_number) +
-                    "\nExpected: #include \"relative/path.glsl\""
-                );
+                    "\nExpected: #include \"relative/path.glsl\"";
+                
+                std::cout << message << std::endl;
+                throw std::runtime_error(message);
             }
 
-            std::filesystem::path include_path = normalized.parent_path() / include_name;
-            include_path = std::filesystem::absolute(include_path);
+            std::filesystem::path include_path = resolve_include(normalized, include_name);
 
             output << load_file_recursive(include_path, include_stack, pragma_once_included);
         } else {
@@ -94,10 +103,43 @@ std::string GlslPreprocessor::load_file_recursive(
     return output.str();
 }
 
+std::filesystem::path GlslPreprocessor::resolve_include(
+    const std::filesystem::path& current_file,
+    const std::string& include_name
+) const {
+    // 1. Сначала относительно текущего файла
+    {
+        std::filesystem::path candidate = current_file.parent_path() / include_name;
+        candidate = std::filesystem::absolute(candidate);
+
+        if (std::filesystem::exists(candidate)) {
+            return std::filesystem::weakly_canonical(candidate);
+        }
+    }
+
+    // 2. Потом в include directories
+    for (const auto& dir : include_directories) {
+        std::filesystem::path candidate = dir / include_name;
+        candidate = std::filesystem::absolute(candidate);
+
+        if (std::filesystem::exists(candidate)) {
+            return std::filesystem::weakly_canonical(candidate);
+        }
+    }
+
+    std::string message = "Failed to resolve GLSL include \"" + include_name +
+        "\" from file:\n  " + current_file.string();
+
+    std::cout << message << std::endl;
+    throw std::runtime_error(message);
+}
+
 std::string GlslPreprocessor::read_text_file(const std::filesystem::path& file_path) {
     std::ifstream file(file_path, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open GLSL file:\n  " + file_path.string());
+        std::string message = "Failed to open GLSL file:\n  " + file_path.string();
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
     }
 
     std::ostringstream ss;

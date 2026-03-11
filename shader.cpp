@@ -23,15 +23,9 @@ void Shader::print_shader_log(const char* name) {
     if (!log.empty()) std::cout << log << "\n";
 }
 
-std::string Shader::load_text_file(const std::string& path) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + path);
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+std::string Shader::load_text_file(const std::filesystem::path& path, const std::vector<std::filesystem::path>& include_directories) {
+    GlslPreprocessor preprocessor;
+    return preprocessor.load(path, include_directories);
 }
 
 GLuint Shader::compile_shader(GLenum type, const char* src) {

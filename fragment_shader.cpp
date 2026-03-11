@@ -1,7 +1,9 @@
 #include "fragment_shader.h"
 
-
-FragmentShader::FragmentShader(std::string path) {
+FragmentShader::FragmentShader(
+    const std::filesystem::path& path, 
+    const std::vector<std::filesystem::path>& include_directories
+) {
     std::string src = load_text_file(path);
     this->id = compile_shader(GL_FRAGMENT_SHADER, src.c_str());
 }

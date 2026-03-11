@@ -14,7 +14,10 @@
 class VertexShader : public Shader {
 public:
     VertexShader() = default;
-    VertexShader(std::string path);
+    VertexShader(
+        const std::filesystem::path& path, 
+        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+    );
     
     VertexShader(const VertexShader&) = delete;
     VertexShader& operator=(const VertexShader&) = delete;

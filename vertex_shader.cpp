@@ -1,8 +1,11 @@
 #include "vertex_shader.h"
 
 
-VertexShader::VertexShader(std::string path) {
-    std::string src = load_text_file(path);
+VertexShader::VertexShader(
+    const std::filesystem::path& path, 
+    const std::vector<std::filesystem::path>& include_directories
+) {
+    std::string src = load_text_file(path, include_directories);
     this->id = compile_shader(GL_VERTEX_SHADER, src.c_str());
 }
 

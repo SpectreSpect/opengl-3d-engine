@@ -1090,10 +1090,10 @@ void VoxelGridGPU::mesh_alloc_vb(const SSBO& dispatch_args) {
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_alloc_.use();
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_vb_pages_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_page_elements"), vb_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_max_order"), vb_order_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_quad_size"), 4u);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_pages"), count_vb_pages_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_page_elements"), vb_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_max_order"), vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_quad_size"), 4u);
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_is_vb_phase"), 1u);
 
     glDispatchComputeIndirect(0);
@@ -1124,10 +1124,10 @@ void VoxelGridGPU::mesh_alloc_ib(const SSBO& dispatch_args) {
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_alloc_.use();
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_pages"), count_ib_pages_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_page_elements"), ib_page_size_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_max_order"), ib_order_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_bb_quad_size"), 6u);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_pages"), count_ib_pages_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_page_elements"), ib_page_size_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_max_order"), ib_order_);
+    glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "bb_quad_size"), 6u);
     glUniform1ui(glGetUniformLocation(prog_mesh_alloc_.id, "u_is_vb_phase"), 0u);
 
     glDispatchComputeIndirect(0);
@@ -1145,8 +1145,6 @@ void VoxelGridGPU::mesh_alloc(const SSBO& dispatch_args) {
 }
 
 void VoxelGridGPU::verify_mesh_allocation(const SSBO& dispatch_args) {
-    // verify_debug_stack_.update_subdata_fill(sizeof(uint32_t) * 1, 0u, sizeof(uint32_t));
-
     chunk_mesh_alloc_local_.bind_base(0);
     chunk_mesh_alloc_.bind_base(1);
     dirty_list_.bind_base(2);
@@ -1164,14 +1162,11 @@ void VoxelGridGPU::verify_mesh_allocation(const SSBO& dispatch_args) {
     ib_free_nodes_list_.bind_base(12);
     ib_returned_nodes_list.bind_base(13);
 
-    verify_debug_stack_.bind_base(14);
-
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_verify_mesh_allocation_.use();
-    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_min_free_pages"),  min_free_pages);
-    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_vb_max_order"),  vb_order_);
-    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "u_ib_max_order"),  ib_order_);
+    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "vb_max_order"),  vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_verify_mesh_allocation_.id, "ib_max_order"),  ib_order_);
 
     glDispatchComputeIndirect(0);
 

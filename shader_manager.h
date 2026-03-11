@@ -13,6 +13,8 @@ namespace fs = std::filesystem;
 
 class ShaderManager {
 public:
+    std::vector<std::filesystem::path> include_directories;
+
     // General
     ComputeShader dispatch_adapter_cs;
     ComputeShader clear_buffer_cs;
@@ -65,11 +67,13 @@ public:
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
-    ShaderManager(const std::string& root_path);
+    ShaderManager(const std::filesystem::path& root_path, std::vector<std::filesystem::path> include_directories = std::vector<std::filesystem::path>());
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
     ShaderManager(ShaderManager&&) noexcept = default;
     ShaderManager& operator=(ShaderManager&&) noexcept = default;
 
-    void init_shaders(const std::string& root_path);
+    void add_include_directory(std::filesystem::path directory);
+
+    void init_shaders(const std::filesystem::path& root_path);
 };
