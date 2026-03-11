@@ -1,6 +1,5 @@
 #include "common.glsl"
 
-//u_vb_max_order -> vb_max_order
 /*
 Для корректной работы кода перед #include необходимо обязательно определить:
 #define PREFIX some_prefix
