@@ -13,7 +13,7 @@ layout(std430, binding=4) buffer FreeList { uint free_list[]; };
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=8) buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=8) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
 uniform uint  u_hash_table_size;
 uniform ivec3 u_chunk_dim;
@@ -38,7 +38,7 @@ void mark_dirty(uint chunkId) {
 
     uint was = atomicExchange(enqueued[chunkId], 1u);
     if (was == 0u) {
-        uint di = atomicAdd(counters.dirty_count, 1u);
+        uint di = atomicAdd(dirty_count, 1u);
         dirty_list[di] = chunkId;
     }
 }

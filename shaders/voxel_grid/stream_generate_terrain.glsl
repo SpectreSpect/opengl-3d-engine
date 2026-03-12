@@ -12,7 +12,7 @@ layout(std430, binding=3) readonly buffer LoadList { uint load_list[]; };
 layout(std430, binding=4) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=5) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=6) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=7) buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=8) buffer FrameCountersBuf { FrameCounters counters; }; // y=dirtyCount
 
 uniform ivec3 u_chunk_dim;
@@ -68,7 +68,7 @@ void mark_dirty(uint chunkId) {
     uint was = atomicCompSwap(enqueued[chunkId], 0u, 1u);
     if (was == 0u) {
         atomicOr(meta[chunkId].dirty_flags, u_set_dirty_flag_bits);
-        uint di = atomicAdd(counters.dirty_count, 1u);
+        uint di = atomicAdd(dirty_count, 1u);
         dirty_list[di] = chunkId;
     }
 }

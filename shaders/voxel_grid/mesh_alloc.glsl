@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
-layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=2) readonly buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=3) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=4) buffer ChunkMeshAllocLocalBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
@@ -35,10 +35,9 @@ bool is_vb_phase = u_is_vb_phase == 1u;
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.dirty_count;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
-
-
+    
     uint chunkId = dirty_list[dirtyIdx];
 
     if (counters.count_vb_free_pages == INVALID_ID || counters.count_ib_free_pages == INVALID_ID) {

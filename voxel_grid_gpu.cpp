@@ -45,7 +45,7 @@ VoxelGridGPU::VoxelGridGPU(
     frame_counters_ = SSBO::from_fill(sizeof(uint32_t) * 7, GL_DYNAMIC_DRAW, 0u, shader_manager);
 
     enqueued_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
-    dirty_list_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
+    dirty_list_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW, 0u, shader_manager);
     failed_dirty_list_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
     chunk_meta_ = SSBO(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
@@ -171,21 +171,23 @@ void VoxelGridGPU::draw(RenderState state) {
     // std::cout << "count_visible: " << count_visible << std::endl;
 }
 
-void VoxelGridGPU::print_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count, uint32_t load_list_count) {
+void VoxelGridGPU::print_counters() {
     std::vector<uint32_t> counters(7);
     frame_counters_.read_subdata(0, counters.data(), sizeof(uint32_t) * 7);
 
     uint32_t stream_counters[2] = {0};
     stream_counters_.read_subdata(0, stream_counters, sizeof(uint32_t) * 2);
 
-    if (write_count != 0) std::cout << "write_count: " << counters[0] << std::endl;
-    if (dirty_count != 0) std::cout << "dirty_count: " << counters[1] << std::endl;
-    if (cmd_count != 0) std::cout << "cmd_count: " << counters[2] << std::endl;
-    if (free_count != 0) std::cout << "free_count: " << counters[3] << std::endl;
-    std::cout << "failed_dirty_count: " << counters[4] << std::endl;
-    std::cout << "count_vb_free_pages: " << counters[5] << std::endl;
-    std::cout << "count_ib_free_pages: " << counters[6] << std::endl;
-    if (load_list_count != 0) std::cout << "load_list_count: " << stream_counters[0] << std::endl;
+    uint32_t dirty_count = dirty_list_.read_scalar<uint32_t>(0);
+
+    std::cout << "write_count: " << counters[0] << std::endl;
+    std::cout << "dirty_count: " << dirty_count << std::endl;
+    std::cout << "cmd_count: " << counters[1] << std::endl;
+    std::cout << "free_count: " << counters[2] << std::endl;
+    std::cout << "failed_dirty_count: " << counters[3] << std::endl;
+    std::cout << "count_vb_free_pages: " << counters[4] << std::endl;
+    std::cout << "count_ib_free_pages: " << counters[5] << std::endl;
+    std::cout << "load_list_count: " << stream_counters[0] << std::endl;
 
     uint32_t count_free_nodes_vb = vb_free_nodes_list_.read_scalar<uint32_t>(0);
     uint32_t count_free_nodes_ib = ib_free_nodes_list_.read_scalar<uint32_t>(0);
@@ -216,9 +218,9 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
     ib_heads_.read_subdata(0, ib_heads.data(), sizeof(uint32_t) * (ib_order_ + 1));
     vb_nodes_.read_subdata(0, vb_nodes.data(), sizeof(AllocNode) * count_vb_nodes_);
     ib_nodes_.read_subdata(0, ib_nodes.data(), sizeof(AllocNode) * count_ib_nodes_);
-    frame_counters_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
+    dirty_list_.read_subdata(0, &dirty_count, sizeof(uint32_t));
     dirty_list.resize(dirty_count);
-    dirty_list_.read_subdata(0, dirty_list.data(), sizeof(uint32_t) * dirty_count);
+    dirty_list_.read_subdata(sizeof(uint32_t), dirty_list.data(), sizeof(uint32_t) * dirty_count);
 
     //=================РАСЧЁТ ДАННЫХ ПО MESH_ALLOC=================
     std::unordered_set<uint32_t> allocated_mesh;
@@ -482,19 +484,18 @@ void VoxelGridGPU::set_frame_counters(uint32_t write_count, uint32_t dirty_count
         frame_counters_.update_subdata(0, &write_count, sizeof(uint32_t));
     
     if (dirty_count != DONT_CHANGE)
-        frame_counters_.update_subdata(4, &dirty_count, sizeof(uint32_t));
+        dirty_list_.update_subdata(0u, &dirty_count, sizeof(uint32_t));
+        // frame_counters_.update_subdata(4, &dirty_count, sizeof(uint32_t));
     
     if (cmd_count != DONT_CHANGE)
-        frame_counters_.update_subdata(8, &cmd_count, sizeof(uint32_t));
+        frame_counters_.update_subdata(4, &cmd_count, sizeof(uint32_t));
     
     if (free_count != DONT_CHANGE)
-        frame_counters_.update_subdata(12, &free_count, sizeof(uint32_t));
+        frame_counters_.update_subdata(8, &free_count, sizeof(uint32_t));
 }
 
 uint32_t VoxelGridGPU::read_dirty_count_cpu() {
-    uint32_t dirtyCount = 0;
-    frame_counters_.read_subdata(sizeof(uint32_t) * 1, &dirtyCount, sizeof(uint32_t));
-    return dirtyCount;
+    return dirty_list_.read_scalar<uint32_t>(0u);
 }
 
 void VoxelGridGPU::world_init_gpu() {
@@ -504,6 +505,7 @@ void VoxelGridGPU::world_init_gpu() {
     frame_counters_.bind_base(5);
     chunk_meta_.bind_base(6);
     enqueued_.bind_base(7);
+    dirty_list_.bind_base(8);
 
     prog_world_init_.use();
     glUniform1ui(glGetUniformLocation(prog_world_init_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -1260,7 +1262,7 @@ void VoxelGridGPU::mesh_finalize(const SSBO& dispatch_args) {
 }
 
 void VoxelGridGPU::reset_dirty_count() {
-    frame_counters_.bind_base(0);
+    dirty_list_.bind_base(0);
 
     vb_free_nodes_list_.bind_base(1);
     vb_returned_nodes_list.bind_base(2);
@@ -1451,44 +1453,37 @@ void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radi
 }
 
 void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
-    // uint32_t dirtyCount = read_dirty_count_cpu();
-    // if (dirtyCount == 0) return;
-
     uint32_t vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
-    // uint32_t groups_vox = math_utils::div_up_u32(vox_per_chunk, 256u); // для 4096 будет 16
-    // uint32_t groups_dirty = math_utils::div_up_u32(dirtyCount, 256u);
-
-    // std::cout << "DIRTY COUT: " << dirtyCount << std::endl;
-
-    // ---- Pass: reset global mesh counters (GPU) ----
-    // reset_global_mesh_counters();
-
-    // mesh_counters_.update_subdata_fill<uint64_t>(0u, 0ull, sizeof(uint32_t) * 2, *shader_manager);
-    
-
-    // glFinish();
-    // std::cout << "REST GLOBAL COUNTERS" << std::endl;
 
     // ---- Pass: mesh_reset ----
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
+
+    // uint32_t args[3] = {0};
+    // dispatch_args.read_subdata(0u, args, sizeof(uint32_t) * 3);
+
+    // std::cout << "DISPATCH ARGS: " << args[0] << ", " << args[1] << ", " << args[2] << std::endl;
+
     mesh_reset(dispatch_args);
+
     // glFinish();
     // std::cout << "MESH RESET" << std::endl;
 
+
     // ---- Pass: mesh_count ----
-    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
     mesh_count(dispatch_args, pack_bits, pack_offset);
+
     // glFinish();
     // std::cout << "MESH COUNT" << std::endl;
 
     // ---- Pass: mesh_alloc ----
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     mesh_alloc(dispatch_args);
     // glFinish();
     // std::cout << "MESH ALLOC" << std::endl;
 
     // ---- Pass: verify_mesh_allocation ----
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     verify_mesh_allocation(dispatch_args);
     // glFinish();
     // std::cout << "VERIFY_ALLOCATION" << std::endl;
@@ -1498,13 +1493,13 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // prog_mesh_emit_.dispatch_compute(groups_vox, dirty_count, 1);
 
     // ---- Pass: mesh_emit ----
-    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
     mesh_emit(dispatch_args, pack_bits, pack_offset);
     // glFinish();
     // std::cout << "MESH EMIT" << std::endl;
 
     // ---- Pass: mesh_finalize ----
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&frame_counters_, 1u));
+    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     mesh_finalize(dispatch_args);
     // glFinish();
     // std::cout << "MESH FINALIZE" << std::endl;
@@ -1515,12 +1510,10 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // std::cout << "RESET DIRTY" << std::endl;
 }
 
-// void VoxelGridGPU::reset_cmd_count() {
-//     frame_counters_.bind_base(0);
-//     prog_cmdcount_reset_.use();
-//     prog_cmdcount_reset_.dispatch_compute(1, 1, 1);
-//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-// }
+void VoxelGridGPU::reset_cmd_count() {
+    frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1u, 0u, sizeof(uint32_t), *shader_manager);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
 
 void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack_bits, int pack_offset) {
     auto planes = math_utils::extract_frustum_planes(view_proj);
@@ -1554,9 +1547,7 @@ void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack
 void VoxelGridGPU::build_indirect_draw_commands_frustum(const glm::mat4& viewProj,
                                                         uint32_t pack_bits,
                                                         int pack_offset) {
-    frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 2u, 0u, sizeof(uint32_t), *shader_manager);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
+    reset_cmd_count();
     build_draw_commands(viewProj, pack_bits, pack_offset);
 }
 
@@ -1589,7 +1580,7 @@ void VoxelGridGPU::draw_indirect(const GLuint vao, const glm::mat4& world, const
         glBindBuffer(GL_PARAMETER_BUFFER, frame_counters_.id());
 
         const GLintptr indirectOffset = 0;
-        const GLintptr countOffset    = 8; // byte offset of counters.z
+        const GLintptr countOffset    = sizeof(uint32_t) * 1;
 
         attash_shader_program();
 
@@ -1604,8 +1595,7 @@ void VoxelGridGPU::draw_indirect(const GLuint vao, const glm::mat4& world, const
     }
     else {
         // Fallback: читаем только 4 байта cmdCount
-        uint32_t cmdCount = 0;
-        frame_counters_.read_subdata(8, &cmdCount, sizeof(uint32_t));
+        uint32_t cmdCount = frame_counters_.read_scalar<uint32_t>(sizeof(uint32_t) * 1);
 
         attash_shader_program();
 
@@ -1997,4 +1987,47 @@ void VoxelGridGPU::print_verify_debug_stack(uint32_t offset, int count_elements_
     } else {
         std::cout << "There is no verify debug stack elements." << std::endl;
     }
+}
+
+void VoxelGridGPU::print_dirty_list() {
+    uint32_t dirty_count = dirty_list_.read_scalar<uint32_t>(0u);
+    std::vector<uint32_t> dirty_list(dirty_count);
+    dirty_list_.read_subdata(sizeof(uint32_t), dirty_list.data(), sizeof(uint32_t) * dirty_count);
+
+    std::cout << "DIRTY_LIST: " << std::endl;
+    for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
+        std::cout << "dirty_id " << dirty_id << ": " << dirty_list[dirty_id] << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+void VoxelGridGPU::print_dirty_list_emit_counters() {
+    uint32_t dirty_count = dirty_list_.read_scalar<uint32_t>(0u);
+    std::vector<uint32_t> dirty_list(dirty_count);
+    std::vector<uint32_t> emit_counters(count_active_chunks);
+    
+    dirty_list_.read_subdata(sizeof(uint32_t), dirty_list.data(), sizeof(uint32_t) * dirty_count);
+    emit_counter_.read_subdata(0, emit_counters.data(), sizeof(uint32_t) * count_active_chunks);
+
+    std::cout << "EMIT COUNTERS: " << std::endl;
+    for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
+        uint32_t chunk_id = dirty_list[dirty_id];
+        std::cout << "dirty_id " << dirty_id << " chunk_id " << chunk_id << ": " << emit_counters[chunk_id] << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+void VoxelGridGPU::print_dirty_list_quad_count() {
+    uint32_t dirty_count = dirty_list_.read_scalar<uint32_t>(0u);
+    std::vector<uint32_t> dirty_list(dirty_count);
+    std::vector<uint32_t> dirty_quad_count(dirty_count);
+    
+    dirty_list_.read_subdata(sizeof(uint32_t), dirty_list.data(), sizeof(uint32_t) * dirty_count);
+    dirty_quad_count_.read_subdata(0, dirty_quad_count.data(), sizeof(uint32_t) * dirty_count);
+
+    std::cout << "DIRTY QUAD COUNTERS: " << std::endl;
+    for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
+        std::cout << "dirty_id " << dirty_id << ": " << dirty_quad_count[dirty_id] << std::endl;
+    }
+    std::cout << std::endl;
 }

@@ -2,7 +2,6 @@
 
 struct FrameCounters {
     uint write_count; 
-    uint dirty_count;
     uint cmd_count;
     uint free_count;
     uint failed_dirty_count;

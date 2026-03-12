@@ -360,8 +360,11 @@ int main() {
         ImGui::PopStyleColor();
 
         if (ImGui::Button("Print counters")) {
-            voxel_grid_gpu.print_counters(1, 1, 1, 1, 1);
+            voxel_grid_gpu.print_counters();
             std::cout << "-----------------------" << std::endl << std::endl;
+        }
+        if (ImGui::Button("Print dirty list")) {
+            voxel_grid_gpu.print_dirty_list();
         }
 
         if (ImGui::Button("Print chunks hash table log")) {

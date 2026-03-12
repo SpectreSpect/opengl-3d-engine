@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
-layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=2) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=3) buffer EmitCounterBuf { uint emit_counter[]; };
 
@@ -16,7 +16,7 @@ layout(std430, binding=3) buffer EmitCounterBuf { uint emit_counter[]; };
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.dirty_count;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
     dirty_quad_count[dirtyIdx] = 0u;

@@ -9,7 +9,7 @@ layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
-layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=5) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
@@ -29,7 +29,7 @@ void main() {
     uint voxelId  = gl_GlobalInvocationID.x; // 0..4095
     uint dirtyIdx = gl_GlobalInvocationID.y;
 
-    uint dirtyCount = counters.dirty_count;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
     if (voxelId >= u_voxels_per_chunk) return;
 

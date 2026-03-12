@@ -11,6 +11,7 @@ layout(std430, binding=4) buffer FreeList { uint free_list[]; };
 layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=8) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
 uniform uint u_hash_table_size;
 uniform uint u_max_chunks;
@@ -43,7 +44,7 @@ void main() {
 
     if (i == 0u) {
         counters.write_count = 0u; 
-        counters.dirty_count = 0u; 
+        dirty_count = 0u; 
         counters.cmd_count = 0u; 
         counters.free_count = u_max_chunks; 
         counters.failed_dirty_count = 0u;

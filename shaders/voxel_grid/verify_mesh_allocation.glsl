@@ -7,7 +7,7 @@ layout(local_size_x = 256) in;
 
 layout(std430, binding=0) readonly buffer LocalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
 layout(std430, binding=1) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
-layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
 layout(std430, binding=4) coherent buffer VBHeads { uint vb_heads[]; };
 layout(std430, binding=5) coherent buffer VBState { uint vb_state[]; };
@@ -42,7 +42,7 @@ void free_chunk_mesh(uint chunk_id_global) {
 void main() {
 
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.dirty_count;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
     if (counters.count_vb_free_pages != INVALID_ID && counters.count_ib_free_pages != INVALID_ID) {
