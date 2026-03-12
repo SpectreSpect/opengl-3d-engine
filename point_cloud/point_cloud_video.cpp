@@ -58,8 +58,8 @@ void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path) {
         frames.back().load_from_file(video_dir_path / e.filename);
 
         // Apply SAME basis remap as points:
-        // frames.back().position = ros_pos_to_engine(e.position);
-        // frames.back().rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
+        frames.back().point_cloud.position = ros_pos_to_engine(e.position);
+        frames.back().point_cloud.rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
         frames.back().car_pos = ros_pos_to_engine(e.position);
         frames.back().car_rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
     }

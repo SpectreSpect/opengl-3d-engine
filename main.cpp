@@ -279,6 +279,570 @@ void icp_step(const std::vector<PointInstance>& source_points,
           << "\n";
 }
 
+// Same order everywhere: XYZ
+glm::mat3 euler_xyz_to_mat3(const glm::vec3& euler) {
+    return glm::mat3(glm::eulerAngleXYZ(euler.x, euler.y, euler.z));
+}
+
+glm::vec3 mat3_to_euler_xyz(const glm::mat3& R) {
+    float x, y, z;
+    glm::extractEulerAngleXYZ(glm::mat4(R), x, y, z);
+    return glm::vec3(x, y, z);
+}
+
+glm::vec3 transform_point_world(const PointCloud& cloud, const glm::vec3& local_p) {
+    glm::mat3 R = euler_xyz_to_mat3(cloud.rotation);
+
+    glm::vec3 scaled(
+        local_p.x * cloud.scale.x,
+        local_p.y * cloud.scale.y,
+        local_p.z * cloud.scale.z
+    );
+
+    return R * scaled + cloud.position;
+}
+
+// Correct normal transform for non-uniform scale too
+glm::vec3 transform_normal_world(const PointCloud& cloud, const glm::vec3& local_n) {
+    glm::mat3 R = euler_xyz_to_mat3(cloud.rotation);
+
+    glm::mat3 S(1.0f);
+    S[0][0] = cloud.scale.x;
+    S[1][1] = cloud.scale.y;
+    S[2][2] = cloud.scale.z;
+
+    glm::mat3 linear = R * S;
+    glm::mat3 normal_matrix = glm::transpose(glm::inverse(linear));
+
+    return glm::normalize(normal_matrix * local_n);
+}
+
+int find_closest_id(const std::vector<glm::vec3>& target_points_world,
+                    const glm::vec3& point,
+                    float max_dist_sq)
+{
+    if (target_points_world.empty())
+        return -1;
+
+    int min_id = -1;
+    float min_dist = max_dist_sq;
+
+    for (size_t i = 0; i < target_points_world.size(); i++) {
+        float dist = glm::distance2(target_points_world[i], point);
+        if (dist < min_dist) {
+            min_dist = dist;
+            min_id = (int)i;
+        }
+    }
+
+    return min_id;
+}
+
+int find_closest_id_with_valid_normal(const std::vector<glm::vec3>& target_points_world,
+                                      const std::vector<glm::vec3>& target_normals_world,
+                                      const glm::vec3& point,
+                                      float max_dist_sq)
+{
+    if (target_points_world.empty())
+        return -1;
+
+    int min_id = -1;
+    float min_dist = max_dist_sq;
+
+    for (size_t i = 0; i < target_points_world.size(); i++) {
+        if (glm::dot(target_normals_world[i], target_normals_world[i]) < 1e-12f)
+            continue;
+
+        float dist = glm::distance2(target_points_world[i], point);
+        if (dist < min_dist) {
+            min_dist = dist;
+            min_id = (int)i;
+        }
+    }
+
+    return min_id;
+}
+
+double icp_step(PointCloud& source_point_cloud,
+              const PointCloud& target_point_cloud,
+              const std::vector<glm::vec3>& target_normals)
+{
+    const std::vector<PointInstance>& source_points = source_point_cloud.points;
+    const std::vector<PointInstance>& target_points = target_point_cloud.points;
+
+    if (target_points.size() != target_normals.size()) {
+        std::cout << "target_points.size() != target_normals.size()\n";
+        return -1;
+    }
+
+    float max_corr_dist = 20.0f;
+    float max_corr_dist_sq = max_corr_dist * max_corr_dist;
+    float max_rot = glm::radians(5.0f);
+    float max_trans = 5.0f;
+
+    double H[6][6] = {};
+    double g[6] = {};
+
+    // Precompute target in world space
+    std::vector<glm::vec3> target_points_world;
+    std::vector<glm::vec3> target_normals_world;
+    target_points_world.reserve(target_points.size());
+    target_normals_world.reserve(target_points.size());
+
+    for (size_t i = 0; i < target_points.size(); i++) {
+        glm::vec3 q_local = glm::vec3(target_points[i].pos);
+        target_points_world.push_back(transform_point_world(target_point_cloud, q_local));
+        target_normals_world.push_back(transform_normal_world(target_point_cloud, target_normals[i]));
+    }
+
+    double total_sq_error = 0.0;
+    int valid_count = 0;
+
+    for (size_t i = 0; i < source_points.size(); i++) {
+        glm::vec3 p_local = glm::vec3(source_points[i].pos);
+
+        // Current source point in world space
+        glm::vec3 x = transform_point_world(source_point_cloud, p_local);
+
+        // int target_id = find_closest_id(target_points_world, x, max_corr_dist_sq);
+        // if (target_id < 0) {
+        //     continue;
+        // }
+
+        int target_id = find_closest_id_with_valid_normal(
+            target_points_world,
+            target_normals_world,
+            x,
+            max_corr_dist_sq
+        );
+        if (target_id < 0) {
+            // source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+            continue;
+        }
+        // source_point_cloud.points[i].color = glm::vec4(0, 0, 1, 1);
+        
+
+        glm::vec3 q = target_points_world[target_id];
+        glm::vec3 raw_n = target_normals_world[target_id];
+
+        float n_len2 = glm::dot(raw_n, raw_n);
+        if (n_len2 < 1e-12f)
+            continue;
+
+        glm::vec3 n = raw_n / std::sqrt(n_len2);
+
+        glm::vec3 a = glm::cross(x, n);
+        double rhs = (double)glm::dot(n, q - x);
+
+        total_sq_error += rhs * rhs;
+
+        double J[6] = {
+            (double)a.x,
+            (double)a.y,
+            (double)a.z,
+            (double)n.x,
+            (double)n.y,
+            (double)n.z
+        };
+
+        for (int r = 0; r < 6; r++) {
+            g[r] += J[r] * rhs;
+            for (int c = 0; c < 6; c++) {
+                H[r][c] += J[r] * J[c];
+            }
+        }
+
+        valid_count++;
+    }
+
+    if (valid_count < 6) {
+        std::cout << "Too few correspondences\n";
+        return -1;
+    }
+
+    double rmse = std::sqrt(total_sq_error / (double)valid_count);
+
+    // damping
+    double lambda = 1e-6;
+    for (int i = 0; i < 6; i++) {
+        H[i][i] += lambda;
+    }
+
+    double delta[6] = {};
+    bool ok = solve_6x6(H, g, delta);
+    if (!ok) {
+        std::cout << "solve_6x6 failed\n";
+        return -1;
+    }
+
+    glm::vec3 omega(
+        (float)delta[0],
+        (float)delta[1],
+        (float)delta[2]
+    );
+
+    glm::vec3 v(
+        (float)delta[3],
+        (float)delta[4],
+        (float)delta[5]
+    );
+
+    float omega_len = glm::length(omega);
+    if (omega_len > max_rot) {
+        omega *= max_rot / omega_len;
+    }
+
+    float v_len = glm::length(v);
+    if (v_len > max_trans) {
+        v *= max_trans / v_len;
+    }
+
+    glm::mat3 dR = omega_to_mat3(omega);
+
+    // Current source cloud world rotation
+    glm::mat3 R_src = euler_xyz_to_mat3(source_point_cloud.rotation);
+
+    // ICP update in world space:
+    // x' = dR * x + v
+    glm::mat3 R_src_new = dR * R_src;
+    glm::vec3 t_src_new = dR * source_point_cloud.position + v;
+
+    source_point_cloud.position = t_src_new;
+    source_point_cloud.rotation = mat3_to_euler_xyz(R_src_new);
+
+    std::cout << "valid_count = " << valid_count
+              << ", rmse = " << rmse
+              << ", |omega| = " << glm::length(omega)
+              << ", |v| = " << glm::length(v)
+              << "\n";
+    
+    return rmse;
+}
+
+glm::mat3 skew_matrix(const glm::vec3& v) {
+    glm::mat3 S(0.0f);
+
+    // GLM matrices are column-major: m[col][row]
+    S[0] = glm::vec3( 0.0f,  v.z,  -v.y);
+    S[1] = glm::vec3(-v.z,   0.0f,  v.x);
+    S[2] = glm::vec3( v.y,  -v.x,   0.0f);
+
+    return S;
+}
+
+// Planar covariance from a normal:
+// tangent variance = 1, normal variance = eps
+glm::mat3 covariance_from_normal(const glm::vec3& raw_n, float eps = 1e-3f) {
+    float len2 = glm::dot(raw_n, raw_n);
+    if (len2 < 1e-12f) {
+        return glm::mat3(0.0f);
+    }
+
+    glm::vec3 n = raw_n / std::sqrt(len2);
+    glm::mat3 I(1.0f);
+    glm::mat3 nnT = glm::outerProduct(n, n);
+
+    // I - nn^T + eps * nn^T
+    return I - (1.0f - eps) * nnT;
+}
+
+void add_mat3_block(double H[6][6], int row0, int col0, const glm::mat3& M) {
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            H[row0 + r][col0 + c] += static_cast<double>(M[c][r]); // glm is [col][row]
+        }
+    }
+}
+
+void add_vec3_block(double g[6], int row0, const glm::vec3& v) {
+    for (int r = 0; r < 3; r++) {
+        g[row0 + r] += static_cast<double>(v[r]);
+    }
+}
+
+glm::vec3 infrared_colormap(float t) {
+    t = glm::clamp(t, 0.0f, 1.0f);
+
+    float r = glm::clamp(1.5f - std::abs(4.0f * t - 3.0f), 0.0f, 1.0f);
+    float g = glm::clamp(1.5f - std::abs(4.0f * t - 2.0f), 0.0f, 1.0f);
+    float b = glm::clamp(1.5f - std::abs(4.0f * t - 1.0f), 0.0f, 1.0f);
+
+    return glm::vec3(r, g, b);
+}
+
+double gicp_step(PointCloud& source_point_cloud,
+                 const PointCloud& target_point_cloud,
+                 const std::vector<glm::vec3>& source_normals,
+                 const std::vector<glm::vec3>& target_normals)
+{
+    const std::vector<PointInstance>& source_points = source_point_cloud.points;
+    const std::vector<PointInstance>& target_points = target_point_cloud.points;
+
+    if (source_points.size() != source_normals.size()) {
+        std::cout << "source_points.size() != source_normals.size()\n";
+        return -1.0;
+    }
+
+    if (target_points.size() != target_normals.size()) {
+        std::cout << "target_points.size() != target_normals.size()\n";
+        return -1.0;
+    }
+
+    float max_corr_dist = 5.0f;
+    float max_corr_dist_sq = max_corr_dist * max_corr_dist;
+    float max_rot = glm::radians(5.0f);
+    float max_trans = 5.0f;
+    float gicp_eps = 1e-3f;
+
+    double H[6][6] = {};
+    double g[6] = {};
+
+    // Precompute target points, normals, covariances in world space
+    std::vector<glm::vec3> target_points_world;
+    std::vector<glm::vec3> target_normals_world;
+    std::vector<glm::mat3> target_covs_world;
+
+    target_points_world.reserve(target_points.size());
+    target_normals_world.reserve(target_points.size());
+    target_covs_world.reserve(target_points.size());
+    
+    std::vector<float> source_distances(source_points.size(), -1);
+    std::vector<float> target_indices(source_points.size(), -1);
+    float max_new_dist = 0;
+    // source_distances.reserve(source_points.size());
+
+    for (size_t i = 0; i < target_points.size(); i++) {
+        glm::vec3 q_local = glm::vec3(target_points[i].pos);
+        glm::vec3 n_world = transform_normal_world(target_point_cloud, target_normals[i]);
+
+        target_points_world.push_back(transform_point_world(target_point_cloud, q_local));
+        target_normals_world.push_back(n_world);
+        target_covs_world.push_back(covariance_from_normal(n_world, gicp_eps));
+    }
+
+    double total_weighted_sq_error = 0.0;
+    int valid_count = 0;
+
+    for (size_t i = 0; i < source_points.size(); i++) {
+        glm::vec3 p_local = glm::vec3(source_points[i].pos);
+
+        // Source point and source normal in world space
+        glm::vec3 x = transform_point_world(source_point_cloud, p_local);
+        glm::vec3 n_src_world = transform_normal_world(source_point_cloud, source_normals[i]);
+
+        if (glm::dot(n_src_world, n_src_world) < 1e-12f) {
+            continue;
+        }
+
+        int target_id = find_closest_id_with_valid_normal(
+            target_points_world,
+            target_normals_world,
+            x,
+            max_corr_dist_sq
+        );
+
+        if (target_id < 0) {
+            // source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+            continue;
+        }
+        source_distances[i] = glm::distance(target_points_world[target_id], x);
+        if (source_distances[i] > max_new_dist)
+            max_new_dist = source_distances[i];
+
+        target_indices[i] = target_id;
+
+        // source_point_cloud.points[i].color = glm::vec4(0, 1, 0, 1);
+        source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+
+        glm::vec3 q = target_points_world[target_id];
+        glm::vec3 n_tgt_world = target_normals_world[target_id];
+
+        if (glm::dot(n_tgt_world, n_tgt_world) < 1e-12f) {
+            continue;
+        }
+
+        // Build source and target local covariances
+        glm::mat3 C_A = covariance_from_normal(n_src_world, gicp_eps);
+        glm::mat3 C_B = target_covs_world[target_id];
+
+        // GICP weighting matrix:
+        // M = (C_B + C_A)^-1
+        // Since x and q are already in world space, both covariances are in world space too.
+        glm::mat3 Sigma = C_B + C_A;
+        glm::mat3 M = glm::inverse(Sigma);
+
+        glm::vec3 d = q - x;
+
+        // Linearization:
+        // x' ≈ x + ω × x + v
+        // d' = q - x' ≈ d + x×ω - v
+        // so A = [skew(x), -I], residual = d
+        glm::mat3 B = skew_matrix(x);
+        glm::mat3 I(1.0f);
+
+        glm::mat3 H00 = glm::transpose(B) * M * B;
+        glm::mat3 H01 = -glm::transpose(B) * M;
+        glm::mat3 H10 = -M * B;
+        glm::mat3 H11 = M;
+
+        glm::vec3 g0 = -glm::transpose(B) * M * d;
+        glm::vec3 g1 =  M * d;
+
+        add_mat3_block(H, 0, 0, H00);
+        add_mat3_block(H, 0, 3, H01);
+        add_mat3_block(H, 3, 0, H10);
+        add_mat3_block(H, 3, 3, H11);
+
+        add_vec3_block(g, 0, g0);
+        add_vec3_block(g, 3, g1);
+
+        total_weighted_sq_error += static_cast<double>(glm::dot(d, M * d));
+        valid_count++;
+    }
+
+    if (valid_count < 6) {
+        std::cout << "Too few correspondences\n";
+        return -1.0;
+    }
+
+    double rmse = std::sqrt(total_weighted_sq_error / static_cast<double>(valid_count));
+
+    double lambda = 1e-6;
+    for (int i = 0; i < 6; i++) {
+        H[i][i] += lambda;
+    }
+
+    double delta[6] = {};
+    bool ok = solve_6x6(H, g, delta);
+    if (!ok) {
+        std::cout << "solve_6x6 failed\n";
+        return -1.0;
+    }
+
+    glm::vec3 omega(
+        static_cast<float>(delta[0]),
+        static_cast<float>(delta[1]),
+        static_cast<float>(delta[2])
+    );
+
+    glm::vec3 v(
+        static_cast<float>(delta[3]),
+        static_cast<float>(delta[4]),
+        static_cast<float>(delta[5])
+    );
+
+    float omega_len = glm::length(omega);
+    if (omega_len > max_rot) {
+        omega *= max_rot / omega_len;
+    }
+
+    float v_len = glm::length(v);
+    if (v_len > max_trans) {
+        v *= max_trans / v_len;
+    }
+
+    glm::mat3 dR = omega_to_mat3(omega);
+
+    glm::mat3 R_src = euler_xyz_to_mat3(source_point_cloud.rotation);
+    glm::mat3 R_src_new = dR * R_src;
+    glm::vec3 t_src_new = dR * source_point_cloud.position + v;
+
+    source_point_cloud.position = t_src_new;
+    source_point_cloud.rotation = mat3_to_euler_xyz(R_src_new);
+
+    // for (size_t i = 0; i < source_points.size(); i++) {
+    //     if (target_indices[i] < 0 || source_distances[i] < 0)
+    //         continue;
+        
+    //     glm::vec3 p_local = glm::vec3(source_points[i].pos);
+    //     glm::vec3 x = transform_point_world(source_point_cloud, p_local);
+    //     glm::vec3 q = target_points_world[target_indices[i]];
+
+    //     float t = std::abs(glm::distance(x, q) - source_distances[i]) / max_new_dist;
+
+    //     glm::vec3 color = infrared_colormap(t);
+    //     source_point_cloud.points[i].color = glm::vec4(color, 1.0f);
+
+    //     // if (new_dist < source_distances[i])
+    //     //     source_point_cloud.points[i].color = glm::vec4(0, 1, 0, 1);
+    //     // else
+    //     //     source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+    // }
+
+    
+    
+
+    std::cout << "valid_count = " << valid_count
+              << ", weighted_rmse = " << rmse
+              << ", |omega| = " << glm::length(omega)
+              << ", |v| = " << glm::length(v)
+              << "\n";
+
+    return rmse;
+}
+
+size_t remove_outlires(PointCloud& source_point_cloud,
+                       std::vector<glm::vec3>& source_normals,
+                       const PointCloud& target_point_cloud,
+                       float max_distance)
+{
+    const std::vector<PointInstance>& source_points = source_point_cloud.points;
+    const std::vector<PointInstance>& target_points = target_point_cloud.points;
+
+    if (source_points.size() != source_normals.size()) {
+        std::cout << "remove_outlires: source_points.size() != source_normals.size()\n";
+        return 0;
+    }
+
+    if (target_points.empty()) {
+        std::cout << "remove_outlires: target cloud is empty\n";
+        return 0;
+    }
+
+    float max_dist_sq = max_distance * max_distance;
+
+    // Precompute target points in world space
+    std::vector<glm::vec3> target_points_world;
+    target_points_world.reserve(target_points.size());
+
+    for (size_t i = 0; i < target_points.size(); i++) {
+        glm::vec3 q_local = glm::vec3(target_points[i].pos);
+        target_points_world.push_back(transform_point_world(target_point_cloud, q_local));
+    }
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec3> filtered_normals;
+
+    filtered_points.reserve(source_points.size());
+    filtered_normals.reserve(source_normals.size());
+
+    size_t removed_count = 0;
+
+    for (size_t i = 0; i < source_points.size(); i++) {
+        glm::vec3 p_local = glm::vec3(source_points[i].pos);
+        glm::vec3 x_world = transform_point_world(source_point_cloud, p_local);
+
+        int target_id = find_closest_id(target_points_world, x_world, max_dist_sq);
+
+        // No target point within max_distance -> remove as outlier
+        if (target_id < 0) {
+            removed_count++;
+            continue;
+        }
+
+        filtered_points.push_back(source_points[i]);
+        filtered_normals.push_back(source_normals[i]);
+    }
+
+    source_point_cloud.points = std::move(filtered_points);
+    source_normals = std::move(filtered_normals);
+
+    std::cout << "remove_outlires: removed " << removed_count
+              << " points, kept " << source_point_cloud.points.size() << "\n";
+
+    return removed_count;
+}
+
 
 int main() {
     Engine3D engine = Engine3D();
@@ -302,11 +866,37 @@ int main() {
     std::vector<Point*> point_cloud_video_points;
     std::vector<Mesh*> lidar_meshes;
 
-    PointCloudFrame point_cloud_frame = PointCloudFrame("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
-    size_t rings_count = 16;
-    size_t ring_size = point_cloud_frame.point_cloud.size() / rings_count;
+    PointCloudVideo point_cloud_video = PointCloudVideo();
+    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
     
-    Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh_gpu(rings_count, ring_size, 1.5);
+
+    // // for (int i = 60; i < point_cloud_video.frames.size(); i++) {
+    // for (int i = 201; i < 203; i++) {
+    //     std::cout << "Iteration " << i << std::endl;
+    //     double old_rmse = -1;
+    //     // glm::vec4 old_position = point_cloud_video.frames[i-1].point_cloud.position;
+    //     for (int j = 0; j < 10; j++) {
+    //         // double rmse = icp_step(point_cloud_video.frames[i].point_cloud, point_cloud_video.frames[i-1].point_cloud, point_cloud_video.frames[i-1].normals);
+    //         double rmse = gicp_step(point_cloud_video.frames[i].point_cloud, point_cloud_video.frames[200].point_cloud, point_cloud_video.frames[i].normals, point_cloud_video.frames[200].normals);
+
+    //         if (rmse < 0.0)
+    //             break;
+    //         if (j > 0) {
+    //             if (std::abs(old_rmse - rmse) < 1e-12f)
+    //                 break;
+    //         }
+
+    //         old_rmse = rmse;
+    //     }
+    // }
+    
+    
+
+    // PointCloudFrame point_cloud_frame = PointCloudFrame("/home/spectre/TEMP_lidar_output_mesh/recording/frame_000000.bin");
+    // size_t rings_count = 16;
+    // size_t ring_size = point_cloud_frame.point_cloud.size() / rings_count;
+    
+    // Mesh point_cloud_mesh = point_cloud_frame.point_cloud.generate_mesh_gpu(rings_count, ring_size, 1.5);
 
 
     std::vector<PointInstance> target_points;
@@ -457,92 +1047,8 @@ int main() {
     glm::mat3 R = glm::mat3(1.0f);
     glm::vec3 t = glm::vec3(0.0f);
     
-
-    // for (int i = 0; i < 10; i++) {
-    //     icp_step(source_points, target_points, target_normals, R, t);
-    // }
-
-    // R * p + t;
-    // for (size_t i = 0; i < source_points.size(); i++) {
-    //     glm::vec3 p = R * glm::vec3(source_points[i].pos) + t;
-    //     source_points_for_drawing[i].pos = glm::vec4(p, 1.0f);
-    // }
-
     
     source_point_cloud_for_drawing.update_points(source_points_for_drawing);
-        
-
-
-    // std::vector<int> correspondences(source_points.size(), -1);
-
-    // for (size_t i = 0; i < source_points.size(); i++) {
-    //     size_t target_id = find_closest_id(target_points, source_points[i].pos);
-    //     correspondences[i] = target_id;
-    // }
-
-    // glm::mat3 R = glm::mat3(1.0f);   // identity rotation
-    // glm::vec3 t = glm::vec3(0.0f);   // zero translation
-
-    // double H[6][6] = {};
-    // double g[6] = {};
-
-    // for (size_t i = 0; i < source_points.size(); i++) {
-    //     // int target_id = correspondences[i];
-    //     size_t target_id = find_closest_id(target_points, source_points[i].pos);
-
-    //     glm::vec3 p = glm::vec3(source_points[i].pos);
-
-    //     glm::vec3 x = R * p + t;
-    //     glm::vec3 q = glm::vec3(target_points[target_id].pos);
-    //     glm::vec3 n = glm::normalize(target_normals[target_id]);
-
-    //     glm::vec3 a = glm::cross(x, n);
-    //     double rhs = (double)glm::dot(n, q - x);
-
-    //     double J[6] = {
-    //         (double)a.x,
-    //         (double)a.y,
-    //         (double)a.z,
-    //         (double)n.x,
-    //         (double)n.y,
-    //         (double)n.z
-    //     };
-
-    //     for (int r = 0; r < 6; r++) {
-    //         g[r] += J[r] * rhs;
-
-    //         for (int c = 0; c < 6; c++) {
-    //             H[r][c] += J[r] * J[c];
-    //         }
-    //     }
-    // }
-
-
-    // // dumping
-    // double lambda = 1e-6;
-    // for (int i = 0; i < 6; i++) {
-    //     H[i][i] += lambda;
-    // }
-
-    // double delta[6] = {};
-    // bool ok = solve_6x6(H, g, delta);
-
-    // glm::vec3 omega(
-    //     (float)delta[0],
-    //     (float)delta[1],
-    //     (float)delta[2]
-    // );
-
-    // glm::vec3 v(
-    //     (float)delta[3],
-    //     (float)delta[4],
-    //     (float)delta[5]
-    // );
-
-    // glm::mat3 dR = omega_to_mat3(omega);
-
-    // R = dR * R;
-    // t = dR * t + v;
 
 
 
@@ -588,10 +1094,29 @@ int main() {
     sphere.mesh->position.y = 1;
 
     PBRSkybox skybox = PBRSkybox(engine.texture_manager->st_peters_square_night_4k);
+
+    int id_1 = 200;
+    int id_2 = 221;
+
+    for (int i = 0; i < point_cloud_video.frames[id_1].point_cloud.points.size(); i++) {
+        point_cloud_video.frames[id_1].point_cloud.points[i].color = glm::vec4(0, 0, 1, 1);
+    }
+    point_cloud_video.frames[id_1].point_cloud.update_points(point_cloud_video.frames[id_1].point_cloud.points);
+
+    // for (int i = 0; i < point_cloud_video.frames[id_2].point_cloud.points.size(); i++) {
+    //     point_cloud_video.frames[id_2].point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+    // }
+    // point_cloud_video.frames[id_2].point_cloud.update_points(point_cloud_video.frames[id_2].point_cloud.points);
+
+
+    remove_outlires(point_cloud_video.frames[id_2].point_cloud, point_cloud_video.frames[id_2].normals, point_cloud_video.frames[id_1].point_cloud, 5.0f);
+    point_cloud_video.frames[id_2].point_cloud.update_points(point_cloud_video.frames[id_2].point_cloud.points);
         
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
     float timer = 0.0f;
+    int cur_frame = 100;
+    
     while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - last_frame;
@@ -617,8 +1142,18 @@ int main() {
 
         // window.draw(&point_cloud_mesh, &camera);
 
-        window.draw(&target_point_cloud, &camera);
-        window.draw(&source_point_cloud, &camera);
+        // window.draw(&target_point_cloud, &camera);
+        // window.draw(&source_point_cloud, &camera);
+
+        // point_cloud_video.update(delta_time);
+        window.draw(&point_cloud_video.frames[id_1], &camera);
+        // window.draw(&point_cloud_video.frames[id_2], &camera);
+        window.draw(&point_cloud_video.frames[cur_frame], &camera);
+        // window.draw(&point_cloud_video.frames[61], &camera);
+
+        
+
+
         // window.draw(&source_point_cloud_for_drawing, &camera);
         
         
@@ -638,21 +1173,29 @@ int main() {
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "fps: %.3f", fps);
+        ImGui::TextColored(ImVec4(0.5,0.5,1,1), "current frame: %d", (int)point_cloud_video.current_frame);
+        ImGui::InputInt("current frame", &cur_frame);
+        
 
         ImGui::SliderFloat("Relative threshold", &rel_thresh, 0.0f, 10.0f);
 
         if (ImGui::Button("ICP Step")) {
-            icp_step(source_points, target_points, target_normals, R, t);
+            // icp_step(source_points, target_points, target_normals, R, t);
+            // icp_step(source_point_cloud, target_point_cloud, target_normals);
+            gicp_step(point_cloud_video.frames[cur_frame].point_cloud, point_cloud_video.frames[id_1].point_cloud, point_cloud_video.frames[cur_frame].normals, point_cloud_video.frames[id_1].normals);
+            point_cloud_video.frames[cur_frame].point_cloud.update_points(point_cloud_video.frames[cur_frame].point_cloud.points);
+            // icp_step(point_cloud_video.frames[id_2].point_cloud, point_cloud_video.frames[id_1].point_cloud, point_cloud_video.frames[id_1].normals);
+            
 
-            for (size_t i = 0; i < source_points.size(); i++) {
-                glm::vec3 p = R * glm::vec3(source_points[i].pos) + t;
-                source_points[i].pos = glm::vec4(p, 1.0f);
-            }
+            // for (size_t i = 0; i < source_points.size(); i++) {
+            //     glm::vec3 p = R * glm::vec3(source_points[i].pos) + t;
+            //     source_points[i].pos = glm::vec4(p, 1.0f);
+            // }
 
-            R = glm::mat3(1.0f);
-            t = glm::vec3(0.0f);
+            // R = glm::mat3(1.0f);
+            // t = glm::vec3(0.0f);
 
-            source_point_cloud.update_points(source_points);
+            // source_point_cloud.update_points(source_points);
         }
 
         ImGui::End();

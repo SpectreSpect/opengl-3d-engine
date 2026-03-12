@@ -13,6 +13,12 @@
 #include "../path_utils.h"
 #include "../ssbo.h"
 #include "../math_utils.h"
+#include <glm/gtx/norm.hpp>
+#include <vector>
+#include <random>
+#include <algorithm>
+#include <numeric>
+#include <iostream>
 
 
 
@@ -47,16 +53,22 @@ public:
     glm::vec3 triangle_normal(const PointInstance& a, const PointInstance& b, const PointInstance& c);
     int xy_id(int x, int y, int ring_width, int cloud_size);
     Mesh generate_mesh(float rel_thresh = 1.5f);
+    void get_normals(const std::vector<PointInstance>& points, std::vector<glm::vec3> &normals);
+    void remove_invalid_points_and_normals(std::vector<PointInstance>& points, std::vector<glm::vec3>& normals);
+    void drop_out_points_and_normals(std::vector<PointInstance>& points, std::vector<glm::vec3>& normals, size_t target_size);
     // void generate_mesh_gpu(const SSBO& point_cloud_ssbo, const SSBO& vertex_ssbo, const SSBO& index_ssbo,  float rel_thresh = 1.5f);
+    void remove_points_near_origin(std::vector<PointInstance>& points, std::vector<glm::vec3>& normals, float min_distance);
     Mesh generate_mesh_gpu(unsigned int rings_count, unsigned int ring_size,  float rel_thresh = 1.5f);
     void generate_mesh_gpu(const SSBO& point_cloud_ssbo, const SSBO& vertex_ssbo, const SSBO& index_ssbo, 
                            unsigned int rings_count, unsigned int ring_size,  float rel_thresh = 1.5f);
     void print_vertex(const Vertex& vertex);
     void draw(RenderState state) override;
+
+    std::vector<PointInstance> points;
         
 private:
     bool needs_gpu_sync = true;
-    std::vector<PointInstance> points;
+    
     
 
     void sync_gpu();

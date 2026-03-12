@@ -104,8 +104,28 @@ void PointCloudFrame::load_from_file(const std::filesystem::path& path) {
         // }
     }
 
+    point_cloud.get_normals(local_points, normals);
+    point_cloud.remove_invalid_points_and_normals(local_points, normals);
+    point_cloud.drop_out_points_and_normals(local_points, normals, 2500);
+
+    point_cloud.remove_points_near_origin(local_points, normals, 3);
+
+    // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
     point_cloud.update_points(std::move(local_points));
 }
+
+
+// void PointCloudFrame::get_normals(std::vector<PointInstance> points, std::vector<glm::vec3> normals) {
+//     int rings_count = 16;
+//     int ring_width = points.size() / rings_count;
+//     int cloud_size = points.size();
+
+//     for (int y = 0; y < rings_count - 1; y++){
+//         for (int x = 0; x < ring_width - 1; x++){
+
+//         }
+//     }
+// }
 
 void PointCloudFrame::draw(RenderState state) {
     state.transform *= get_model_matrix();

@@ -240,6 +240,228 @@ Mesh PointCloud::generate_mesh(float rel_thresh) {
     return mesh;
 }
 
+void PointCloud::get_normals(const std::vector<PointInstance>& points,
+                             std::vector<glm::vec3>& normals)
+{
+    normals.clear();
+    normals.resize(points.size(), glm::vec3(0.0f));
+
+    if (points.empty())
+        return;
+
+    const int rings_count = 16;
+    const int cloud_size = static_cast<int>(points.size());
+
+    if (cloud_size < rings_count)
+        return;
+
+    const int ring_width = cloud_size / rings_count;
+    if (ring_width < 2)
+        return;
+
+    const float rel_thresh = 1.0f;
+
+    auto accumulate_triangle_normal = [&](int ia, int ib, int ic)
+    {
+        const PointInstance& a = points[ia];
+        const PointInstance& b = points[ib];
+        const PointInstance& c = points[ic];
+
+        // Extra safety: don't accumulate into invalid points
+        if (!is_point_valid(a) || !is_point_valid(b) || !is_point_valid(c))
+            return;
+
+        glm::vec3 n = triangle_normal(a, b, c);
+
+        if (glm::dot(n, n) < 1e-12f)
+            return;
+
+        // Keep normals consistently oriented upward
+        if (glm::dot(n, glm::vec3(0.0f, 1.0f, 0.0f)) < 0.0f)
+            n = -n;
+
+        normals[ia] += n;
+        normals[ib] += n;
+        normals[ic] += n;
+    };
+
+    for (int y = 0; y < rings_count - 1; y++) {
+        for (int x = 0; x < ring_width - 1; x++) {
+            int id1 = xy_id(x,     y,     ring_width, cloud_size);
+            int id2 = xy_id(x,     y + 1, ring_width, cloud_size);
+            int id3 = xy_id(x + 1, y + 1, ring_width, cloud_size);
+            int id5 = xy_id(x + 1, y,     ring_width, cloud_size);
+
+            const PointInstance& p0 = points[id1]; // lower-left
+            const PointInstance& p1 = points[id2]; // upper-left
+            const PointInstance& p2 = points[id3]; // upper-right
+            const PointInstance& p3 = points[id5]; // lower-right
+
+            bool tri1_ok = false;
+            bool tri2_ok = false;
+
+            if (is_point_valid(p0) && is_point_valid(p1) && is_point_valid(p2)) {
+                if (is_same_object(p0, p1, rel_thresh) &&
+                    is_same_object(p1, p2, 1.5f, false))
+                {
+                    tri1_ok = true;
+                }
+            }
+
+            if (is_point_valid(p2) && is_point_valid(p3) && is_point_valid(p0)) {
+                if (is_same_object(p3, p2, rel_thresh) &&
+                    is_same_object(p3, p0, 1.5f, false))
+                {
+                    tri2_ok = true;
+                }
+            }
+
+            if (tri1_ok) {
+                accumulate_triangle_normal(id3, id1, id2);
+            }
+
+            if (tri2_ok) {
+                accumulate_triangle_normal(id1, id3, id5);
+            }
+        }
+    }
+
+    // Normalize only valid points that actually accumulated something.
+    // Invalid points remain degenerate: (0,0,0).
+    for (size_t i = 0; i < normals.size(); i++) {
+        if (!is_point_valid(points[i])) {
+            normals[i] = glm::vec3(0.0f);
+            continue;
+        }
+
+        float len2 = glm::dot(normals[i], normals[i]);
+        if (len2 < 1e-12f) {
+            normals[i] = glm::vec3(0.0f);
+        } else {
+            normals[i] = glm::normalize(normals[i]);
+        }
+    }
+}
+
+void PointCloud::remove_invalid_points_and_normals(std::vector<PointInstance>& points,
+                                                   std::vector<glm::vec3>& normals)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "remove_invalid_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec3> filtered_normals;
+
+    filtered_points.reserve(points.size());
+    filtered_normals.reserve(normals.size());
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const PointInstance& p = points[i];
+        const glm::vec3& n = normals[i];
+
+        bool point_valid = is_point_valid(p);
+        bool normal_valid = glm::dot(n, n) > 1e-12f;
+
+        if (!point_valid || !normal_valid)
+            continue;
+
+        filtered_points.push_back(p);
+        filtered_normals.push_back(glm::normalize(n));
+    }
+
+    points = std::move(filtered_points);
+    normals = std::move(filtered_normals);
+}
+
+void PointCloud::remove_points_near_origin(std::vector<PointInstance>& points,
+                                           std::vector<glm::vec3>& normals,
+                                           float min_distance)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "remove_points_near_origin: points.size() != normals.size()\n";
+        return;
+    }
+
+    float min_dist_sq = min_distance * min_distance;
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec3> filtered_normals;
+
+    filtered_points.reserve(points.size());
+    filtered_normals.reserve(normals.size());
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const PointInstance& p = points[i];
+        const glm::vec3& n = normals[i];
+
+        glm::vec3 pos = glm::vec3(p.pos);
+        float dist_sq = glm::dot(pos, pos);
+
+        // remove points that are too close to the lidar origin
+        if (dist_sq < min_dist_sq || p.pos.y < 1.0)
+            continue;
+
+        filtered_points.push_back(p);
+        filtered_normals.push_back(n);
+    }
+
+    points = std::move(filtered_points);
+    normals = std::move(filtered_normals);
+}
+
+void PointCloud::drop_out_points_and_normals(std::vector<PointInstance>& points,
+                                 std::vector<glm::vec3>& normals,
+                                 size_t target_size)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "drop_out_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    size_t n = points.size();
+
+    if (target_size >= n) {
+        return; // nothing to drop
+    }
+
+    if (target_size == 0) {
+        points.clear();
+        normals.clear();
+        return;
+    }
+
+    // Create indices [0, 1, 2, ..., n-1]
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // Shuffle indices randomly
+    static std::random_device rd;
+    static std::mt19937 rng(rd());
+    std::shuffle(indices.begin(), indices.end(), rng);
+
+    // Keep only the first target_size indices
+    indices.resize(target_size);
+
+    // Optional: sort so the remaining points keep their original relative order
+    std::sort(indices.begin(), indices.end());
+
+    std::vector<PointInstance> new_points;
+    std::vector<glm::vec3> new_normals;
+
+    new_points.reserve(target_size);
+    new_normals.reserve(target_size);
+
+    for (size_t idx : indices) {
+        new_points.push_back(points[idx]);
+        new_normals.push_back(normals[idx]);
+    }
+
+    points = std::move(new_points);
+    normals = std::move(new_normals);
+}
+
 Mesh PointCloud::generate_mesh_gpu(unsigned int rings_count, unsigned int ring_size,  float rel_thresh) {
     size_t triangles_count = (rings_count - 1) * ring_size * 2;
     size_t vertices_count = triangles_count * 3;

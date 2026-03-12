@@ -7,6 +7,7 @@ public:
     uint64_t timestamp_ns = 0;
     uint32_t flags = 0;        // 1=rgb, 2=intensity
     PointCloud point_cloud;
+    std::vector<glm::vec3> normals;
 
     glm::vec3 car_pos;
     glm::vec3 car_rotation;
@@ -95,6 +96,8 @@ public:
     {
         return glm::vec3(-p_ros.x, p_ros.z, p_ros.y); // (-x, z, y)
     }
+
+    // void get_normals(std::vector<PointInstance> points, std::vector<glm::vec3> normals);
 
 
     void draw(RenderState state) override;
