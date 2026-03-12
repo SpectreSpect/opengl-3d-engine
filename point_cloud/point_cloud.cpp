@@ -400,7 +400,8 @@ void PointCloud::remove_points_near_origin(std::vector<PointInstance>& points,
         float dist_sq = glm::dot(pos, pos);
 
         // remove points that are too close to the lidar origin
-        if (dist_sq < min_dist_sq || p.pos.y < 1.0)
+        // if (dist_sq < min_dist_sq || p.pos.y < 1.0)
+        if (dist_sq < min_dist_sq)
             continue;
 
         filtered_points.push_back(p);

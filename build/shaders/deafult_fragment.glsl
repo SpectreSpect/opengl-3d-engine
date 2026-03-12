@@ -190,7 +190,7 @@ void main()
 {
     vec3 albedo = clamp(vColor, 0.0, 1.0);
     float metallic = 0.0;
-    float roughness = 0.3;
+    float roughness = 0.6;
     float ao = 1.0;
 
     roughness = clamp(roughness, 0.0005, 1.0);

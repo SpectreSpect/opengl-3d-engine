@@ -39,7 +39,7 @@ Sphere::Sphere() {
             SphereBuildVertex vert;
             vert.pos    = glm::vec3(radius * x, radius * y, radius * z);
             vert.normal = glm::normalize(glm::vec3(x, y, z));
-            vert.color  = glm::vec3(1.0f, 1.0f, 1.0f);
+            vert.color  = glm::vec3(0.960784314f, 0.870588235f, 0.305882353f);
 
             temp_vertices.push_back(vert);
         }

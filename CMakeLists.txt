@@ -76,6 +76,7 @@ add_executable(app
   texture_manager.cpp
   pbr_environment.cpp
   pbr_skybox.cpp
+  third_person_camera_controller.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")

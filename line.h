@@ -6,13 +6,14 @@
 #include <vector>
 #include <cstddef> // offsetof
 #include "drawable.h"
+#include "transformable.h"
 
 struct LineInstance {
     glm::vec3 p0;
     glm::vec3 p1;
 };
 
-class Line : public Drawable{
+class Line : public Drawable, public Transformable{
 public:
     Line();
     ~Line();

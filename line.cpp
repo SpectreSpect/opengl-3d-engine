@@ -101,10 +101,13 @@ void Line::draw(RenderState state) {
 
     Program* program = state.engine->default_line_program;
     program->use();
-    program->set_mat4("uProj", state.proj);
-
     
 
+    glm::mat4 model = get_model_matrix();
+    glm::mat4 world = state.transform * model;
+
+    program->set_mat4("uModel", world);
+    program->set_mat4("uProj", state.proj);
     if (state.camera) {
         program->set_mat4("uView", state.camera->get_view_matrix());
     }
