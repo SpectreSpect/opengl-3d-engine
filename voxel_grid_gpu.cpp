@@ -448,21 +448,17 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
 
 void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_clear_chunks_ = ComputeProgram(&shader_manager.clear_chunks_cs);
-    prog_set_chunks_ = ComputeProgram(&shader_manager.set_chunks_cs);;
 
     prog_dispatch_adapter_ = ComputeProgram(&shader_manager.dispatch_adapter_cs);
     prog_world_init_ = ComputeProgram(&shader_manager.world_init_cs);
     prog_apply_writes_ = ComputeProgram(&shader_manager.apply_writes_to_world_cs);
-    prog_mesh_counters_reset_ = ComputeProgram(&shader_manager.mesh_counters_reset_cs);
     prog_mesh_reset_ = ComputeProgram(&shader_manager.mesh_reset_cs);
     prog_mesh_count_ = ComputeProgram(&shader_manager.mesh_count_cs);
     prog_mesh_alloc_ = ComputeProgram(&shader_manager.mesh_alloc_cs);
     prog_mesh_emit_ = ComputeProgram(&shader_manager.mesh_emit_cs);
     prog_mesh_finalize_ = ComputeProgram(&shader_manager.mesh_finalize_cs);
-    prog_cmdcount_reset_ = ComputeProgram(&shader_manager.cmdcount_reset_cs);
     prog_build_indirect_cmds_ = ComputeProgram(&shader_manager.build_indirect_cmds_cs);
     prog_reset_dirty_count_ = ComputeProgram(&shader_manager.reset_dirty_count_cs);
-    prog_evict_buckets_reset_ = ComputeProgram(&shader_manager.evict_buckets_reset_cs);
     prog_evict_buckets_build_ = ComputeProgram(&shader_manager.evict_buckets_build_cs);
     prog_evict_low_priority_ = ComputeProgram(&shader_manager.evict_low_priority_cs);
     prog_evict_low_priority_dispatch_adapter_ = ComputeProgram(&shader_manager.evict_low_priority_dispatch_adapter_cs);
@@ -471,7 +467,6 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_mark_all_user_chunks_as_dirty_ = ComputeProgram(&shader_manager.mark_all_user_chunks_as_dirty_cs);
     prog_mesh_pool_clear_ = ComputeProgram(&shader_manager.mesh_pool_clear_cs);
     prog_mesh_pool_seed_ = ComputeProgram(&shader_manager.mesh_pool_seed_cs);
-    prog_reset_load_list_counter_ = ComputeProgram(&shader_manager.reset_load_list_counter_cs);
     prog_verify_mesh_allocation_ = ComputeProgram(&shader_manager.verify_mesh_allocation_cs);
     prog_return_free_alloc_nodes_ = ComputeProgram(&shader_manager.return_free_alloc_nodes_cs);
     prog_return_free_alloc_nodes_dispatch_adapter_ = ComputeProgram(&shader_manager.return_free_alloc_nodes_dispatch_adapter_cs);
@@ -865,14 +860,7 @@ void VoxelGridGPU::print_eviction_log(const glm::vec3& camera_pos) {
 }
 
 void VoxelGridGPU::reset_heads() {
-    bucket_heads_.bind_base(0);
-
-    prog_evict_buckets_reset_.use();
-    glUniform1ui(glGetUniformLocation(prog_evict_buckets_reset_.id, "u_bucket_count"), count_evict_buckets);
-
-    uint32_t gx = math_utils::div_up_u32(count_evict_buckets, 256u);
-    prog_evict_buckets_reset_.dispatch_compute(gx, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    bucket_heads_.update_subdata_fill<uint32_t>(0u, INVALID_ID, sizeof(uint32_t) * count_evict_buckets, *shader_manager);
 }
 
 void VoxelGridGPU::build_bucket_lists(const glm::vec3& cam_pos) {
@@ -926,7 +914,6 @@ void VoxelGridGPU::evict_lowpriority_chunks(const SSBO& dispatch_args) {
     prog_evict_low_priority_.use();
     glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_bucket_count"), count_evict_buckets);
-    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_min_free"), min_free_chunks);
 
     glDispatchComputeIndirect(0);
 
@@ -964,8 +951,8 @@ void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_free_evicted_chunks_mesh_.use();
-    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "u_vb_max_order"), vb_order_);
-    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "u_ib_max_order"), ib_order_);
+    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "vb_max_order"), vb_order_);
+    glUniform1ui(glGetUniformLocation(prog_free_evicted_chunks_mesh_.id, "ib_max_order"), ib_order_);
 
     glDispatchComputeIndirect(0);
 
@@ -1016,14 +1003,14 @@ void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
     }
 }
 
-void VoxelGridGPU::reset_global_mesh_counters() {
-    mesh_counters_.bind_base(0);
-    frame_counters_.bind_base(1);
+// void VoxelGridGPU::reset_global_mesh_counters() {
+//     mesh_counters_.bind_base(0);
+//     frame_counters_.bind_base(1);
 
-    prog_mesh_counters_reset_.use();
-    prog_mesh_counters_reset_.dispatch_compute(1, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-}
+//     prog_mesh_counters_reset_.use();
+//     prog_mesh_counters_reset_.dispatch_compute(1, 1, 1);
+//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+// }
 
 void VoxelGridGPU::mesh_reset(const SSBO& dispatch_args) {
     frame_counters_.bind_base(0);
@@ -1034,8 +1021,6 @@ void VoxelGridGPU::mesh_reset(const SSBO& dispatch_args) {
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_reset_.use();
-    glUniform3ui(glGetUniformLocation(prog_mesh_reset_.id, "u3_chunk_size"), chunk_size.x, chunk_size.y, chunk_size.z);
-
     glDispatchComputeIndirect(0);
 
     // prog_mesh_reset_.dispatch_compute(groups_dirty, 1, 1);
@@ -1422,10 +1407,12 @@ void VoxelGridGPU::generate_terrain(uint32_t seed, uint32_t load_count) {
 }
 
 void VoxelGridGPU::reset_load_list_counter() {
-    stream_counters_.bind_base(0);
-    prog_reset_load_list_counter_.use();
-    prog_reset_load_list_counter_.dispatch_compute(1, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // stream_counters_.bind_base(0);
+    // prog_reset_load_list_counter_.use();
+    // prog_reset_load_list_counter_.dispatch_compute(1, 1, 1);
+    // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    stream_counters_.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
 }
 
 void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {
@@ -1474,7 +1461,11 @@ void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
     // std::cout << "DIRTY COUT: " << dirtyCount << std::endl;
 
     // ---- Pass: reset global mesh counters (GPU) ----
-    reset_global_mesh_counters();
+    // reset_global_mesh_counters();
+
+    // mesh_counters_.update_subdata_fill<uint64_t>(0u, 0ull, sizeof(uint32_t) * 2, *shader_manager);
+    
+
     // glFinish();
     // std::cout << "REST GLOBAL COUNTERS" << std::endl;
 
@@ -1664,10 +1655,10 @@ void VoxelGridGPU::init_draw_buffers() {
 }
 
 void VoxelGridGPU::mark_all_used_chunks_as_dirty() {
-    chunk_meta_.bind_base(6);
-    enqueued_.bind_base(7);
-    dirty_list_.bind_base(8);
-    frame_counters_.bind_base(5);
+    chunk_meta_.bind_base(0);
+    enqueued_.bind_base(1);
+    dirty_list_.bind_base(2);
+    frame_counters_.bind_base(3);
 
     prog_mark_all_user_chunks_as_dirty_.use();
 

@@ -4,6 +4,8 @@
 Для корректной работы кода перед #include необходимо обязательно определить:
 #define PREFIX some_prefix
 
+В противном случае будет подключена только секция ALLOCATOR_COMMON.
+
 Также необходимо наличие следующих данных (названия обязательно должны соответсвовать указанным вместе с заменённым
 PREFIX на определённое ранее вами название).
 
@@ -39,6 +41,7 @@ uint pack_head(uint start, uint tag) {return (start << HEAD_TAG_BITS) | (tag & H
 
 #endif
 
+#ifdef PREFIX
 #define P(NAME) PR(PREFIX, NAME)
 uint P(pop_free_node_id)() {
     for (;;) {
@@ -242,3 +245,4 @@ bool P(free_pages)(uint start, uint order) {
 
 #undef P
 #undef PREFIX
+#endif

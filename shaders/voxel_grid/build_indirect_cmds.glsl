@@ -1,33 +1,13 @@
 #version 430
-
-#define INVALID_ID 0xFFFFFFFFu
-
 layout(local_size_x = 256) in;
 
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
+
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
-
-struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=1) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
-
-struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
 layout(std430, binding=2) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
-
-struct DrawElementsIndirectCommand {
-    uint count;
-    uint instanceCount;
-    uint firstIndex;
-    int  baseVertex;
-    uint baseInstance;
-};
 layout(std430, binding=3) buffer IndirectCmdBuf { DrawElementsIndirectCommand cmds[]; };
 
 uniform uint  u_max_chunks;
@@ -46,39 +26,9 @@ uniform uint u_ib_page_inds;
 // 6 плоскостей фрустума в world space: ax+by+cz+d >= 0 (внутри)
 uniform vec4 u_frustum_planes[6];
 
-uint mask_bits(uint bits) {
-    return (bits >= 32u) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
-}
-
-// извлекает `bits` начиная с `shift` из 64-битного значения, хранящегося как uvec2(lo,hi)
-uint extract_bits_uvec2(uvec2 k, uint shift, uint bits) {
-    uint m = mask_bits(bits);
-    if (bits == 0u) return 0u;
-
-    if (shift < 32u) {
-        uint res = k.x >> shift;
-
-        uint rem = 32u - shift;
-        if (rem < bits) {
-            res |= (k.y << rem);
-        }
-        return res & m;
-    } else {
-        uint s = shift - 32u;
-        return (k.y >> s) & m;
-    }
-}
-
-ivec3 unpack_key_to_coord(uvec2 key2) {
-    uint B = u_pack_bits;
-    uint ux = extract_bits_uvec2(key2, 2u * B, B);
-    uint uy = extract_bits_uvec2(key2, 1u * B, B);
-    uint uz = extract_bits_uvec2(key2, 0u * B, B);
-
-    return ivec3(int(ux) - u_pack_offset,
-                 int(uy) - u_pack_offset,
-                 int(uz) - u_pack_offset);
-}
+// ----- include -----
+#include "common/common.glsl"
+// -------------------
 
 // Быстрый тест сферы против плоскостей (false positives допустимы)
 bool sphere_in_frustum(vec3 center, float radius) {
@@ -97,14 +47,12 @@ void main() {
     if (meta[chunkId].used == 0u) return;
 
     ChunkMeshAlloc mesh_alloc = chunk_mesh_alloc[chunkId];
-    // {uint v_startPage; uint v_order; uint i_startPage; uint i_order; };
+
     if (mesh_alloc.v_startPage == INVALID_ID || mesh_alloc.i_startPage == INVALID_ID) return;
     if (mesh_alloc.needV == 0 || mesh_alloc.needI == 0) return;
 
-    // ChunkMeshMeta m = mesh_meta[chunkId];
-    // if (m.mesh_valid == 0u || m.index_count == 0u) return;
 
-    ivec3 chunkCoord = unpack_key_to_coord(uvec2(meta[chunkId].key_lo, meta[chunkId].key_hi));
+    ivec3 chunkCoord = unpack_key_to_coord(uvec2(meta[chunkId].key_lo, meta[chunkId].key_hi), u_pack_offset, u_pack_bits);
 
     vec3 chunkSize = vec3(u_chunk_dim) * u_voxel_size;
 

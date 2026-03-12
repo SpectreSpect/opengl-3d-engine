@@ -5,9 +5,14 @@ layout(local_size_x = 256) in;
 layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) buffer ChunkHashVals { uint  hash_vals[]; };
 
-#define SLOT_EMPTY 0xFFFFFFFFu
-
 uniform uint u_hash_table_size;
+
+// ----- include -----
+
+#define NOT_INCLUDE_GET_OR_CREATE
+#define NOT_INCLUDE_LOOKUP_REMOVE
+#include "common/hash_table.glsl"
+// -------------------
 
 void main() {
     uint slot_id = gl_GlobalInvocationID.x;

@@ -42,5 +42,5 @@ public:
         const std::filesystem::path& path, 
         const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
     );
-    static GLuint compile_shader(GLenum type, const char* src);
+    static GLuint compile_shader(GLenum type, const char* src, const std::filesystem::path* shader_path = nullptr);
 };

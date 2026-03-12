@@ -5,13 +5,9 @@ layout(std430, binding=0) buffer VBReturnedNodesList  { uint vb_returned_nodes_c
 layout(std430, binding=1) buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
 layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
 
-uint div_up_u32(uint a, uint b) { 
-    return (a + b - 1u) / b; 
-}
-
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
+// ----- include -----
+#include "common/common.glsl"
+// -------------------
 
 void main() {
     if (gl_GlobalInvocationID.x != 0u) return;

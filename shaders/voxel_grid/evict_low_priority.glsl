@@ -1,91 +1,30 @@
 #version 430
 layout(local_size_x = 256) in;
 
-#define SLOT_EMPTY   0xFFFFFFFFu
-#define SLOT_LOCKED  0xFFFFFFFEu
-#define SLOT_TOMB    0xFFFFFFFDu
-#define INVALID_ID   0xFFFFFFFFu
-
-#define MAX_PROBES   128u
-#define LOCK_SPINS   64u
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
-
 layout(std430, binding=2) buffer FreeList { uint free_list[]; };
-
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
 layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
-
-struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-
 layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
-
 layout(std430, binding=6) coherent buffer BucketHeads { uint bucket_heads[]; };
 layout(std430, binding=7) coherent buffer BucketNext  { uint bucket_next[]; };
-
-struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
 layout(std430, binding=8) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
-
 layout(std430, binding=9) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 
 uniform uint u_hash_table_size;
 uniform uint u_bucket_count;
-uniform uint u_min_free;    // сколько свободных хотим иметь
 
-uint hash_uvec2(uvec2 v) {
-    uint x = v.x * 1664525u + 1013904223u;
-    uint y = v.y * 22695477u + 1u;
-    uint h = x ^ (y + (x << 16) + (x >> 16));
-    h ^= h >> 16; h *= 0x7feb352du;
-    h ^= h >> 15; h *= 0x846ca68bu;
-    h ^= h >> 16;
-    return h;
-}
+// ----- include -----
+#include "common/common.glsl"
 
-bool remove_from_table(uvec2 key) {
-    uint mask = u_hash_table_size - 1u;
-    uint idx  = hash_uvec2(key) & mask;
-
-    for (uint probe = 0u; probe < MAX_PROBES;) {
-        uint v = atomicAdd(hash_vals[idx], 0u);
-
-        if (v == SLOT_LOCKED) continue;
-
-        if (v == SLOT_EMPTY) return false;
-
-        if (v == SLOT_TOMB) { 
-            idx = (idx + 1u) & mask;
-            probe++;
-            continue;
-        }
-
-        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
-            // Залочили слот - можем читать ключ
-            if (all(equal(hash_keys[idx], key))) {
-                atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
-                return true;
-            }
-
-            atomicExchange(hash_vals[idx], v); // Убираем блокировку
-        } else {
-            continue; // Не получилось захватить. Попробуем ещё раз.
-        }
-
-        idx = (idx + 1u) & mask;
-        probe++;
-    }
-    return false;
-}
+#define NOT_INCLUDE_GET_OR_CREATE
+#include "common/hash_table.glsl"
+// -------------------
 
 // ABA проблемы не будет, так как везде используется либо только pop, либо только push (поэтому теги на heads пока не нужны)
 uint pop_bucket(uint b) {

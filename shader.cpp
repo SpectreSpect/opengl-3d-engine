@@ -28,7 +28,7 @@ std::string Shader::load_text_file(const std::filesystem::path& path, const std:
     return preprocessor.load(path, include_directories);
 }
 
-GLuint Shader::compile_shader(GLenum type, const char* src) {
+GLuint Shader::compile_shader(GLenum type, const char* src, const std::filesystem::path* shader_path) {
     GLuint s = glCreateShader(type);
     glShaderSource(s, 1, &src, nullptr);
     glCompileShader(s);
@@ -37,7 +37,14 @@ GLuint Shader::compile_shader(GLenum type, const char* src) {
     if (!ok) {
         char buf[1024];
         glGetShaderInfoLog(s, sizeof(buf), nullptr, buf);
-        std::cerr << "Shader compile error: " << buf << "\n";
+        
+        if (shader_path != nullptr) {
+            std::filesystem::path shader_name = shader_path->filename();
+            std::cout << "Error in shader " << shader_name << ":" << std::endl;
+            std::cout << buf << std::endl;
+        } else {
+            std::cerr << "Shader compile error: " << buf << std::endl;
+        }
     }
     return s;
 }

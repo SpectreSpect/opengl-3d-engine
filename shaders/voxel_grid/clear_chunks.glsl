@@ -1,12 +1,11 @@
 #version 430
 layout(local_size_x = 256) in;
 
-struct VoxelData {
-    uint type_vis_flags;
-    uint color; // RGBA8
-};
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-layout(std430, binding=0) buffer Voxels        { VoxelData voxels[]; };
+layout(std430, binding=0) buffer Voxels { VoxelData voxels[]; };
 layout(std430, binding=1) readonly buffer IdsToClear { uint ids_to_clear[]; };
 layout(std430, binding=2) readonly buffer VoxelPrifab { VoxelData voxel_prifab; };
 

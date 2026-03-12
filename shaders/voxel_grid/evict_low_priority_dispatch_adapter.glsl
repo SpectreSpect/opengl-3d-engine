@@ -1,28 +1,19 @@
 #version 430
 layout(local_size_x = 1) in;
 
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
+
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
 layout(std430, binding=1) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
 
 uniform uint u_min_free;
 
-uint div_up_u32(uint a, uint b) { 
-    return (a + b - 1u) / b; 
-}
-
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
+// ----- include -----
+#include "common/common.glsl"
+// -------------------
 
 void main() {
     if (gl_GlobalInvocationID.x != 0u) return;

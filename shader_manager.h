@@ -36,7 +36,6 @@ public:
 
     //voxel_grid
     ComputeShader clear_chunks_cs;
-    ComputeShader set_chunks_cs;
     ComputeShader world_init_cs;
     ComputeShader apply_writes_to_world_cs;
     ComputeShader mesh_counters_reset_cs;
@@ -45,10 +44,8 @@ public:
     ComputeShader mesh_alloc_cs;
     ComputeShader mesh_emit_cs;
     ComputeShader mesh_finalize_cs;
-    ComputeShader cmdcount_reset_cs;
     ComputeShader build_indirect_cmds_cs;
     ComputeShader reset_dirty_count_cs;
-    ComputeShader evict_buckets_reset_cs;
     ComputeShader evict_buckets_build_cs;
     ComputeShader evict_low_priority_cs;
     ComputeShader evict_low_priority_dispatch_adapter_cs;
@@ -57,7 +54,6 @@ public:
     ComputeShader mark_all_user_chunks_as_dirty_cs;
     ComputeShader mesh_pool_clear_cs;
     ComputeShader mesh_pool_seed_cs;
-    ComputeShader reset_load_list_counter_cs;
     ComputeShader verify_mesh_allocation_cs;
     ComputeShader return_free_alloc_nodes_cs;
     ComputeShader return_free_alloc_nodes_dispatch_adapter_cs;

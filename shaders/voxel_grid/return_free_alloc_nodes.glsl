@@ -1,34 +1,21 @@
 #version 430
 layout(local_size_x = 256) in;
 
-struct Node {uint page; uint next;};
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-// ---- VB pool ----
 layout(std430, binding=0) buffer VBFreeNodesList  { uint vb_free_nodes_counter; uint vb_free_nodes_list[];  };
 layout(std430, binding=1) buffer VBReturnedNodesList  { uint vb_returned_nodes_counter; uint vb_returned_nodes_list[]; };
-
-// ---- IB pool ----
 layout(std430, binding=2) buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
 layout(std430, binding=3) buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
-
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
 layout(std430, binding=4) buffer FrameCountersBuf { FrameCounters counters; };
 
 uniform uvec3 u3_chunk_size;
 
-uint div_up_u32(uint a, uint b) { return (a + b - 1u) / b; }
-
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
+// ----- include -----
+#include "common/common.glsl"
+// -------------------
 
 void main() {
     uint returned_list_id = gl_GlobalInvocationID.x;

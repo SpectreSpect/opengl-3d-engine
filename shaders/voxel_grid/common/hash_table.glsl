@@ -4,6 +4,7 @@
 Для настройки #include можно определить следующие дефайны (не обязательно):
 #define TOMB_CHECK_LIST_SIZE n (число n должно быть n = 2^i)
 #define NOT_INCLUDE_GET_OR_CREATE (позволяет не подключить get_or_create_chunk())
+#define NOT_INCLUDE_LOOKUP_REMOVE (позволяет не подключать lookup_chunk() и remove_from_table())
 
 Также необходимо наличие следующих данных (названия обязательно должны соответсвовать указанным).
 
@@ -24,15 +25,7 @@ uniform uint u_hash_table_size;
 #define SLOT_EMPTY   0xFFFFFFFFu
 #define SLOT_LOCKED  0xFFFFFFFEu
 #define SLOT_TOMB    0xFFFFFFFDu
-
-#endif
-
 #define MAX_PROBES   128u
-
-#ifndef NOT_INCLUDE_GET_OR_CREATE
-#ifndef HASH_TABLE_GET_OR_CREATE
-#define HASH_TABLE_GET_OR_CREATE
-
 
 #ifndef TOMB_CHECK_LIST_SIZE
 #define TOMB_CHECK_LIST_SIZE 32u
@@ -44,18 +37,6 @@ uint tomb_check_list[TOMB_CHECK_LIST_SIZE];
 uint tomb_list_head_id = INVALID_ID;
 uint tomb_list_tail_id = INVALID_ID;
 uint tomb_list_count_elements = 0u;
-
-uint pop_free_chunk_id() {
-    for (;;) {
-        uint old_counter = atomicAdd(counters.free_count, 0u);
-        if (old_counter == 0u) return INVALID_ID;
-        
-        if (atomicCompSwap(counters.free_count, old_counter, old_counter - 1u) == old_counter) {
-            memoryBarrierBuffer();
-            return free_list[old_counter - 1u];
-        }
-    }
-}
 
 bool push_tomb_id(uint slot_id) {
     if (tomb_list_count_elements >= TOMB_CHECK_LIST_SIZE)
@@ -91,6 +72,23 @@ uint pop_tail_tomb_id() {
     }
 
     return result;
+}
+#endif
+
+#ifndef NOT_INCLUDE_GET_OR_CREATE
+#ifndef HASH_TABLE_GET_OR_CREATE
+#define HASH_TABLE_GET_OR_CREATE
+
+uint pop_free_chunk_id() {
+    for (;;) {
+        uint old_counter = atomicAdd(counters.free_count, 0u);
+        if (old_counter == 0u) return INVALID_ID;
+        
+        if (atomicCompSwap(counters.free_count, old_counter, old_counter - 1u) == old_counter) {
+            memoryBarrierBuffer();
+            return free_list[old_counter - 1u];
+        }
+    }
 }
 
 bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
@@ -185,8 +183,9 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
 #endif
 #endif
 
-#ifndef HASH_TABLE_LOOKUP_CHUNK
-#define HASH_TABLE_LOOKUP_CHUNK
+#ifndef NOT_INCLUDE_LOOKUP_REMOVE
+#ifndef HASH_TABLE_LOOKUP_REMOVE_CHUNK
+#define HASH_TABLE_LOOKUP_REMOVE_CHUNK
 uint lookup_chunk(uvec2 key) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
@@ -217,4 +216,120 @@ uint lookup_chunk(uvec2 key) {
 
     return INVALID_ID;
 }
+
+bool remove_from_table(uvec2 key) {
+    uint mask = u_hash_table_size - 1u;
+    uint idx  = hash_uvec2(key) & mask;
+
+    for (uint probe = 0u; probe < MAX_PROBES;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
+
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_EMPTY) return false;
+
+        if (v == SLOT_TOMB) { 
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
+        }
+
+        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+            // Залочили слот - можем читать ключ
+            if (all(equal(hash_keys[idx], key))) {
+                atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
+                return true;
+            }
+
+            atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        } else {
+            continue; // Не получилось захватить. Попробуем ещё раз.
+        }
+
+        idx = (idx + 1u) & mask;
+        probe++;
+    }
+    return false;
+}
+
+bool set_chunk(uvec2 key, uint chunk_id) {
+    uint mask = u_hash_table_size - 1u;
+    uint idx  = hash_uvec2(key) & mask;
+    uint last_tomb_id = INVALID_ID;
+
+    tomb_list_head_id = INVALID_ID;
+    tomb_list_tail_id = INVALID_ID;
+    tomb_list_count_elements = 0u;
+
+    for (uint probe = 0u; probe < MAX_PROBES + 1u;) {
+        uint v = atomicAdd(hash_vals[idx], 0u);
+
+        if (v == SLOT_EMPTY || probe == MAX_PROBES) {
+            if (probe >= MAX_PROBES) idx = INVALID_ID;
+
+            // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
+            if (last_tomb_id == INVALID_ID) last_tomb_id = pop_tail_tomb_id();
+
+            uint idx_to_create = last_tomb_id == INVALID_ID ? idx : last_tomb_id;
+            uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
+
+            if (idx_to_create == INVALID_ID) return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
+
+            uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
+            if (prev != slot_state) {
+                // кто-то успел — перепроверяем этот же idx
+
+                if (last_tomb_id != INVALID_ID && prev != SLOT_LOCKED) {
+                    // Условие говорит, что мы проверяем tomb_check_list_counter - 1u слот и он оказался занят
+                    last_tomb_id = INVALID_ID;
+                    continue;
+                }
+                else {
+                    continue;
+                }
+            }
+
+            // публикуем key
+            hash_keys[idx_to_create] = key;
+
+            // гарантируем, что key/meta видимы до публикации id
+            memoryBarrierBuffer();
+
+            // публикуем id (и одновременно "анлочим")
+            atomicExchange(hash_vals[idx_to_create], chunk_id);
+
+            return true;
+        }
+
+        if (v == SLOT_LOCKED) continue;
+
+        if (v == SLOT_TOMB) {
+            push_tomb_id(idx);
+            idx = (idx + 1u) & mask;
+            probe++;
+            continue;
+        }
+
+        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
+        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
+
+        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+            // Залочили слот - можем читать ключ
+            if (all(equal(hash_keys[idx], key))) {
+                atomicExchange(hash_vals[idx], v); // Убираем блокировку
+                return false;
+            }
+
+            atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        } else {
+            continue; // Не получилось захватить. Попробуем ещё раз.
+        }
+        
+        idx = (idx + 1u) & mask;
+        probe++;
+    }
+
+    return false;
+}
+#endif
 #endif

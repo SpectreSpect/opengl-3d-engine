@@ -55,3 +55,11 @@ struct Vertex {
     uint pad0;
     uint pad1;
 };
+
+struct DrawElementsIndirectCommand {
+    uint count;
+    uint instanceCount;
+    uint firstIndex;
+    int  baseVertex;
+    uint baseInstance;
+};

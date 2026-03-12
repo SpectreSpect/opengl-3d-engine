@@ -1,22 +1,14 @@
 #version 430
 layout(local_size_x = 256) in;
 
-struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=8) buffer DirtyListBuf { uint dirty_list[]; };
-
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; }; // y=dirtyCount
+layout(std430, binding=0) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=1) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=2) buffer DirtyListBuf { uint dirty_list[]; };
+layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
 
 uniform uint u_max_chunks;
 uniform uint u_set_dirty_flag_bits; 

@@ -809,7 +809,7 @@ int main() {
         ImGui::Separator();
 
         if (ImGui::Button("reset_global_mesh_counters()")) {
-            voxel_grid_gpu.reset_global_mesh_counters();
+            // voxel_grid_gpu.reset_global_mesh_counters();
         }
 
         if (ImGui::Button("mesh_reset()")) {

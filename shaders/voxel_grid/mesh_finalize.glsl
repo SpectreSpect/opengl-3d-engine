@@ -1,32 +1,22 @@
 #version 430
-
-#define INVALID_ID 0xFFFFFFFFu
-
 layout(local_size_x = 256) in;
 
-struct FrameCounters {
-    uint write_count; 
-    uint dirty_count;
-    uint cmd_count;
-    uint free_count;
-    uint failed_dirty_count;
-    uint count_vb_free_pages;
-    uint count_ib_free_pages;
-};
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
+
 layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
 layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_list[]; };
-
 layout(std430, binding=2) buffer EnqueuedBuf { uint enqueued[]; };
-
-struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-
-struct ChunkMeshAlloc {uint v_startPage; uint v_order; uint needV; uint i_startPage; uint i_order; uint needI; uint need_rebuild; };
 layout(std430, binding=4) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
-
 layout(std430, binding=5) buffer FailedDirtyListBuf { uint failed_dirty_list[]; }; 
 
-uniform uint u_dirty_flag_bits; // например 1u
+uniform uint u_dirty_flag_bits;
+
+// ----- include -----
+#include "common/common.glsl"
+// -------------------
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;

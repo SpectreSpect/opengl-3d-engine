@@ -222,10 +222,8 @@ public:
 
     ComputeProgram prog_dispatch_adapter_;
     ComputeProgram prog_clear_chunks_;
-    ComputeProgram prog_set_chunks_;
     ComputeProgram prog_world_init_;
     ComputeProgram prog_apply_writes_;
-    ComputeProgram prog_mesh_counters_reset_;
     ComputeProgram prog_mesh_reset_;
     ComputeProgram prog_mesh_count_;
     ComputeProgram prog_mesh_alloc_;
@@ -234,7 +232,6 @@ public:
     ComputeProgram prog_cmdcount_reset_;
     ComputeProgram prog_build_indirect_cmds_;
     ComputeProgram prog_reset_dirty_count_;
-    ComputeProgram prog_evict_buckets_reset_;
     ComputeProgram prog_evict_buckets_build_;
     ComputeProgram prog_evict_low_priority_;
     ComputeProgram prog_evict_low_priority_dispatch_adapter_;
@@ -243,7 +240,6 @@ public:
     ComputeProgram prog_mark_all_user_chunks_as_dirty_;
     ComputeProgram prog_mesh_pool_clear_;
     ComputeProgram prog_mesh_pool_seed_;
-    ComputeProgram prog_reset_load_list_counter_;
     ComputeProgram prog_verify_mesh_allocation_;
     ComputeProgram prog_return_free_alloc_nodes_;
     ComputeProgram prog_return_free_alloc_nodes_dispatch_adapter_;
@@ -377,7 +373,7 @@ public:
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); // ++++++++++++++++++++
     void ensure_voxel_write_list(size_t count); // ++++++++++++++++++++
 
-    void reset_global_mesh_counters(); // ++++++++++++++++++++
+    // void reset_global_mesh_counters(); // ++++++++++++++++++++
     void mesh_reset(const SSBO& dispatch_args); // ++++++++++++++++++++
     void mesh_count(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); // ++++++++++++++++++++
     void mesh_alloc_vb(const SSBO& dispatch_args); // ++++++++++++++++++++
