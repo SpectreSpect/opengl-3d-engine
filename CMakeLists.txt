@@ -80,6 +80,7 @@ add_executable(app
   limb.cpp
   leg.cpp
   spider.cpp
+  gicp.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
