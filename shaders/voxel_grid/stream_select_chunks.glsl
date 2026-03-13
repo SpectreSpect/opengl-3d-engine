@@ -10,8 +10,7 @@ layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=5) buffer StreamCounters { uvec2 stream; };
-layout(std430, binding=6) buffer LoadList { uint load_list[]; };
+layout(std430, binding=5) buffer LoadList { uint load_list_counter; uint load_list[]; };
 
 uniform uint  u_hash_table_size;   // pow2
 uniform uint  u_max_load_entries;  // обычно = count_active_chunks
@@ -54,7 +53,7 @@ void main() {
     if (!get_or_create_chunk(key, chunkId, created)) return;
 
     if (created) {
-        uint i = atomicAdd(stream.x, 1u);
+        uint i = atomicAdd(load_list_counter, 1u);
         if (i < u_max_load_entries) load_list[i] = chunkId;
     }
 }

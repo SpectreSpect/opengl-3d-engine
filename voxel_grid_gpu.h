@@ -266,8 +266,7 @@ public:
     SSBO chunk_indices_to_set_;
     SSBO coord_keys_to_set_;
     SSBO dirty_quad_count_;
-    SSBO emit_counter_;
-    SSBO mesh_counters_;
+    SSBO emit_counters_;
     SSBO indirect_cmds_;
     SSBO bucket_heads_;
     SSBO bucket_next_;

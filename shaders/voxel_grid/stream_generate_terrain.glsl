@@ -7,12 +7,11 @@ layout(local_size_x = 256) in;
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
-layout(std430, binding=2) buffer StreamCounters { uvec2 stream; }; // x=loadCount
-layout(std430, binding=3) readonly buffer LoadList { uint load_list[]; };
-layout(std430, binding=4) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=5) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=6) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=2) readonly buffer LoadList { uint load_list_counter; uint load_list[]; };
+layout(std430, binding=3) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=6) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
@@ -87,7 +86,7 @@ void main() {
     uint voxelId = gl_GlobalInvocationID.x;
     uint listIdx = gl_GlobalInvocationID.y;
 
-    uint loadCount = stream.x;
+    uint loadCount = load_list_counter;
     if (listIdx >= loadCount) return;
     if (voxelId >= u_voxels_per_chunk) return;
 

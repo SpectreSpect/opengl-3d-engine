@@ -51,8 +51,7 @@ VoxelGridGPU::VoxelGridGPU(
     chunk_meta_ = SSBO(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
     dirty_quad_count_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
-    emit_counter_     = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
-    mesh_counters_    = SSBO(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW);
+    emit_counters_     = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
     bucket_heads_ = SSBO::from_fill(sizeof(uint32_t) * count_evict_buckets, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
     bucket_next_  = SSBO::from_fill(sizeof(uint32_t) * count_active_chunks, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
@@ -1018,7 +1017,7 @@ void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
 void VoxelGridGPU::mesh_reset(const SSBO& dispatch_args) {
     dirty_list_.bind_base(0);
     dirty_quad_count_.bind_base(1);
-    emit_counter_.bind_base(2);
+    emit_counters_.bind_base(2);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
@@ -1205,7 +1204,7 @@ void VoxelGridGPU::mesh_emit(const SSBO& dispatch_args, uint32_t pack_bits, uint
     voxels_.bind_base(2);
     mesh_buffers_status_.bind_base(3);
     dirty_list_.bind_base(4);
-    emit_counter_.bind_base(5);
+    emit_counters_.bind_base(5);
     chunk_mesh_alloc_.bind_base(6);
 
     chunk_meta_.bind_base(7);
@@ -1340,8 +1339,7 @@ void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int ra
     glm::vec3 cam_local = glm::vec3(invM * glm::vec4(cam_world_pos, 1.0f));
 
     // reset loadCount = 0
-    uint32_t zero2[2] = {0, 0};
-    stream_counters_.update_subdata(0, zero2, sizeof(zero2));
+    load_list_.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
 
     // ---- pass 1: select/create ----
     chunk_hash_keys_.bind_base(0);
@@ -1349,9 +1347,7 @@ void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int ra
     free_list_.bind_base(2);
     chunk_meta_.bind_base(3);
     enqueued_.bind_base(4);
-
-    stream_counters_.bind_base(5);
-    load_list_.bind_base(6);
+    load_list_.bind_base(5);
 
     prog_stream_select_chunks_.use();
     glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_hash_table_size"), chunk_hash_table_size);
@@ -1378,13 +1374,12 @@ void VoxelGridGPU::generate_terrain(uint32_t seed, uint32_t load_count) {
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
 
-    stream_counters_.bind_base(2);
-    load_list_.bind_base(3);
+    load_list_.bind_base(2);
 
-    voxels_.bind_base(4);
-    chunk_meta_.bind_base(5);
-    enqueued_.bind_base(6);
-    dirty_list_.bind_base(7);
+    voxels_.bind_base(3);
+    chunk_meta_.bind_base(4);
+    enqueued_.bind_base(5);
+    dirty_list_.bind_base(6);
 
     prog_stream_generate_terrain_.use();
     glUniform3i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
@@ -1420,8 +1415,7 @@ void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radi
     
     // double t1 = math_utils::ms_now();
 
-    uint32_t load_count = 0;
-    stream_counters_.read_subdata(0, &load_count, sizeof(uint32_t));
+    uint32_t load_count = load_list_.read_scalar<uint32_t>(0u);
     if (load_count == 0) return;
 
     // double t2 = math_utils::ms_now();
@@ -1999,7 +1993,7 @@ void VoxelGridGPU::print_dirty_list_emit_counters() {
     std::vector<uint32_t> emit_counters(count_active_chunks);
     
     dirty_list_.read_subdata(sizeof(uint32_t), dirty_list.data(), sizeof(uint32_t) * dirty_count);
-    emit_counter_.read_subdata(0, emit_counters.data(), sizeof(uint32_t) * count_active_chunks);
+    emit_counters_.read_subdata(0, emit_counters.data(), sizeof(uint32_t) * count_active_chunks);
 
     std::cout << "EMIT COUNTERS: " << std::endl;
     for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
