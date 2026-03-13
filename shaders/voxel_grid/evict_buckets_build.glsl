@@ -22,7 +22,7 @@ uniform int  u_pack_offset;
 uniform float f_eviction_bucket_shell_thickness;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void push_bucket(uint b, uint chunkId) {

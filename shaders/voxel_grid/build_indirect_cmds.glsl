@@ -26,7 +26,7 @@ uniform uint u_ib_page_inds;
 uniform vec4 u_frustum_planes[6];
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 // Быстрый тест сферы против плоскостей (false positives допустимы)

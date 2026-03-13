@@ -571,9 +571,9 @@ void VoxelGridGPU::prepare_dispatch_args(SSBO& dispatch_args, const DispatchArg&
     dispatch_args.bind_base(3);
 
     prog_dispatch_adapter_.use();
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_0"), arg_x.offset);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_1"), arg_y.offset);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_2"), arg_z.offset);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_0"), arg_x.offset_bytes);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_1"), arg_y.offset_bytes);
+    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_2"), arg_z.offset_bytes);
 
     glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_0"), arg_x.direct_value);
     glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_1"), arg_y.direct_value);

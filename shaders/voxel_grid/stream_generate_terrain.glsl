@@ -25,7 +25,7 @@ uniform uint u_seed;
 uniform uint u_hash_table_size;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 
 #define NOT_INCLUDE_GET_OR_CREATE
 #include "common/hash_table.glsl"

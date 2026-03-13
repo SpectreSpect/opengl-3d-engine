@@ -13,7 +13,7 @@ layout(std430, binding=3) buffer IBReturnedNodesList  { uint ib_returned_nodes_c
 uniform uvec3 u3_chunk_size;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void main() {

@@ -22,7 +22,7 @@ uniform uint u_ib_heads_count;
 uniform uint u_max_chunks;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 #include "common/allocator.glsl"
 // -------------------
 

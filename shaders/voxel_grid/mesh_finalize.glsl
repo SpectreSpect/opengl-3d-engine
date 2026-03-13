@@ -14,7 +14,7 @@ layout(std430, binding=4) buffer FailedDirtyListBuf { uint failed_dirty_count; u
 uniform uint u_dirty_flag_bits;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void main() {

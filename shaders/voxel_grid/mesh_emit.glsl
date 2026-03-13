@@ -29,7 +29,7 @@ uniform uint u_vb_page_verts;
 uniform uint u_ib_page_inds;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 #include "common/chunk_pool.glsl"
 // -------------------
 

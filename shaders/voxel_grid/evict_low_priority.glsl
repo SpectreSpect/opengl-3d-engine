@@ -19,7 +19,7 @@ uniform uint u_hash_table_size;
 uniform uint u_bucket_count;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 
 #define NOT_INCLUDE_GET_OR_CREATE
 #include "common/hash_table.glsl"

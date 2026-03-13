@@ -18,7 +18,7 @@ uniform uint u_vb_max_order;
 uniform uint u_ib_max_order;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 #include "common/allocator.glsl"
 // -------------------
 

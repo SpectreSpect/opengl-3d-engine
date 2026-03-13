@@ -6,7 +6,7 @@ layout(std430, binding=1) buffer IBReturnedNodesList  { uint ib_returned_nodes_c
 layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void main() {

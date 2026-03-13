@@ -16,7 +16,7 @@ uniform uint u_pack_bits;
 uniform int u_pack_offset;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 
 #define NOT_INCLUDE_GET_OR_CREATE
 #include "common/hash_table.glsl"

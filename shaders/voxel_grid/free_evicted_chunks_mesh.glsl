@@ -22,7 +22,7 @@ uniform uint vb_max_order;
 uniform uint ib_max_order;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 
 #define PREFIX vb
 #include "common/allocator.glsl"

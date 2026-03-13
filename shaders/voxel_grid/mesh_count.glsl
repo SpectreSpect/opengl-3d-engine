@@ -20,7 +20,7 @@ uniform uint u_pack_bits;
 uniform int  u_pack_offset;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 #include "common/chunk_pool.glsl"
 // -------------------
 

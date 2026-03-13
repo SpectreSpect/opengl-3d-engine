@@ -10,7 +10,7 @@ layout(std430, binding=1) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=2) buffer EmitCounterBuf { uint emit_counter[]; };
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void main() {

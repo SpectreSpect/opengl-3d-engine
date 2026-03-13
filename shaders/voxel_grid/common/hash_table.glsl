@@ -1,4 +1,4 @@
-#include "common.glsl"
+#include "../../utils.glsl"
 
 /*
 Для настройки #include можно определить следующие дефайны (не обязательно):

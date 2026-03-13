@@ -5,8 +5,10 @@
 #define CAT3_(A, B, C) A##B##C
 #define CAT3(A, B, C)  CAT3_(A, B, C)
 #define PR(PREFIX, NAME) CAT3(PREFIX, _, NAME)
+#define SF(NAME, SUFFIX) CAT3(NAME, _, SUFFIX)
 
 #define INVALID_ID 0xFFFFFFFFu
+#define BYTE_MASK 0xFFu
 
 uint max(uint a, uint b) {
     return a > b ? a : b;

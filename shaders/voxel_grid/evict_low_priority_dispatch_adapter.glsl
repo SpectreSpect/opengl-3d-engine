@@ -12,7 +12,7 @@ layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; }
 uniform uint u_min_free;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 // -------------------
 
 void main() {

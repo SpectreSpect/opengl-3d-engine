@@ -24,7 +24,7 @@ uniform uint bb_quad_size;
 uniform uint u_is_vb_phase;
 
 // ----- include -----
-#include "common/common.glsl"
+#include "../utils.glsl"
 
 #define PREFIX bb
 #include "common/allocator.glsl"

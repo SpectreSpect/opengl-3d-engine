@@ -1,5 +1,5 @@
 #pragma once
-#include "common.glsl"
+#include "../../utils.glsl"
 
 #define NOT_INCLUDE_GET_OR_CREATE
 #include "hash_table.glsl"
