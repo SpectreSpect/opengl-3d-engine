@@ -111,8 +111,7 @@ VoxelGridGPU::VoxelGridGPU(
 
     voxel_prifab_ = SSBO(sizeof(VoxelDataGPU), GL_DYNAMIC_DRAW);
 
-    stream_counters_ = SSBO(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW);
-    load_list_       = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
+    load_list_       = SSBO(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
 
     debug_counters_vb_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u, shader_manager);
     debug_counters_ib_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u, shader_manager);
@@ -171,9 +170,7 @@ void VoxelGridGPU::draw(RenderState state) {
 }
 
 void VoxelGridGPU::print_counters() {
-    uint32_t stream_counters[2] = {0};
-    stream_counters_.read_subdata(0, stream_counters, sizeof(uint32_t) * 2);
-
+    uint32_t load_list_count = load_list_.read_scalar<uint32_t>(0u);
     uint32_t write_count = voxel_write_list_.read_scalar<uint32_t>(0);
     uint32_t dirty_count = dirty_list_.read_scalar<uint32_t>(0);
     uint32_t cmd_count = indirect_cmds_.read_scalar<uint32_t>(0);
@@ -189,7 +186,7 @@ void VoxelGridGPU::print_counters() {
     std::cout << "failed_dirty_count: " << failed_dirty_count << std::endl;
     std::cout << "is_vb_full: " << (is_vb_full == 1u ? "TRUE" : "FALSE") << std::endl;
     std::cout << "count_ib_free_pages: " << (is_ib_full == 1u ? "TRUE" : "FALSE") << std::endl;
-    std::cout << "load_list_count: " << stream_counters[0] << std::endl;
+    std::cout << "load_list_count: " << load_list_count << std::endl;
 
     uint32_t count_free_nodes_vb = vb_free_nodes_list_.read_scalar<uint32_t>(0);
     uint32_t count_free_nodes_ib = ib_free_nodes_list_.read_scalar<uint32_t>(0);
@@ -1402,7 +1399,7 @@ void VoxelGridGPU::reset_load_list_counter() {
     // prog_reset_load_list_counter_.dispatch_compute(1, 1, 1);
     // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    stream_counters_.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
+    load_list_.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
 }
 
 void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {

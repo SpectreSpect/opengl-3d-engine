@@ -290,7 +290,7 @@ int main() {
     };
 
     std::function<void()> generate_terrain_fn = [&]() {
-        uint32_t load_count = voxel_grid_gpu.stream_counters_.read_scalar<uint32_t>(0);
+        uint32_t load_count = voxel_grid_gpu.load_list_.read_scalar<uint32_t>(0);
         if (load_count == 0) return;
 
         uint32_t seed = 45345345u;
@@ -298,7 +298,7 @@ int main() {
     };
 
     std::function<void()> reset_load_list_counter_fn = [&]() {
-        uint32_t load_count = voxel_grid_gpu.stream_counters_.read_scalar<uint32_t>(0);
+        uint32_t load_count = voxel_grid_gpu.load_list_.read_scalar<uint32_t>(0);
         if (load_count == 0) return;
 
         voxel_grid_gpu.reset_load_list_counter();

@@ -270,7 +270,6 @@ public:
     SSBO indirect_cmds_;
     SSBO bucket_heads_;
     SSBO bucket_next_;
-    SSBO stream_counters_;
     SSBO load_list_;
     SSBO failed_dirty_list_;
     SSBO verify_debug_stack_;
