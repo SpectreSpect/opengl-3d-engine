@@ -1,10 +1,5 @@
 #pragma once
 
-struct MeshBuffersStatus {
-    uint is_vb_full;
-    uint is_ib_full;
-};
-
 struct ChunkMeta { 
     uint used; 
     uint key_lo; 

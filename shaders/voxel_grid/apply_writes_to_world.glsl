@@ -10,10 +10,9 @@ layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer VoxelWriteList { uint write_count; VoxelWrite writes[]; };
 layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=4) buffer FreeList { uint free_count; uint free_list[]; };
-layout(std430, binding=5) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
-layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=8) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=5) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=6) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
 uniform uint  u_hash_table_size;
 uniform ivec3 u_chunk_dim;

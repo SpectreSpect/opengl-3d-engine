@@ -9,7 +9,6 @@ layout(std430, binding=0) buffer VBFreeNodesList  { uint vb_free_nodes_counter; 
 layout(std430, binding=1) buffer VBReturnedNodesList  { uint vb_returned_nodes_counter; uint vb_returned_nodes_list[]; };
 layout(std430, binding=2) buffer IBFreeNodesList  { uint ib_free_nodes_counter; uint ib_free_nodes_list[];  };
 layout(std430, binding=3) buffer IBReturnedNodesList  { uint ib_returned_nodes_counter; uint ib_returned_nodes_list[]; };
-layout(std430, binding=4) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 
 uniform uvec3 u3_chunk_size;
 

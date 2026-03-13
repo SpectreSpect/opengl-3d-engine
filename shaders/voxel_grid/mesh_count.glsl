@@ -8,10 +8,9 @@ layout(local_size_x = 256) in;
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=3) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
-layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=5) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
-layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=3) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=4) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+layout(std430, binding=5) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
 uniform uint  u_hash_table_size;
 uniform ivec3 u_chunk_dim;

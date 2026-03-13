@@ -5,10 +5,9 @@ layout(local_size_x = 1) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
-layout(std430, binding=1) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
-layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
-layout(std430, binding=3) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=0) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
+layout(std430, binding=1) buffer DispatchArgs { uvec3 dispatch_args; };
+layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
 
 uniform uint u_min_free;
 

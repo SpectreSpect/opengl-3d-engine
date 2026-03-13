@@ -9,7 +9,6 @@ layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=3) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=4) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 
 uniform uint u_max_chunks;
 uniform uint u_hash_table_size;

@@ -5,12 +5,11 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y = dirtyCount
-layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=2) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=4) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
-layout(std430, binding=5) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
+layout(std430, binding=0) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=1) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=3) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
+layout(std430, binding=4) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
 
 uniform uint u_dirty_flag_bits;
 

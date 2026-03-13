@@ -5,10 +5,9 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
-layout(std430, binding=1) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=2) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
-layout(std430, binding=3) buffer IndirectCmdBuf { uint cmd_count; DrawElementsIndirectCommand cmds[]; };
+layout(std430, binding=0) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=1) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_mesh_alloc[]; }; 
+layout(std430, binding=2) buffer IndirectCmdBuf { uint cmd_count; DrawElementsIndirectCommand cmds[]; };
 
 uniform uint  u_max_chunks;
 
