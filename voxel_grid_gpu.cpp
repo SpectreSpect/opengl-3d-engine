@@ -6,10 +6,9 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t count_active_chunks, 
     uint32_t max_quads,
     float chunk_hash_table_size_factor, 
-    uint32_t max_count_probing,
     uint32_t count_evict_buckets,
     uint32_t min_free_chunks,
-    uint32_t max_evict_chunks,
+    uint32_t tomb_fraction_to_rebuild,
     float eviction_bucket_shell_thickness,
     uint32_t vb_page_size_order_of_two,
     uint32_t ib_page_size_order_of_two,
@@ -21,10 +20,9 @@ VoxelGridGPU::VoxelGridGPU(
     this->chunk_size = chunk_size;
     this->voxel_size = voxel_size;
     this->count_active_chunks = count_active_chunks;
-    this->max_count_probing = max_count_probing;
     this->count_evict_buckets = count_evict_buckets;
     this->min_free_chunks = min_free_chunks;
-    this->max_evict_chunks = max_evict_chunks;
+    this->tomb_fraction_to_rebuild = tomb_fraction_to_rebuild;
     this->eviction_bucket_shell_thickness = eviction_bucket_shell_thickness;
     this->shader_manager = &shader_manager;
 
@@ -119,7 +117,7 @@ VoxelGridGPU::VoxelGridGPU(
     voxels_ = SSBO::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, shader_manager);
 
     chunk_hash_keys_ = SSBO(sizeof(glm::uvec2) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
-    chunk_hash_vals_ = SSBO(sizeof(uint32_t) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
+    chunk_hash_vals_ = SSBO(sizeof(uint32_t) * (1 + chunk_hash_table_size), GL_DYNAMIC_DRAW);
 
     // init_active_chunks(chunk_size, count_active_chunks, init_chunk_voxel_prifab);
     // init_chunks_hash_table();
@@ -502,7 +500,7 @@ void VoxelGridGPU::init_mesh_pool() {
 void VoxelGridGPU::print_chunks_hash_table_log() {
     std::vector<uint32_t> hash_table_vals(chunk_hash_table_size);
 
-    chunk_hash_vals_.read_subdata(0, hash_table_vals.data(), sizeof(uint32_t) * chunk_hash_table_size);
+    chunk_hash_vals_.read_subdata(sizeof(uint32_t), hash_table_vals.data(), sizeof(uint32_t) * chunk_hash_table_size);
 
     uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_alloc_slots = 0u;
     for (uint32_t slot_id = 0u; slot_id < chunk_hash_table_size; slot_id++) {

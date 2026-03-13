@@ -3,7 +3,7 @@ layout(local_size_x = 256) in;
 
 // --- hash table ---
 layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) buffer ChunkHashVals { uint  hash_vals[]; };
+layout(std430, binding=1) buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 
 uniform uint u_hash_table_size;
 

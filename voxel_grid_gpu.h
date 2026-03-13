@@ -52,10 +52,9 @@ public:
     uint32_t count_active_chunks;
     glm::vec3 voxel_size;
     uint32_t chunk_hash_table_size;
-    uint32_t max_count_probing;
     uint32_t count_evict_buckets;
     uint32_t min_free_chunks;
-    uint32_t max_evict_chunks;
+    uint32_t tomb_fraction_to_rebuild;
     uint32_t eviction_bucket_shell_thickness;
     uint32_t vox_per_chunk;
 
@@ -196,10 +195,9 @@ public:
         uint32_t count_active_chunks, 
         uint32_t max_quads,
         float chunk_hash_table_size_factor, 
-        uint32_t max_count_probing,
         uint32_t count_evict_buckets,
         uint32_t min_free_chunks,
-        uint32_t max_evict_chunks,
+        uint32_t tomb_fraction_to_rebuild,
         float eviction_bucket_shell_thickness,
         uint32_t vb_page_size_order_of_two,
         uint32_t ib_page_size_order_of_two,

@@ -239,10 +239,9 @@ int main() {
         10'000, // count_active_chunks
         1'000'000, // max_quads
         4, // chunk_hash_table_size_factor
-        512, // max_count_probing
         4096, // count_evict_buckets
         5'000, // min_free_chunks
-        10'000, // max_evict_chunks
+        0.2f, // tomb_fraction_to_rebuild
         chunk_size * voxel_size * 1, // eviction_bucket_shell_thickness
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two

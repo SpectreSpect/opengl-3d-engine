@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
+layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };

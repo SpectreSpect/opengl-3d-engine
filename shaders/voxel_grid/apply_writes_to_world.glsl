@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
+layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer VoxelWriteList { uint write_count; VoxelWrite writes[]; };
 layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=4) buffer FreeList { uint free_count; uint free_list[]; };

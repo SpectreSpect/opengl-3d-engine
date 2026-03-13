@@ -10,7 +10,7 @@
 
 Буфферы:
 coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-coherent buffer ChunkHashVals { uint  hash_vals[]; };
+coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 buffer FreeList { uint free_list[]; }; (только если подключён get_or_create_chunk())
 buffer ChunkMetaBuf { ChunkMeta meta[]; }; (только если подключён get_or_create_chunk())
 
@@ -134,6 +134,10 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
                 return false;
             }
 
+            if (slot_state == SLOT_TOMB) {
+                atomicAdd(count_tomb, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как count_tomb > 0)
+            }
+
             // meta подготовим ДО публикации id
             meta[id].used       = 1u;
             meta[id].key_lo     = key.x;
@@ -164,8 +168,6 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             continue;
         }
 
-        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
-        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
         memoryBarrierBuffer();
 
         if (all(equal(hash_keys[idx], key))) {
@@ -234,16 +236,25 @@ bool remove_from_table(uvec2 key) {
             continue;
         }
 
-        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
-            // Залочили слот - можем читать ключ
-            if (all(equal(hash_keys[idx], key))) {
-                atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
-                return true;
-            }
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
+        //         atomicAdd(count_tomb, 1u);
+        //         return true;
+        //     }
 
-            atomicExchange(hash_vals[idx], v); // Убираем блокировку
-        } else {
-            continue; // Не получилось захватить. Попробуем ещё раз.
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
+
+        memoryBarrierBuffer();
+
+        if (all(equal(hash_keys[idx], key))) {
+            atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
+            atomicAdd(count_tomb, 1u);
+            return true;
         }
 
         idx = (idx + 1u) & mask;
@@ -289,6 +300,10 @@ bool set_chunk(uvec2 key, uint chunk_id) {
                 }
             }
 
+            if (slot_state == SLOT_TOMB) {
+                atomicAdd(count_tomb, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как count_tomb > 0)
+            }
+
             // публикуем key
             hash_keys[idx_to_create] = key;
 
@@ -313,18 +328,22 @@ bool set_chunk(uvec2 key, uint chunk_id) {
         // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
         // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
 
-        if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
-            // Залочили слот - можем читать ключ
-            if (all(equal(hash_keys[idx], key))) {
-                atomicExchange(hash_vals[idx], v); // Убираем блокировку
-                return false;
-            }
+        // if (atomicCompSwap(hash_vals[idx], v, SLOT_LOCKED) == v) {
+        //     // Залочили слот - можем читать ключ
+        //     if (all(equal(hash_keys[idx], key))) {
+        //         atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        //         return false;
+        //     }
 
-            atomicExchange(hash_vals[idx], v); // Убираем блокировку
-        } else {
-            continue; // Не получилось захватить. Попробуем ещё раз.
+        //     atomicExchange(hash_vals[idx], v); // Убираем блокировку
+        // } else {
+        //     continue; // Не получилось захватить. Попробуем ещё раз.
+        // }
+
+        if (all(equal(hash_keys[idx], key))) {
+            return false;
         }
-        
+
         idx = (idx + 1u) & mask;
         probe++;
     }

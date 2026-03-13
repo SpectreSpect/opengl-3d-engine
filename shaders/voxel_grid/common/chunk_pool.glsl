@@ -12,7 +12,7 @@
 
 Буфферы:
 coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-coherent buffer ChunkHashVals { uint  hash_vals[]; };
+coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 buffer FreeList { uint free_list[]; }; (только если подключён get_or_create_chunk())
 buffer ChunkMetaBuf { ChunkMeta meta[]; }; (только если подключён get_or_create_chunk())
 
