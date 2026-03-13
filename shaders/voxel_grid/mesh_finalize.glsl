@@ -1,32 +1,40 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
-layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=0) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=1) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=3) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
+layout(std430, binding=4) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
 
-struct ChunkMeta { uint used; uint key_lo; uint key_hi; uint dirty_flags; };
-layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+uniform uint u_dirty_flag_bits;
 
-struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
-layout(std430, binding=9) buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
-
-uniform uint u_dirty_flag_bits; // например 1u
+// ----- include -----
+#include "../utils.glsl"
+// -------------------
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.y;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
     uint chunkId = dirty_list[dirtyIdx];
-
-    // меш построен
-    mesh_meta[chunkId].mesh_valid = (mesh_meta[chunkId].index_count != 0u) ? 1u : 0u;
+    
+    if (chunk_alloc[chunkId].v_startPage == INVALID_ID || chunk_alloc[chunkId].i_startPage == INVALID_ID) {
+        if (enqueued[chunkId] != 2u) {
+            uint idx = atomicAdd(failed_dirty_count, 1u);
+            failed_dirty_list[idx] = chunkId;
+            enqueued[chunkId] = 2u;
+        }
+    } else {
+        // разрешить повторно enqueue
+        enqueued[chunkId] = 0u;
+    }
 
     // снять dirty флаг(и)
     meta[chunkId].dirty_flags &= ~u_dirty_flag_bits;
-
-    // разрешить повторно enqueue
-    enqueued[chunkId] = 0u;
 }

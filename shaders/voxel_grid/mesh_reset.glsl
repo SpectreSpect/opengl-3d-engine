@@ -1,15 +1,21 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
-layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-layout(std430, binding=11) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; }; // indexed by dirtyIdx
-layout(std430, binding=12) buffer EmitCounterBuf { uint emit_counter[]; };        // indexed by chunkId
+layout(std430, binding=0) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=1) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+layout(std430, binding=2) buffer EmitCounterBuf { uint emit_counter[]; };
+
+// ----- include -----
+#include "../utils.glsl"
+// -------------------
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.y;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
     dirty_quad_count[dirtyIdx] = 0u;

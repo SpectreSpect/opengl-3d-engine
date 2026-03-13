@@ -3,14 +3,14 @@
 VoxelRasterizatorGPU::VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& shader_manager)
 {
     this->gridable = gridable;
-    prog_count_ = ComputeProgram(&shader_manager.count_cs);
+    prog_count_ = ComputeProgram(&shader_manager.count_triangles_in_chunks_cs);
     prog_scan_blocks_ = ComputeProgram(&shader_manager.scan_blocks_cs);
     prog_add_block_offsets_ = ComputeProgram(&shader_manager.add_block_offsets_cs);
     prog_fix_last_ = ComputeProgram(&shader_manager.fix_last_cs);
     prog_copy_offsets_to_cursor_ = ComputeProgram(&shader_manager.copy_offsets_to_cursor_cs);
-    prog_fill_ = ComputeProgram(&shader_manager.fill_cs);
+    prog_fill_ = ComputeProgram(&shader_manager.fill_triangle_indices_cs);
     prog_voxelize_ = ComputeProgram(&shader_manager.voxelize_cs);
-    prog_clear_ = ComputeProgram(&shader_manager.clear_cs);
+    prog_clear_ = ComputeProgram(&shader_manager.clear_voxels_cs);
     prog_roi_reduce_indices_ = ComputeProgram(&shader_manager.roi_reduce_indices_cs);
     prog_roi_reduce_pairs_ = ComputeProgram(&shader_manager.roi_reduce_pairs_cs);
     prog_roi_finalize_ = ComputeProgram(&shader_manager.roi_finalize_cs);

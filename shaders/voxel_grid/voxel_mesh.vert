@@ -23,9 +23,9 @@ vec3 face_normal(uint f) {
 }
 
 vec3 unpack_rgb(uint rgba8) {
-    float r = float((rgba8      ) & 0xFFu) / 255.0;
-    float g = float((rgba8 >>  8) & 0xFFu) / 255.0;
-    float b = float((rgba8 >> 16) & 0xFFu) / 255.0;
+    float r = float((rgba8 >> 24) & 0xFFu) / 255.0;
+    float g = float((rgba8 >> 16) & 0xFFu) / 255.0;
+    float b = float((rgba8 >> 8) & 0xFFu) / 255.0;
     return vec3(r, g, b);
 }
 
@@ -37,7 +37,7 @@ void main() {
     vNormal = normalize(normalMat * face_normal(aFace));
 
     vColor = unpack_rgb(aColor);
-    vAO = float((aColor >> 24) & 0xFFu) / 255.0;
+    vAO = float(aColor & 0xFFu) / 255.0;
 
     gl_Position = uProjView * worldPos4;
 }

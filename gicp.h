@@ -25,5 +25,5 @@ public:
     static double align_gpu(PointCloud& source_point_cloud,
                             const PointCloud& target_point_cloud,
                             const std::vector<glm::vec3>& source_normals,
-                            const std::vector<glm::vec3>& target_normals)
+                            const std::vector<glm::vec3>& target_normals);
 };

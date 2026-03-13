@@ -11,6 +11,22 @@
 #include <vector>
 #include <array>
 
+#include <cstdint>
+#include <type_traits>
+#include <sstream>
+#include <iomanip>
+
+#if __has_include(<bit>) && (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L))
+  #include <bit>
+  #define MATHUTILS_HAS_STD_BIT 1
+#else
+  #define MATHUTILS_HAS_STD_BIT 0
+#endif
+
+#if defined(_MSC_VER)
+  #include <intrin.h>
+#endif
+
 namespace math_utils {
     static constexpr uint32_t BITS = 21;
     static constexpr uint64_t MASK = (uint64_t(1) << BITS) - 1;
@@ -97,16 +113,64 @@ namespace math_utils {
     }
 
     static uint32_t next_pow2_u32(uint32_t x) {
-        if (x <= 1) return 1;
-        x--;
-        x |= x >> 1;
-        x |= x >> 2;
-        x |= x >> 4;
-        x |= x >> 8;
-        x |= x >> 16;
-        return x + 1;
+    if (x <= 1u) return 1u;
+#if MATHUTILS_HAS_STD_BIT
+    return static_cast<uint32_t>(std::bit_ceil(x));
+#else
+    // classic bit-hack
+    x--;
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x++;
+    return x;
+#endif
     }
 
+    static inline uint32_t log2_floor_u32(uint32_t x) {
+    #if MATHUTILS_HAS_STD_BIT
+        return std::bit_width(x) - 1u;
+    #elif defined(_MSC_VER)
+        unsigned long idx = 0;
+        _BitScanReverse(&idx, x);
+        return static_cast<uint32_t>(idx);
+    #else
+        return 31u - static_cast<uint32_t>(__builtin_clz(x));
+    #endif
+    }
+
+    static inline uint32_t log2_ceil_u32(uint32_t x) {
+        if (x <= 1u) return 0u;
+
+        uint32_t v = x - 1u; // важно: ceil(log2(x)) = floor(log2(x-1)) + 1
+
+    #if defined(__cpp_lib_bitops) && (__cpp_lib_bitops >= 201907L)
+        // C++20: bit_width(n) = floor(log2(n)) + 1 для n>0
+        return std::bit_width(v);
+
+    #elif defined(_MSC_VER)
+        unsigned long idx;
+        _BitScanReverse(&idx, v);      // idx = floor(log2(v))
+        return uint32_t(idx + 1u);
+
+    #elif defined(__GNUC__) || defined(__clang__)
+        // __builtin_clz(0) UB, но v != 0 потому что x>1
+        return 32u - uint32_t(__builtin_clz(v));
+
+    #else
+        // Самый простой fallback (до 31 итерации)
+        uint32_t r = 0u;
+        while (v) { v >>= 1u; ++r; }
+        return r;
+    #endif
+    }
+
+    static inline uint32_t log2_pow2_u32(uint32_t x) {
+        return log2_floor_u32(x);
+    }
+    
     static glm::uvec2 split_u64(uint64_t k) {
         return glm::uvec2(uint32_t(k & 0xFFFFFFFFull), uint32_t(k >> 32));
     }
@@ -136,4 +200,59 @@ namespace math_utils {
         return p;
     }
 
+    static inline bool intersects(uint64_t s1, uint64_t len1, uint64_t s2, uint64_t len2) {
+        uint64_t e1 = s1 + len1;
+        uint64_t e2 = s2 + len2;
+        return (s1 < e2) && (s2 < e1);
+    }
+
+    template<typename Map>
+    struct MapDiff {
+        std::vector<typename Map::key_type> only_in_a;
+        std::vector<typename Map::key_type> only_in_b;
+        // ключ + (value_from_a, value_from_b)
+        std::vector<std::pair<typename Map::key_type,
+                            std::pair<typename Map::mapped_type, typename Map::mapped_type>>> different;
+    };
+
+    template<typename Map>
+    static inline MapDiff<Map> diff_maps(const Map& A, const Map& B) {
+        MapDiff<Map> out;
+        out.only_in_a.reserve( A.size() > B.size() ? (A.size() - B.size()) : 0 );
+        out.only_in_b.reserve( B.size() > A.size() ? (B.size() - A.size()) : 0 );
+
+        // проход по A: помечаем только-in-A и различающиеся значения
+        for (const auto& kv : A) {
+            auto it = B.find(kv.first);
+            if (it == B.end()) {
+                out.only_in_a.push_back(kv.first);
+            } else if (!(kv.second == it->second)) { // использует operator== для значений
+                out.different.emplace_back(kv.first, std::make_pair(kv.second, it->second));
+            }
+        }
+
+        // проход по B: те ключи, которых нет в A
+        for (const auto& kv : B) {
+            if (A.find(kv.first) == A.end()) out.only_in_b.push_back(kv.first);
+        }
+
+        return out;
+    }
+
+    static inline std::string get_current_date_time()
+    {
+        using namespace std::chrono;
+
+        auto now = system_clock::now();
+        auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+        std::time_t t = system_clock::to_time_t(now);
+        std::tm tm = *std::localtime(&t);
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
+        oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
+        return oss.str();
+    }
 }

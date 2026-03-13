@@ -81,6 +81,10 @@ add_executable(app
   leg.cpp
   spider.cpp
   gicp.cpp
+  dispatch_arg.cpp
+  buffer_dispatch_arg.cpp
+  value_dispatch_arg.cpp
+  glsl_preprocessor.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")

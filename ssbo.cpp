@@ -5,6 +5,9 @@
 #include <cstring>
 #include <stdexcept>
 
+SSBO SSBO::prefab_buffer;
+std::mutex SSBO::prefab_buffer_mutex;
+
 static void require_gl_buffer_storage() {
     // Для persistent нужен OpenGL 4.4 или расширение ARB_buffer_storage
     if (!(GLEW_VERSION_4_4 || GLEW_ARB_buffer_storage)) {
@@ -12,8 +15,15 @@ static void require_gl_buffer_storage() {
     }
 }
 
-SSBO::SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data)
-{
+SSBO::SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data) {
+    init_with_initial_data(size_bytes, usage, initial_data);
+}
+
+SSBO::SSBO(std::filesystem::path path_to_ssbo_dump_file) {
+    read_binary_dump(path_to_ssbo_dump_file);
+}
+
+void SSBO::init_with_initial_data(std::size_t size_bytes, GLenum usage, const void* initial_data) {
     if (size_bytes == 0) {
         throw std::invalid_argument("SSBO: size_bytes must be > 0");
     }
@@ -151,6 +161,212 @@ void SSBO::move_from(SSBO&& other) noexcept {
 
 void SSBO::bind() const noexcept {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, id_);
+}
+
+std::filesystem::path SSBO::make_csv_dump(
+    const std::filesystem::path& path,
+    const std::map<std::string, DumpType>& structure_field_sizes_bytes,
+    size_t offset_bytes,
+    size_t count_structures) const
+{
+    // ------ Configuration / предположения ------
+    // Размеры типов (в байтах). При необходимости поменяйте BOOL_SIZE.
+    constexpr size_t UINT_SIZE  = 4;
+    constexpr size_t INT_SIZE   = 4;
+    constexpr size_t FLOAT_SIZE = 4;
+    constexpr size_t BOOL_SIZE  = 4; // часто в SSBO булевы поля выравниваются на 4 байта
+
+    // ----- Проверки -----
+    if (count_structures == 0) {
+        throw std::invalid_argument("count_structures must be > 0");
+    }
+    if (structure_field_sizes_bytes.empty()) {
+        throw std::invalid_argument("structure_field_sizes_bytes must not be empty");
+    }
+
+    // ----- Рассчитать размер одной структуры (в байтах) -----
+    size_t struct_size = 0;
+    for (const auto& kv : structure_field_sizes_bytes) {
+        switch (kv.second) {
+            case UINT:  struct_size += UINT_SIZE;  break;
+            case INT:   struct_size += INT_SIZE;   break;
+            case FLOAT: struct_size += FLOAT_SIZE; break;
+            case BOOL:  struct_size += BOOL_SIZE;  break;
+            default:
+                throw std::invalid_argument("unknown DumpType value");
+        }
+    }
+
+    if (struct_size == 0) {
+        throw std::runtime_error("computed structure size is zero");
+    }
+
+    // ----- Подготовка пути к файлу -----
+    std::filesystem::path out_file = path;
+    try {
+        if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
+            // сформируем имя файла с временной меткой
+            auto now = std::chrono::system_clock::now();
+            std::time_t tnow = std::chrono::system_clock::to_time_t(now);
+            std::tm tm;
+#if defined(_WIN32)
+            localtime_s(&tm, &tnow);
+#else
+            localtime_r(&tnow, &tm);
+#endif
+            std::ostringstream name;
+            name << "ssbo_dump_"
+                 << std::put_time(&tm, "%Y%m%d_%H%M%S")
+                 << ".csv";
+            out_file /= name.str();
+        } else {
+            // если путь не существует — попробуем создать родительские директории
+            if (out_file.has_parent_path()) {
+                std::filesystem::create_directories(out_file.parent_path());
+            }
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        throw std::runtime_error(std::string("filesystem error: ") + e.what());
+    }
+
+    // ----- Открыть файл для записи -----
+    std::ofstream ofs(out_file, std::ios::binary);
+    if (!ofs.is_open()) {
+        throw std::runtime_error("failed to open output file for writing: " + out_file.string());
+    }
+
+    // ----- Записать заголовок CSV (имена полей в порядке map) -----
+    bool first = true;
+    for (const auto& kv : structure_field_sizes_bytes) {
+        if (!first) ofs << ',';
+        first = false;
+        // оборачиваем имя в кавычки на случай запятых
+        ofs << '"' << kv.first << '"';
+    }
+    ofs << '\n';
+
+    // ----- Буфер для одной структуры -----
+    std::vector<uint8_t> struct_buf(struct_size);
+
+    // ----- Для каждой структуры: читать и распарсить -----
+    for (size_t i = 0; i < count_structures; ++i) {
+        size_t read_offset = offset_bytes + i * struct_size;
+
+        // читаем одну структуру
+        read_subdata(read_offset, struct_buf.data(), struct_size);
+
+        // парсим поля по очереди
+        size_t local_off = 0;
+        bool first_value = true;
+        for (const auto& kv : structure_field_sizes_bytes) {
+            if (!first_value) ofs << ',';
+            first_value = false;
+
+            DumpType dt = kv.second;
+            switch (dt) {
+                case UINT: {
+                    uint32_t v = 0;
+                    // безопасно копируем независимо от выравнивания
+                    std::memcpy(&v, struct_buf.data() + local_off, UINT_SIZE);
+                    ofs << v;
+                    local_off += UINT_SIZE;
+                    break;
+                }
+                case INT: {
+                    int32_t v = 0;
+                    std::memcpy(&v, struct_buf.data() + local_off, INT_SIZE);
+                    ofs << v;
+                    local_off += INT_SIZE;
+                    break;
+                }
+                case FLOAT: {
+                    float f = 0.0f;
+                    std::memcpy(&f, struct_buf.data() + local_off, FLOAT_SIZE);
+                    // форматирование float: достаточно 6-9 значащих цифр
+                    ofs << std::setprecision(9) << f;
+                    // вернуть формат по умолчанию (не обязательно, но аккуратно)
+                    ofs << std::setprecision(6);
+                    local_off += FLOAT_SIZE;
+                    break;
+                }
+                case BOOL: {
+                    // по умолчанию читаем как 32-битное целое (см. BOOL_SIZE)
+                    if (BOOL_SIZE == 1) {
+                        uint8_t b = 0;
+                        std::memcpy(&b, struct_buf.data() + local_off, 1);
+                        ofs << (b ? "true" : "false");
+                        local_off += 1;
+                    } else if (BOOL_SIZE == 4) {
+                        uint32_t b = 0;
+                        std::memcpy(&b, struct_buf.data() + local_off, 4);
+                        ofs << (b ? "true" : "false");
+                        local_off += 4;
+                    } else {
+                        // на всякий случай поддерживаем произвольный размер булева поля
+                        uint32_t b = 0;
+                        std::memcpy(&b, struct_buf.data() + local_off, std::min<size_t>(4, BOOL_SIZE));
+                        ofs << (b ? "true" : "false");
+                        local_off += BOOL_SIZE;
+                    }
+                    break;
+                }
+                default:
+                    throw std::runtime_error("unhandled DumpType while writing CSV");
+            }
+        } // fields
+
+        ofs << '\n';
+    } // structures
+
+    ofs.close();
+    if (!ofs) {
+        throw std::runtime_error("error occurred while writing CSV file: " + out_file.string());
+    }
+
+    return out_file;
+}
+
+std::filesystem::path SSBO::make_binary_dump(const std::filesystem::path& file_path) {
+    std::vector<std::byte> buffer(size_bytes_);
+    read_subdata(0, buffer.data(), size_bytes_);
+
+    std::ofstream out(file_path, std::ios_base::binary);
+    if (!out)
+        throw std::runtime_error("Failed to open file");
+
+    out.write(reinterpret_cast<const char*>(&size_bytes_), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(&capacity_bytes_), sizeof(size_t));
+    out.write(reinterpret_cast<const char*>(&usage_), sizeof(GLenum));
+    out.write(reinterpret_cast<const char*>(buffer.data()), size_bytes_);
+    out.close();
+
+    return file_path;
+}
+
+void SSBO::read_binary_dump(const std::filesystem::path& file_path) {
+    std::ifstream in(file_path, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("Failed to open file");
+    
+    in.read(reinterpret_cast<char*>(&size_bytes_), sizeof(size_t));
+    in.read(reinterpret_cast<char*>(&capacity_bytes_), sizeof(size_t));
+    in.read(reinterpret_cast<char*>(&usage_), sizeof(GLenum));
+
+    // std::cout << "size_bytes: " << size_bytes_ << std::endl;
+    // std::cout << "capacity_bytes: " << capacity_bytes_ << std::endl;
+    // std::cout << "usage: " << usage_ << std::endl;
+    // std::cout << std::endl;
+
+    std::vector<std::byte> buffer(size_bytes_);
+    in.read(reinterpret_cast<char*>(buffer.data()), size_bytes_);
+
+    // size_t count_print = std::min(10ull, size_bytes_ / sizeof(uint32_t));
+    // for (size_t i = 0; i < count_print; i++) {
+    //     std::cout << *(uint32_t*)(buffer.data() + i) << " ";
+    // }
+    // std::cout << std::endl;
+
+    update_subdata(0, buffer.data(), size_bytes_);
 }
 
 void SSBO::unbind() noexcept {
@@ -333,7 +549,7 @@ uint32_t SSBO::read_u32(std::size_t offset_bytes) const {
     return v;
 }
 
-GLuint SSBO::id() {
+GLuint SSBO::id() const {
     return id_;
 }
 

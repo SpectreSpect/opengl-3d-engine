@@ -41,7 +41,7 @@ int Engine3D::init_glew() {
     mesh_manager->load_cube();
     material_manager->load_blinn_phong();
 
-    shader_manager = new ShaderManager(executable_dir_str());
+    shader_manager = new ShaderManager(executable_dir_str(), std::vector<std::filesystem::path>());
     
 
     // default_vertex_shader = new VertexShader(default_vertex_shader_path);

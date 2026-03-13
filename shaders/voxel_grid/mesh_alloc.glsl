@@ -1,53 +1,124 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=5) buffer FrameCounters { uvec4 counters; }; // y = dirtyCount
-layout(std430, binding=8) readonly buffer DirtyListBuf { uint dirty_list[]; };
-layout(std430, binding=11) readonly buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+// ----- include -----
+#include "common/buffer_structures.glsl"
+// -------------------
 
-layout(std430, binding=12) buffer EmitCounterBuf { uint emit_counter[]; };
-layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y = dirtyCount
+layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=2) readonly buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+layout(std430, binding=3) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=4) buffer ChunkMeshAllocLocalBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
+layout(std430, binding=5) readonly buffer ChunkMeshAllocGlobalBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
+layout(std430, binding=6) coherent buffer BBHeads { uint bb_heads[]; };
+layout(std430, binding=7) coherent buffer BBState { uint bb_state[]; };
+layout(std430, binding=8) coherent buffer BBNodes  { Node bb_nodes[];  };
+layout(std430, binding=9) coherent buffer BBFreeNodesList  { uint bb_free_nodes_counter; uint bb_free_nodes_list[];  };
+layout(std430, binding=10) coherent buffer BBReturnedNodesList  { uint bb_returned_nodes_counter; uint bb_returned_nodes_list[]; };
 
-layout(std430, binding=10) buffer MeshCounters { uvec2 meshCounters; }; // x=vertexCounter, y=indexCounter
+uniform uint bb_pages;
+uniform uint bb_page_elements;  // например 256
+uniform uint bb_max_order;   // log2(u_bb_pages)
+uniform uint bb_quad_size;
+uniform uint u_is_vb_phase;
 
-struct ChunkMeshMeta { uint first_index; uint index_count; uint base_vertex; uint mesh_valid; };
-layout(std430, binding=9) buffer ChunkMeshMetaBuf { ChunkMeshMeta mesh_meta[]; };
+// ----- include -----
+#include "../utils.glsl"
 
-uniform uint u_max_vertices;
-uniform uint u_max_indices;
+#define PREFIX bb
+#include "common/allocator.glsl"
+// -------------------
+
+bool is_vb_phase = u_is_vb_phase == 1u;
 
 void main() {
     uint dirtyIdx = gl_GlobalInvocationID.x;
-    uint dirtyCount = counters.y;
+    uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
-
+    
     uint chunkId = dirty_list[dirtyIdx];
-    uint quads   = dirty_quad_count[dirtyIdx];
 
-    uint needV = quads * 4u;
-    uint needI = quads * 6u;
+    if (is_vb_full == 1u || is_ib_full == 1u) {
+        if (is_vb_phase){
+            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].v_order = 0u;
+            chunk_alloc_local[dirtyIdx].needV = 0u;
+        } else {
+            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].i_order = 0u;
+            chunk_alloc_local[dirtyIdx].needI = 0u;
+        }
 
-    uint baseV = atomicAdd(meshCounters.x, needV);
-    uint baseI = atomicAdd(meshCounters.y, needI);
-
-    // budget check
-    if (baseV + needV > u_max_vertices || baseI + needI > u_max_indices) {
-        // откатить атомики без CAS нельзя, поэтому просто делаем chunk invalid
-        mesh_meta[chunkId].mesh_valid  = 0u;
-        mesh_meta[chunkId].index_count = 0u;
-        mesh_meta[chunkId].base_vertex = 0u;
-        mesh_meta[chunkId].first_index = 0u;
-
-        emit_counter[chunkId] = 0u;
-        enqueued[chunkId] = 0u;
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
         return;
     }
 
-    mesh_meta[chunkId].base_vertex = baseV;
-    mesh_meta[chunkId].first_index = baseI;
-    mesh_meta[chunkId].index_count = needI;
-    mesh_meta[chunkId].mesh_valid  = 0u;
+    // мог быть уже выселен
+    if (meta[chunkId].used == 0u) {
+        if (is_vb_phase){
+            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].v_order = 0u;
+            chunk_alloc_local[dirtyIdx].needV = 0u;
+        } else {
+            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].i_order = 0u;
+            chunk_alloc_local[dirtyIdx].needI = 0u;
+        }
+        
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        return;
+    }
 
-    emit_counter[chunkId] = 0u;
-    enqueued[chunkId] = 0u; // можно снова добавлять в dirty_list в будущем
+    uint quads = dirty_quad_count[dirtyIdx];
+
+    // пустой меш
+    if (quads == 0u) {
+        if (is_vb_phase){
+            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].v_order = 0u;
+            chunk_alloc_local[dirtyIdx].needV = 0u;
+        } else {
+            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].i_order = 0u;
+            chunk_alloc_local[dirtyIdx].needI = 0u;
+        }
+        
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        return;
+    }
+
+    uint needB = quads * bb_quad_size;
+    uint bPages = div_up_u32(needB, bb_page_elements);
+    uint bOrder = ceil_log2_u32(bPages);
+
+    uint bStart = bb_alloc_pages(bOrder);
+    if (bStart == INVALID_ID) {
+        if (is_vb_phase){
+            atomicExchange(is_vb_full, 1u);
+            chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].v_order = 0u;
+            chunk_alloc_local[dirtyIdx].needV = 0u;
+        } else {
+            atomicExchange(is_ib_full, 1u);
+            chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
+            chunk_alloc_local[dirtyIdx].i_order = 0u;
+            chunk_alloc_local[dirtyIdx].needI = 0u;
+        }
+        
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        return;
+    }
+
+    if (is_vb_phase) {
+        chunk_alloc_local[dirtyIdx].v_startPage = bStart;
+        chunk_alloc_local[dirtyIdx].v_order = bOrder;
+        chunk_alloc_local[dirtyIdx].needV = needB;
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+    } else {
+        chunk_alloc_local[dirtyIdx].i_startPage = bStart;
+        chunk_alloc_local[dirtyIdx].i_order = bOrder;
+        chunk_alloc_local[dirtyIdx].needI = needB;
+        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+    }
 }
