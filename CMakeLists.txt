@@ -77,6 +77,9 @@ add_executable(app
   pbr_environment.cpp
   pbr_skybox.cpp
   third_person_camera_controller.cpp
+  limb.cpp
+  leg.cpp
+  spider.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
