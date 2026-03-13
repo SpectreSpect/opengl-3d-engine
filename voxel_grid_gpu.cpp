@@ -778,6 +778,7 @@ void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
 void VoxelGridGPU::reset_evicted_list_and_buckets() {
     bucket_heads_.bind_base(0);
     evicted_chunks_list_.bind_base(1);
+    free_list_.bind_base(2);
 
     prog_reset_evicted_list_and_buckets_.use();
     glUniform1ui(glGetUniformLocation(prog_reset_evicted_list_and_buckets_.id, "u_bucket_count"), count_evict_buckets);

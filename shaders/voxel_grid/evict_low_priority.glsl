@@ -74,49 +74,8 @@ void main() {
     meta[victim].dirty_flags = 0u;
     enqueued[victim] = 0u;
 
-    // пушим обратно в free_list (stack)
-    uint idx = atomicAdd(free_count, 1u);
-    free_list[idx] = victim;
+    // пушим обратно в free_list
+    free_list[free_count + enviction_id] = victim;
     
     evicted_chunks_list[enviction_id] = victim;
-    return;
-
-    
-
-    
-
-    // uint victim = INVALID_ID;
-    // for (;;) {
-    //     // худшие бакеты — с конца (больший bucket == дальше)
-    //     for (int bi = int(u_bucket_count) - 1; bi >= 0; --bi) {
-    //         victim = pop_bucket(uint(bi));
-    //         if (victim != INVALID_ID) break;
-    //     }
-
-    //     if (victim == INVALID_ID)  {
-    //         // не нашли
-    //         evicted_chunks_list[enviction_id] = INVALID_ID;
-    //         return;
-    //     }
-
-    //     // мог уже стать свободным/неактивным
-    //     if (meta[victim].used == 0u) continue;
-
-    //     uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
-
-    //     // выкидываем из таблицы
-    //     remove_from_table(key);
-
-    //     // освобождаем метаданные
-    //     meta[victim].used = 0u;
-    //     meta[victim].dirty_flags = 0u;
-    //     enqueued[victim] = 0u;
-
-    //     // пушим обратно в free_list (stack)
-    //     uint idx = atomicAdd(free_count, 1u);
-    //     free_list[idx] = victim;
-        
-    //     evicted_chunks_list[enviction_id] = victim;
-    //     return;
-    // }
 }
