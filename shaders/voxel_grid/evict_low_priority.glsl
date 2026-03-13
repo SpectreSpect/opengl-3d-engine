@@ -10,7 +10,7 @@ layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
 layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=5) coherent buffer BucketHeads { uint bucket_heads[]; };
+layout(std430, binding=5) coherent buffer BucketHeads { BucketHead bucket_heads[]; };
 layout(std430, binding=6) coherent buffer BucketNext  { uint bucket_next[]; };
 layout(std430, binding=7) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
 layout(std430, binding=8) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
@@ -28,13 +28,13 @@ uniform uint u_bucket_count;
 // ABA проблемы не будет, так как везде используется либо только pop, либо только push (поэтому теги на heads пока не нужны)
 uint pop_bucket(uint b) {
     for (;;) {
-        uint h = atomicAdd(bucket_heads[b], 0u);
+        uint h = atomicAdd(bucket_heads[b].id, 0u);
         if (h == INVALID_ID) return INVALID_ID;
 
         memoryBarrierBuffer();
         uint nxt = bucket_next[h];
 
-        uint prev = atomicCompSwap(bucket_heads[b], h, nxt);
+        uint prev = atomicCompSwap(bucket_heads[b].id, h, nxt);
         if (prev == h) return h;
     }
 }
@@ -43,38 +43,80 @@ void main() {
     uint enviction_id = gl_GlobalInvocationID.x;
     if (enviction_id >= evicted_chunks_counter) return;
 
-    uint victim = INVALID_ID;
-    for (;;) {
-        // худшие бакеты — с конца (больший bucket == дальше)
-        for (int bi = int(u_bucket_count) - 1; bi >= 0; --bi) {
-            victim = pop_bucket(uint(bi));
-            if (victim != INVALID_ID) break;
-        }
+    uint evict_pointer = 0u;
+    int bucket_id = int(u_bucket_count) - 1;
+    for (; bucket_id >= 0; --bucket_id) {
+        evict_pointer += bucket_heads[bucket_id].count;
+        if (evict_pointer > enviction_id) break;
+    }
 
-        if (victim == INVALID_ID)  {
-            // не нашли
-            evicted_chunks_list[enviction_id] = INVALID_ID;
-            return;
-        }
+    uint victim = pop_bucket(uint(bucket_id));
 
-        // мог уже стать свободным/неактивным
-        if (meta[victim].used == 0u) continue;
-
-        uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
-
-        // выкидываем из таблицы
-        remove_from_table(key);
-
-        // освобождаем метаданные
-        meta[victim].used = 0u;
-        meta[victim].dirty_flags = 0u;
-        enqueued[victim] = 0u;
-
-        // пушим обратно в free_list (stack)
-        uint idx = atomicAdd(free_count, 1u);
-        free_list[idx] = victim;
-        
-        evicted_chunks_list[enviction_id] = victim;
+    if (victim == INVALID_ID)  {
+        // не нашли
+        evicted_chunks_list[enviction_id] = INVALID_ID;
         return;
     }
+
+    // мог уже стать свободным/неактивным
+    if (meta[victim].used == 0u) {
+        evicted_chunks_list[enviction_id] = INVALID_ID;
+        return;
+    };
+
+    uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
+
+    // выкидываем из таблицы
+    remove_from_table(key);
+
+    // освобождаем метаданные
+    meta[victim].used = 0u;
+    meta[victim].dirty_flags = 0u;
+    enqueued[victim] = 0u;
+
+    // пушим обратно в free_list (stack)
+    uint idx = atomicAdd(free_count, 1u);
+    free_list[idx] = victim;
+    
+    evicted_chunks_list[enviction_id] = victim;
+    return;
+
+    
+
+    
+
+    // uint victim = INVALID_ID;
+    // for (;;) {
+    //     // худшие бакеты — с конца (больший bucket == дальше)
+    //     for (int bi = int(u_bucket_count) - 1; bi >= 0; --bi) {
+    //         victim = pop_bucket(uint(bi));
+    //         if (victim != INVALID_ID) break;
+    //     }
+
+    //     if (victim == INVALID_ID)  {
+    //         // не нашли
+    //         evicted_chunks_list[enviction_id] = INVALID_ID;
+    //         return;
+    //     }
+
+    //     // мог уже стать свободным/неактивным
+    //     if (meta[victim].used == 0u) continue;
+
+    //     uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
+
+    //     // выкидываем из таблицы
+    //     remove_from_table(key);
+
+    //     // освобождаем метаданные
+    //     meta[victim].used = 0u;
+    //     meta[victim].dirty_flags = 0u;
+    //     enqueued[victim] = 0u;
+
+    //     // пушим обратно в free_list (stack)
+    //     uint idx = atomicAdd(free_count, 1u);
+    //     free_list[idx] = victim;
+        
+    //     evicted_chunks_list[enviction_id] = victim;
+    //     return;
+    // }
 }

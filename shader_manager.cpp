@@ -50,6 +50,7 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     free_evicted_chunks_mesh_cs = ComputeShader(p / "shaders" / "voxel_grid" / "free_evicted_chunks_mesh.glsl", include_directories);
     fill_chunk_hash_table_cs = ComputeShader(p / "shaders" / "voxel_grid" / "fill_chunk_hash_table.glsl", include_directories);
     clear_chunk_hash_table_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunk_hash_table.glsl", include_directories);
+    reset_evicted_list_and_buckets_cs = ComputeShader(p / "shaders" / "voxel_grid" / "reset_evicted_list_and_buckets.glsl", include_directories);
     voxel_mesh_vs = VertexShader(p / "shaders" / "voxel_grid" / "voxel_mesh.vert", include_directories);
     voxel_mesh_fs = FragmentShader(p / "shaders" / "voxel_grid" / "voxel_mesh.frag", include_directories);
 }

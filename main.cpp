@@ -240,7 +240,7 @@ int main() {
         1'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         512, // max_count_probing
-        2048, // count_evict_buckets
+        4096, // count_evict_buckets
         5'000, // min_free_chunks
         10'000, // max_evict_chunks
         chunk_size * voxel_size * 1, // eviction_bucket_shell_thickness

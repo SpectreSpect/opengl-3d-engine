@@ -61,6 +61,11 @@ public:
 
     const uint32_t min_free_pages = 1024;
 
+    struct BucketHead {
+        uint32_t id;
+        uint32_t count;
+    };
+
     struct ChunkMetaGPU {
         uint32_t used;
         uint32_t key_lo;
@@ -246,6 +251,7 @@ public:
     ComputeProgram prog_free_evicted_chunks_mesh_;
     ComputeProgram prog_fill_chunk_hash_table_;
     ComputeProgram prog_clear_chunk_hash_table_;
+    ComputeProgram prog_reset_evicted_list_and_buckets_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO dispatch_args;
@@ -327,7 +333,7 @@ public:
     void prepare_evict_lowpriority_chunks(const SSBO& dispatch_args); 
     void evict_lowpriority_chunks(const SSBO& dispatch_args); 
     void free_evicted_chunks_mesh(const SSBO& dispatch_args); 
-    void reset_evicted_chunks_counter();
+    void reset_evicted_list_and_buckets();
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); 
     void ensure_voxel_write_list(size_t count); 
 

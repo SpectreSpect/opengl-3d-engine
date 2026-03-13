@@ -60,6 +60,7 @@ public:
     ComputeShader free_evicted_chunks_mesh_cs;
     ComputeShader fill_chunk_hash_table_cs;
     ComputeShader clear_chunk_hash_table_cs;
+    ComputeShader reset_evicted_list_and_buckets_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

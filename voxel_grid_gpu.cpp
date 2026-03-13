@@ -54,7 +54,11 @@ VoxelGridGPU::VoxelGridGPU(
     dirty_quad_count_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     emit_counters_     = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
-    bucket_heads_ = SSBO::from_fill(sizeof(uint32_t) * count_evict_buckets, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
+    BucketHead bucket_head;
+    bucket_head.id = INVALID_ID;
+    bucket_head.count = 0;
+    
+    bucket_heads_ = SSBO::from_fill(sizeof(BucketHead) * count_evict_buckets, GL_DYNAMIC_DRAW, bucket_head, shader_manager);
     bucket_next_  = SSBO::from_fill(sizeof(uint32_t) * count_active_chunks, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
     verify_debug_stack_ = SSBO::from_fill(sizeof(uint32_t) * 2 + sizeof(DebugStackElement) * 10'000, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
     verify_debug_stack_.update_subdata_fill(0, 0u, sizeof(uint32_t) * 2, shader_manager);
@@ -418,6 +422,7 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_free_evicted_chunks_mesh_ = ComputeProgram(&shader_manager.free_evicted_chunks_mesh_cs);
     prog_fill_chunk_hash_table_ = ComputeProgram(&shader_manager.fill_chunk_hash_table_cs);
     prog_clear_chunk_hash_table_ = ComputeProgram(&shader_manager.clear_chunk_hash_table_cs);
+    prog_reset_evicted_list_and_buckets_ = ComputeProgram(&shader_manager.reset_evicted_list_and_buckets_cs);
 
     prog_vf_voxel_mesh_diffusion_spec_ = VfProgram(&shader_manager.voxel_mesh_vs, &shader_manager.voxel_mesh_fs);
 }
@@ -678,7 +683,11 @@ void VoxelGridGPU::print_eviction_log(const glm::vec3& camera_pos) {
 }
 
 void VoxelGridGPU::reset_heads() {
-    bucket_heads_.update_subdata_fill<uint32_t>(0u, INVALID_ID, sizeof(uint32_t) * count_evict_buckets, *shader_manager);
+    BucketHead bucket_head;
+    bucket_head.id = INVALID_ID;
+    bucket_head.count = 0;
+
+    bucket_heads_.update_subdata_fill<BucketHead>(0u, bucket_head, sizeof(BucketHead) * count_evict_buckets, *shader_manager);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -766,8 +775,15 @@ void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::reset_evicted_chunks_counter() {
-    evicted_chunks_list_.update_subdata_fill<uint32_t>(0, 0u, sizeof(uint32_t), *shader_manager);
+void VoxelGridGPU::reset_evicted_list_and_buckets() {
+    bucket_heads_.bind_base(0);
+    evicted_chunks_list_.bind_base(1);
+
+    prog_reset_evicted_list_and_buckets_.use();
+    glUniform1ui(glGetUniformLocation(prog_reset_evicted_list_and_buckets_.id, "u_bucket_count"), count_evict_buckets);
+
+    uint32_t bucket_count_groups = math_utils::div_up_u32(count_evict_buckets, 256u);
+    prog_reset_evicted_list_and_buckets_.dispatch_compute(bucket_count_groups, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -780,7 +796,7 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
 
     free_evicted_chunks_mesh(dispatch_args); // dispatch_args здесь уже подготовлен
     
-    reset_evicted_chunks_counter();
+    reset_evicted_list_and_buckets();
 
     prepare_return_free_alloc_nodes(dispatch_args);
     return_free_alloc_nodes(dispatch_args);

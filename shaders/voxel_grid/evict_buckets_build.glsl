@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 layout(std430, binding=0) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=1) coherent buffer BucketHeads { uint bucket_heads[]; };
+layout(std430, binding=1) coherent buffer BucketHeads { BucketHead bucket_heads[]; };
 layout(std430, binding=2) coherent buffer BucketNext  { uint bucket_next[]; };
 
 uniform uint  u_max_chunks;
@@ -27,11 +27,14 @@ uniform float f_eviction_bucket_shell_thickness;
 
 void push_bucket(uint b, uint chunkId) {
     for (;;) {
-        uint old = atomicAdd(bucket_heads[b], 0u);
+        uint old = atomicAdd(bucket_heads[b].id, 0u);
         bucket_next[chunkId] = old;
         memoryBarrierBuffer(); // next должен стать видим до публикации head
-        uint prev = atomicCompSwap(bucket_heads[b], old, chunkId);
-        if (prev == old) break;
+        uint prev = atomicCompSwap(bucket_heads[b].id, old, chunkId);
+        if (prev == old) {
+            atomicAdd(bucket_heads[b].count, 1u);
+            break;
+        }
     }
 }
 

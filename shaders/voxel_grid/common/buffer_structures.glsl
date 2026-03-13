@@ -53,3 +53,8 @@ struct DrawElementsIndirectCommand {
     int  baseVertex;
     uint baseInstance;
 };
+
+struct BucketHead {
+    uint id;
+    uint count;
+};
