@@ -7,8 +7,8 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
-layout(std430, binding=4) buffer FreeList { uint free_list[]; };
-layout(std430, binding=5) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=4) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=5) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=6) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=7) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=16) buffer StreamCounters { uvec2 stream; };

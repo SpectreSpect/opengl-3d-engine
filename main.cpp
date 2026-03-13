@@ -595,7 +595,7 @@ int main() {
         ImGui::InputInt("dirty_count", &dirty_count_to_set);
         ImGui::SameLine();
         if (ImGui::Button("Set dirty count")) {
-            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1, (uint32_t)(dirty_count_to_set), sizeof(uint32_t), shader_manager);
+            voxel_grid_gpu.mesh_buffers_status_.update_subdata_fill<uint32_t>(sizeof(uint32_t) * 1, (uint32_t)(dirty_count_to_set), sizeof(uint32_t), shader_manager);
             std::cout << "Dirty count has been set to " << dirty_count_to_set << "." << std::endl;
         }
 
@@ -716,7 +716,7 @@ int main() {
 
             if (vb_button || ib_button) {
                 voxel_grid_gpu.chunk_mesh_alloc_.read_subdata(0, alloc_meta.data(), sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid_gpu.count_active_chunks);
-                voxel_grid_gpu.frame_counters_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
+                voxel_grid_gpu.mesh_buffers_status_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
                 dirty_list.resize(dirty_count);
                 voxel_grid_gpu.dirty_list_.read_subdata(0, dirty_list.data(), sizeof(uint32_t) * dirty_count);
             }
@@ -816,7 +816,7 @@ int main() {
         }
 
         if (ImGui::Button("mesh_reset()")) {
-            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u));
             voxel_grid_gpu.mesh_reset(voxel_grid_gpu.dispatch_args);
         }
 
@@ -825,24 +825,24 @@ int main() {
             voxel_grid_gpu.prepare_dispatch_args(
                 voxel_grid_gpu.dispatch_args, 
                 ValueDispatchArg(vox_per_chunk), 
-                BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u)
+                BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u)
             );
             voxel_grid_gpu.mesh_count(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_alloc()")) {
-            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u));
             voxel_grid_gpu.mesh_alloc(voxel_grid_gpu.dispatch_args);
         }
 
         if (ImGui::Button("verify_mesh_allocation()")) {
-            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
-            voxel_grid_gpu.verify_mesh_allocation(voxel_grid_gpu.frame_counters_);
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u));
+            voxel_grid_gpu.verify_mesh_allocation(voxel_grid_gpu.mesh_buffers_status_);
         }
 
         if (ImGui::Button("return_free_alloc_nodes()")) {
-            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.frame_counters_);
-            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.frame_counters_);
+            voxel_grid_gpu.prepare_return_free_alloc_nodes(voxel_grid_gpu.mesh_buffers_status_);
+            voxel_grid_gpu.return_free_alloc_nodes(voxel_grid_gpu.mesh_buffers_status_);
         }
 
         if (ImGui::Button("mesh_emit()")) {
@@ -850,13 +850,13 @@ int main() {
             voxel_grid_gpu.prepare_dispatch_args(
                 voxel_grid_gpu.dispatch_args, 
                 ValueDispatchArg(vox_per_chunk), 
-                BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u)
+                BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u)
             );
             voxel_grid_gpu.mesh_emit(voxel_grid_gpu.dispatch_args, math_utils::BITS, math_utils::OFFSET);
         }
 
         if (ImGui::Button("mesh_finalize()")) {
-            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.frame_counters_, 1u));
+            voxel_grid_gpu.prepare_dispatch_args(voxel_grid_gpu.dispatch_args, BufferDispatchArg(&voxel_grid_gpu.mesh_buffers_status_, 1u));
             voxel_grid_gpu.mesh_finalize(voxel_grid_gpu.dispatch_args);
         }
 
@@ -880,7 +880,7 @@ int main() {
         ImGui::Separator();
 
         if (ImGui::Button("reset_cmd_count()")) {
-            voxel_grid_gpu.frame_counters_.update_subdata_fill<uint32_t>(2, 0u, sizeof(uint32_t), shader_manager);
+            voxel_grid_gpu.mesh_buffers_status_.update_subdata_fill<uint32_t>(2, 0u, sizeof(uint32_t), shader_manager);
         }
 
         if (ImGui::Button("build_draw_commands()")) {

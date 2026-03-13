@@ -8,7 +8,7 @@ layout(local_size_x = 256) in;
 layout(std430, binding=0) readonly buffer LocalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_local[]; }; 
 layout(std430, binding=1) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
 layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=3) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=4) coherent buffer VBHeads { uint vb_heads[]; };
 layout(std430, binding=5) coherent buffer VBState { uint vb_state[]; };
 layout(std430, binding=6) coherent buffer VBNodes  { Node vb_nodes[];  };
@@ -45,7 +45,7 @@ void main() {
     uint dirtyCount = dirty_count;
     if (dirtyIdx >= dirtyCount) return;
 
-    if (counters.count_vb_free_pages != INVALID_ID && counters.count_ib_free_pages != INVALID_ID) {
+    if (is_vb_full != 1u && is_ib_full != 1u) {
         uint chunkId = dirty_list[dirtyIdx];
         free_chunk_mesh(chunkId);
         chunk_alloc_global[chunkId] = chunk_alloc_local[dirtyIdx];

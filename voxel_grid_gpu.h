@@ -255,7 +255,7 @@ public:
     SSBO chunk_hash_vals_;
     SSBO free_list_;
     SSBO active_list_;
-    SSBO frame_counters_;
+    SSBO mesh_buffers_status_;
     SSBO voxel_write_list_;
     SSBO enqueued_;
     SSBO dirty_list_;

@@ -5,7 +5,7 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=2) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=3) buffer EmitCounterBuf { uint emit_counter[]; };

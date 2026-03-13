@@ -5,7 +5,7 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
+layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y = dirtyCount
 layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=2) readonly buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
 layout(std430, binding=3) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -40,14 +40,12 @@ void main() {
     
     uint chunkId = dirty_list[dirtyIdx];
 
-    if (counters.count_vb_free_pages == INVALID_ID || counters.count_ib_free_pages == INVALID_ID) {
+    if (is_vb_full == 1u || is_ib_full == 1u) {
         if (is_vb_phase){
-            atomicExchange(counters.count_vb_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            atomicExchange(counters.count_ib_free_pages, INVALID_ID);
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;
@@ -98,12 +96,12 @@ void main() {
     uint bStart = bb_alloc_pages(bOrder);
     if (bStart == INVALID_ID) {
         if (is_vb_phase){
-            atomicExchange(counters.count_vb_free_pages, INVALID_ID);
+            atomicExchange(is_vb_full, 1u);
             chunk_alloc_local[dirtyIdx].v_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].v_order = 0u;
             chunk_alloc_local[dirtyIdx].needV = 0u;
         } else {
-            atomicExchange(counters.count_ib_free_pages, INVALID_ID);
+            atomicExchange(is_ib_full, 1u);
             chunk_alloc_local[dirtyIdx].i_startPage = INVALID_ID;
             chunk_alloc_local[dirtyIdx].i_order = 0u;
             chunk_alloc_local[dirtyIdx].needI = 0u;

@@ -5,9 +5,10 @@ layout(local_size_x = 1) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=1) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 layout(std430, binding=2) buffer DispatchArgs { uvec3 dispatch_args; };
+layout(std430, binding=3) buffer FreeList { uint free_count; uint free_list[]; };
 
 uniform uint u_min_free;
 
@@ -18,8 +19,8 @@ uniform uint u_min_free;
 void main() {
     if (gl_GlobalInvocationID.x != 0u) return;
 
-    if (counters.free_count < u_min_free) {
-        uint count_chunks_to_envict = u_min_free - counters.free_count;
+    if (free_count < u_min_free) {
+        uint count_chunks_to_envict = u_min_free - free_count;
         evicted_chunks_counter = count_chunks_to_envict;
 
         uint count_groups_to_envict = div_up_u32(count_chunks_to_envict, 256u);

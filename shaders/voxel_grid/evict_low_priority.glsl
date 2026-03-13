@@ -7,8 +7,8 @@ layout(local_size_x = 256) in;
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) coherent buffer ChunkHashVals { uint  hash_vals[]; };
-layout(std430, binding=2) buffer FreeList { uint free_list[]; };
-layout(std430, binding=3) buffer FrameCountersBuf { FrameCounters counters; };
+layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=3) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=6) coherent buffer BucketHeads { uint bucket_heads[]; };
@@ -72,7 +72,7 @@ void main() {
         enqueued[victim] = 0u;
 
         // пушим обратно в free_list (stack)
-        uint idx = atomicAdd(counters.free_count, 1u);
+        uint idx = atomicAdd(free_count, 1u);
         free_list[idx] = victim;
         
         evicted_chunks_list[enviction_id] = victim;

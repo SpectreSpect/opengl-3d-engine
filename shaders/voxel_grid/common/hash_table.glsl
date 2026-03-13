@@ -81,10 +81,10 @@ uint pop_tail_tomb_id() {
 
 uint pop_free_chunk_id() {
     for (;;) {
-        uint old_counter = atomicAdd(counters.free_count, 0u);
+        uint old_counter = atomicAdd(free_count, 0u);
         if (old_counter == 0u) return INVALID_ID;
         
-        if (atomicCompSwap(counters.free_count, old_counter, old_counter - 1u) == old_counter) {
+        if (atomicCompSwap(free_count, old_counter, old_counter - 1u) == old_counter) {
             memoryBarrierBuffer();
             return free_list[old_counter - 1u];
         }

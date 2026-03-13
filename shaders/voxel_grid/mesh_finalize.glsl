@@ -5,12 +5,12 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer FrameCountersBuf { FrameCounters counters; }; // y = dirtyCount
+layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y = dirtyCount
 layout(std430, binding=1) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=2) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=4) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
-layout(std430, binding=5) buffer FailedDirtyListBuf { uint failed_dirty_list[]; }; 
+layout(std430, binding=5) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
 
 uniform uint u_dirty_flag_bits;
 
@@ -27,7 +27,7 @@ void main() {
     
     if (chunk_alloc[chunkId].v_startPage == INVALID_ID || chunk_alloc[chunkId].i_startPage == INVALID_ID) {
         if (enqueued[chunkId] != 2u) {
-            uint idx = atomicAdd(counters.failed_dirty_count, 1u);
+            uint idx = atomicAdd(failed_dirty_count, 1u);
             failed_dirty_list[idx] = chunkId;
             enqueued[chunkId] = 2u;
         }

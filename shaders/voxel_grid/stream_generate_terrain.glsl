@@ -13,7 +13,7 @@ layout(std430, binding=4) writeonly restrict buffer ChunkVoxels { VoxelData voxe
 layout(std430, binding=5) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=6) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=8) buffer FrameCountersBuf { FrameCounters counters; }; // y=dirtyCount
+layout(std430, binding=8) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y=dirtyCount
 
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
