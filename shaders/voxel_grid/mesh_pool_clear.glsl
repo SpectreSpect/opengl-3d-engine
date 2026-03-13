@@ -20,8 +20,6 @@ uniform uint u_ib_nodes;
 uniform uint u_vb_heads_count;
 uniform uint u_ib_heads_count;
 uniform uint u_max_chunks;
-uniform uint u_vb_index_bits;
-uniform uint u_ib_index_bits;
 
 // ----- include -----
 #include "common/common.glsl"

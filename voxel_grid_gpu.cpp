@@ -39,7 +39,6 @@ VoxelGridGPU::VoxelGridGPU(
     
     chunk_meta_ = SSBO(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     free_list_ = SSBO(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
-    active_list_ = SSBO(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW); 
     indirect_cmds_ = SSBO(sizeof(uint32_t) + sizeof(DrawElementsIndirectCommand) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
     mesh_buffers_status_ = SSBO::from_fill(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW, 0u, shader_manager);
@@ -65,14 +64,12 @@ VoxelGridGPU::VoxelGridGPU(
     vb_page_size_ = 1 << vb_page_size_order_of_two;
     count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 4u), vb_page_size_));
     count_vb_nodes_ = ceil(count_vb_pages_ * buddy_allocator_nodes_factor);
-    vb_index_bits_ = math_utils::log2_ceil_u32(count_vb_pages_ + 1); // + 1 для значения INVALID_VALUE
     vb_order_ = math_utils::log2_floor_u32(count_vb_pages_);
     max_mesh_vertices_ = count_vb_pages_ * vb_page_size_;
     
     std::cout << "vb_page_size_: " << vb_page_size_ << std::endl;
     std::cout << "count_vb_pages_: " << count_vb_pages_ << std::endl;
     std::cout << "count_vb_nodes_: " << count_vb_nodes_ << std::endl;
-    std::cout << "vb_index_bits_: " << vb_index_bits_ << std::endl;
     std::cout << "vb_order_: " << vb_order_ << std::endl;
     std::cout << "max_mesh_vertices_: " << max_mesh_vertices_ << std::endl;
     std::cout << std::endl;
@@ -87,14 +84,12 @@ VoxelGridGPU::VoxelGridGPU(
     ib_page_size_ = 1 << ib_page_size_order_of_two;
     count_ib_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 6u), ib_page_size_));
     count_ib_nodes_ = ceil(count_ib_pages_ * buddy_allocator_nodes_factor);
-    ib_index_bits_ = math_utils::log2_ceil_u32(count_ib_pages_ + 1); // + 1 для значения INVALID_VALUE
     ib_order_ = math_utils::log2_floor_u32(count_ib_pages_);
     max_mesh_indices_ = count_ib_pages_ * ib_page_size_;
 
     std::cout << "ib_page_size_: " << ib_page_size_ << std::endl;
     std::cout << "count_ib_pages_: " << count_ib_pages_ << std::endl;
     std::cout << "count_ib_nodes_: " << count_ib_nodes_ << std::endl;
-    std::cout << "ib_index_bits_: " << ib_index_bits_ << std::endl;
     std::cout << "ib_order_: " << ib_order_ << std::endl;
     std::cout << "max_mesh_indices_: " << max_mesh_indices_ << std::endl;
     std::cout << std::endl;
@@ -111,12 +106,7 @@ VoxelGridGPU::VoxelGridGPU(
 
     voxel_prifab_ = SSBO(sizeof(VoxelDataGPU), GL_DYNAMIC_DRAW);
 
-    load_list_       = SSBO(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
-
-    debug_counters_vb_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u, shader_manager);
-    debug_counters_ib_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)5000, GL_DYNAMIC_DRAW, 0u, shader_manager);
-    stream_generate_debug_counters_ = SSBO::from_fill(sizeof(uint32_t) * (size_t)2, GL_DYNAMIC_DRAW, 0u, shader_manager);
-    alloc_markers_ = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, shader_manager);
+    load_list_ = SSBO(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
 
     VoxelDataGPU voxel_prifab(0u, 0u, 0u, glm::ivec3(255));
     uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
@@ -139,34 +129,6 @@ void VoxelGridGPU::draw(RenderState state) {
     build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
     build_indirect_draw_commands_frustum(state.vp, math_utils::BITS, math_utils::OFFSET);
     draw_indirect(vao.id, state.transform, state.vp, state.camera->position);
-
-    // uint32_t old_dirty_count = 8;
-    // std::vector<uint32_t> dirty_list(old_dirty_count);
-    // dirty_list_.read_subdata(0, dirty_list.data(), old_dirty_count * sizeof(uint32_t));
-
-    // std::cout << "dirty_list: ";
-    // for (int i = 0; i < old_dirty_count; i++)  {
-    //     std::cout << dirty_list[i];
-    //     if (i != old_dirty_count - 1) std::cout << ", ";
-    // }
-    // std::cout << std::endl;
-
-    // uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
-    // uint32_t count_visible = 0;
-    // for (uint32_t i = 0; i < old_dirty_count; i++) {
-    //     uint32_t chunk_id = dirty_list[i];
-    //     size_t chunk_base = chunk_id * count_voxels_in_chunk;
-
-    //     std::vector<VoxelDataGPU> voxels(count_voxels_in_chunk);
-    //     voxels_.read_subdata(chunk_base * sizeof(VoxelDataGPU), voxels.data(), count_voxels_in_chunk * sizeof(VoxelDataGPU));
-
-    //     for (VoxelDataGPU& v : voxels) {
-    //         uint32_t type = (v.type_vis_flags >> 16) & 0xFFu;
-    //         if (type != 0) count_visible++;
-    //     }
-    // }
-
-    // std::cout << "count_visible: " << count_visible << std::endl;
 }
 
 void VoxelGridGPU::print_counters() {
@@ -427,26 +389,6 @@ void VoxelGridGPU::print_count_free_mesh_alloc() {
     std::cout << std::endl;
 }
 
-// void VoxelGridGPU::load_alloc_stacks() {
-//     std::ifstream vb_in(executable_dir() / "vb_alloc_stack_with_bug.txt");
-//     std::vector<uint32_t> vb_stack;
-//     uint32_t value;
-//     while(vb_in >> value) {
-//         vb_stack.push_back(value);
-//     }
-//     vb_in.close();
-
-//     std::ifstream ib_in(executable_dir() / "ib_alloc_stack_with_bug.txt");
-//     std::vector<uint32_t> ib_stack;
-//     while(ib_in >> value) {
-//         ib_stack.push_back(value);
-//     }
-//     ib_in.close();
-
-//     vb_alloc_stack_ = SSBO(sizeof(uint32_t) * vb_stack.size(), GL_DYNAMIC_DRAW, vb_stack.data());
-//     ib_alloc_stack_ = SSBO(sizeof(uint32_t) * ib_stack.size(), GL_DYNAMIC_DRAW, ib_stack.data());
-// }
-
 void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_clear_chunks_ = ComputeProgram(&shader_manager.clear_chunks_cs);
 
@@ -478,24 +420,6 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_vf_voxel_mesh_diffusion_spec_ = VfProgram(&shader_manager.voxel_mesh_vs, &shader_manager.voxel_mesh_fs);
 }
 
-void VoxelGridGPU::set_frame_counters(uint32_t write_count, uint32_t dirty_count, uint32_t cmd_count, uint32_t free_count) {
-    if (write_count != DONT_CHANGE)
-        voxel_write_list_.update_subdata(0u, &write_count, sizeof(uint32_t));
-    
-    if (dirty_count != DONT_CHANGE)
-        dirty_list_.update_subdata(0u, &dirty_count, sizeof(uint32_t));
-    
-    if (cmd_count != DONT_CHANGE)
-        indirect_cmds_.update_subdata(0u, &cmd_count, sizeof(uint32_t));
-    
-    if (free_count != DONT_CHANGE)
-        free_list_.update_subdata(0u, &free_count, sizeof(uint32_t));
-}
-
-uint32_t VoxelGridGPU::read_dirty_count_cpu() {
-    return dirty_list_.read_scalar<uint32_t>(0u);
-}
-
 void VoxelGridGPU::world_init_gpu() {
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
@@ -519,34 +443,6 @@ void VoxelGridGPU::world_init_gpu() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-// void VoxelGridGPU::clear_chunks(std::vector<uint32_t>& chunk_ids, const VoxelDataGPU& init_voxel_prifab) {
-//     if (chunk_ids.size() == 0) return;
-
-//     size_t need = sizeof(uint32_t) * chunk_ids.size();
-//     if (chunk_indices_to_clear_cap_bytes_ < need) {
-//         chunk_indices_to_clear_ = SSBO(need, GL_DYNAMIC_DRAW, nullptr);
-//         chunk_indices_to_clear_cap_bytes_ = need;
-//     }
-
-//     chunk_indices_to_clear_.update_discard(chunk_ids.data(), need);
-//     voxel_prifab_.update_discard(&init_voxel_prifab, sizeof(VoxelDataGPU));
-
-//     uint32_t chunk_voxel_count = chunk_size.x * chunk_size.y * chunk_size.z;
-//     uint32_t groups_x = math_utils::div_up_u32(chunk_voxel_count, 256u);
-//     uint32_t groups_y = chunk_ids.size();
-//     uint32_t groups_z = 1;
-
-//     voxels_.bind_base(0);
-//     chunk_indices_to_clear_.bind_base(1);
-//     voxel_prifab_.bind_base(2);
-
-//     prog_clear_chunks_.use();
-//     glUniform1ui(glGetUniformLocation(prog_clear_chunks_.id, "u_count_chunks_to_clear"), chunk_ids.size());
-//     glUniform1ui(glGetUniformLocation(prog_clear_chunks_.id, "u_chunk_size"), chunk_voxel_count);
-//     prog_clear_chunks_.dispatch_compute(groups_x, groups_y, groups_z);
-//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-// }
-
 void VoxelGridGPU::init_mesh_pool() {
     // Pass 1: mesh_pool_clear
     vb_heads_.bind_base(0);
@@ -568,8 +464,6 @@ void VoxelGridGPU::init_mesh_pool() {
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_heads_count"), vb_order_ + 1);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_heads_count"), ib_order_ + 1);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_max_chunks"), count_active_chunks);
-    glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_vb_index_bits"),  vb_index_bits_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_pool_clear_.id, "u_ib_index_bits"),  ib_index_bits_);
 
     uint32_t max_count = std::max({count_vb_pages_, count_ib_pages_, count_active_chunks, count_vb_nodes_, count_ib_nodes_});
     uint32_t groups_x = math_utils::div_up_u32(max_count, 256u);
@@ -592,75 +486,11 @@ void VoxelGridGPU::init_mesh_pool() {
 
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_seed_.id, "u_vb_max_order"), vb_order_);
     glUniform1ui(glGetUniformLocation(prog_mesh_pool_seed_.id, "u_ib_max_order"), ib_order_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_pool_seed_.id, "u_vb_index_bits"),  vb_index_bits_);
-    glUniform1ui(glGetUniformLocation(prog_mesh_pool_seed_.id, "u_ib_index_bits"),  ib_index_bits_);
 
     prog_mesh_pool_seed_.dispatch_compute(1, 1, 1);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
-
-// void VoxelGridGPU::init_active_chunks(glm::ivec3 chunk_size, uint32_t count_active_chunks, const VoxelDataGPU& init_voxel_prifab) {
-//     uint32_t chunk_voxel_count = chunk_size.x * chunk_size.y * chunk_size.z;
-//     voxels_ = SSBO(sizeof(VoxelDataGPU) * chunk_voxel_count * count_active_chunks, GL_DYNAMIC_DRAW);
-
-//     std::vector<uint32_t> chunk_ids(count_active_chunks);
-//     for (uint32_t i = 0; i < count_active_chunks; i++) chunk_ids[i] = i;
-//     clear_chunks(chunk_ids, init_voxel_prifab);
-// }
-
-// void VoxelGridGPU::init_chunks_hash_table() {
-
-// }
-
-// void VoxelGridGPU::set_chunks(const std::vector<uint32_t>& chunk_ids, const std::vector<glm::ivec3>& chunk_coords, bool set_with_replace) {
-//     std::vector<uint64_t> coord_keys(chunk_coords.size());
-//     for (uint32_t i = 0; i < chunk_coords.size(); i++) 
-//         coord_keys[i] = math_utils::pack_key(chunk_coords[i].x, chunk_coords[i].y, chunk_coords[i].z);
-    
-//     set_chunks(chunk_ids, coord_keys, set_with_replace);
-// }
-
-
-// void VoxelGridGPU::set_chunks(const std::vector<uint32_t>& chunk_ids,
-//                               const std::vector<uint64_t>& coord_keys,
-//                               bool set_with_replace) {
-//     assert(chunk_ids.size() == coord_keys.size());
-
-//     std::vector<glm::uvec2> keys2(coord_keys.size());
-//     for (size_t i = 0; i < coord_keys.size(); ++i) keys2[i] = math_utils::split_u64(coord_keys[i]);
-
-//     // ensure buffers (uint32 ids + uvec2 keys)
-//     size_t need_ids = sizeof(uint32_t) * chunk_ids.size();
-//     if (need_ids > chunk_indices_to_set_cap_bytes_) {
-//         chunk_indices_to_set_ = SSBO(need_ids, GL_DYNAMIC_DRAW);
-//         chunk_indices_to_set_cap_bytes_ = need_ids;
-//     }
-
-//     size_t need_keys = sizeof(glm::uvec2) * keys2.size();
-//     if (need_keys > coord_keys_to_set_cap_bytes_) {
-//         coord_keys_to_set_ = SSBO(need_keys, GL_DYNAMIC_DRAW);
-//         coord_keys_to_set_cap_bytes_ = need_keys;
-//     }
-
-//     chunk_indices_to_set_.update_discard(chunk_ids.data(), need_ids);
-//     coord_keys_to_set_.update_discard(keys2.data(), need_keys);
-
-//     uint32_t groups_x = math_utils::div_up_u32((uint32_t)chunk_ids.size(), 256u);
-
-//     chunk_hash_keys_.bind_base(0);
-//     chunk_hash_vals_.bind_base(1);
-//     chunk_indices_to_set_.bind_base(2);
-//     coord_keys_to_set_.bind_base(3);
-    
-//     prog_set_chunks_.use();
-//     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_count_chunks_to_set"), (uint32_t)chunk_ids.size());
-//     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_hash_table_size"), chunk_hash_table_size);
-//     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_max_count_probing"), max_count_probing);
-//     glUniform1ui(glGetUniformLocation(prog_set_chunks_.id, "u_set_with_replace"), set_with_replace ? 1u : 0u);
-//     prog_set_chunks_.dispatch_compute(groups_x, 1, 1);
-//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-// }
 
 void VoxelGridGPU::print_chunks_hash_table_log() {
     std::vector<uint32_t> hash_table_vals(chunk_hash_table_size);
@@ -758,20 +588,6 @@ void VoxelGridGPU::prepare_dispatch_args(SSBO& dispatch_args, const DispatchArg&
     prog_dispatch_adapter_.dispatch_compute(1u, 1u, 1u);
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
-
-// void VoxelGridGPU::ensure_set_chunk_buffers(const std::vector<uint32_t>& chunk_ids, const std::vector<uint64_t>& coord_keys) {
-//     size_t need_ids_cap = sizeof(uint32_t) * chunk_ids.size();
-//     if (need_ids_cap > chunk_indices_to_set_cap_bytes_) {
-//         chunk_indices_to_set_ = SSBO(need_ids_cap, GL_DYNAMIC_DRAW);
-//         chunk_indices_to_set_cap_bytes_ = need_ids_cap;
-//     }
-
-//     size_t need_coord_keys_cap = sizeof(uint64_t) * coord_keys.size();
-//     if (need_coord_keys_cap > coord_keys_to_set_cap_bytes_) {
-//         coord_keys_to_set_ = SSBO(need_coord_keys_cap, GL_DYNAMIC_DRAW);
-//         coord_keys_to_set_cap_bytes_ = need_coord_keys_cap;
-//     }
-// }
 
 void VoxelGridGPU::print_eviction_log(const glm::vec3& camera_pos) {
     std::vector<uint32_t> bucket_heads(count_evict_buckets);
@@ -917,17 +733,6 @@ void VoxelGridGPU::evict_lowpriority_chunks(const SSBO& dispatch_args) {
     glDispatchComputeIndirect(0);
 
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-
-    // uint32_t free_count = frame_counters_.read_scalar<uint32_t>(sizeof(uint32_t) * 3);
-    // if (free_count < min_free_chunks) {
-    //     uint32_t count_chunks_to_envict = min_free_chunks - free_count;
-    //     glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_count_chunks_to_evict"), count_chunks_to_envict);
-
-    //     uint32_t count_groups_to_envict = math_utils::div_up_u32(count_chunks_to_envict, 256u);
-
-    //     prog_evict_lowprio_.dispatch_compute(count_groups_to_envict, 1, 1);
-    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    // }
 }
 
 void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
@@ -956,17 +761,11 @@ void VoxelGridGPU::free_evicted_chunks_mesh(const SSBO& dispatch_args) {
     glDispatchComputeIndirect(0);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    // uint32_t count_chunks_to_envict = evicted_chunks_list_.read_scalar<uint32_t>(sizeof(uint32_t));
+}
 
-    // glUniform1ui(glGetUniformLocation(prog_evict_lowprio_.id, "u_count_chunks_to_envict"), count_chunks_to_envict);
-
-    // if (count_chunks_to_envict > 0) {
-    //     uint32_t evicted_groups = math_utils::div_up_u32(count_chunks_to_envict, 256u);
-
-    //     prog_free_evicted_chunks_mesh_.dispatch_compute(evicted_groups, 1u, 1u);    
-
-    //     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-    // }
+void VoxelGridGPU::reset_evicted_chunks_counter() {
+    evicted_chunks_list_.update_subdata_fill<uint32_t>(0, 0u, sizeof(uint32_t), *shader_manager);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset) {
@@ -978,8 +777,7 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
 
     free_evicted_chunks_mesh(dispatch_args); // dispatch_args здесь уже подготовлен
     
-    evicted_chunks_list_.update_subdata_fill<uint32_t>(0, 0u, sizeof(uint32_t), *shader_manager);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    reset_evicted_chunks_counter();
 
     prepare_return_free_alloc_nodes(dispatch_args);
     return_free_alloc_nodes(dispatch_args);
@@ -993,23 +791,8 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
 }
 
 void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
-    size_t need = sizeof(uint32_t) + sizeof(VoxelWriteGPU) * count;
-    if (need == 0) return;
-
-    if (voxel_write_list_cap_bytes_ < need) {
-        voxel_write_list_ = SSBO(need, GL_DYNAMIC_DRAW, nullptr);
-        voxel_write_list_cap_bytes_ = need;
-    }
+    voxel_write_list_.ensure_capacity(sizeof(uint32_t) + sizeof(VoxelWriteGPU) * count);
 }
-
-// void VoxelGridGPU::reset_global_mesh_counters() {
-//     mesh_counters_.bind_base(0);
-//     frame_counters_.bind_base(1);
-
-//     prog_mesh_counters_reset_.use();
-//     prog_mesh_counters_reset_.dispatch_compute(1, 1, 1);
-//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-// }
 
 void VoxelGridGPU::mesh_reset(const SSBO& dispatch_args) {
     dirty_list_.bind_base(0);
@@ -1067,8 +850,6 @@ void VoxelGridGPU::mesh_alloc_vb(const SSBO& dispatch_args) {
     vb_free_nodes_list_.bind_base(9);
     vb_returned_nodes_list.bind_base(10);
 
-    debug_counters_vb_.bind_base(11);
-
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_alloc_.use();
@@ -1100,8 +881,6 @@ void VoxelGridGPU::mesh_alloc_ib(const SSBO& dispatch_args) {
     ib_nodes_.bind_base(8);
     ib_free_nodes_list_.bind_base(9);
     ib_returned_nodes_list.bind_base(10);
-
-    debug_counters_ib_.bind_base(11);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
@@ -1268,10 +1047,10 @@ void VoxelGridGPU::reset_dirty_count() {
 }
 
 void VoxelGridGPU::apply_writes_to_world_gpu(uint32_t write_count) {
-    assert(voxel_write_list_cap_bytes_ / sizeof(VoxelWriteGPU) >= write_count);
     if (write_count == 0) return;
+    ensure_voxel_write_list(write_count);
 
-    set_frame_counters(write_count);
+    voxel_write_list_.update_subdata(0u, &write_count, sizeof(uint32_t));
 
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
@@ -1696,32 +1475,24 @@ void VoxelGridGPU::save_verify_mesh_buffers_dumps(std::filesystem::path dir) {
     std::vector<std::string> dump_names = {
         "chunk_mesh_alloc_local",
         "chunk_mesh_alloc",
-        "count_free_pages",
         "dirty_list",
         "frame_counters",
         "vb_heads",
         "vb_state",
         "ib_heads",
         "ib_state",
-        "vb_alloc_stack",
-        "ib_alloc_stack",
-        "debug_counters",
         "verify_debug_stack"
     };
     
     std::vector<SSBO*> dump_buffers {
         &chunk_mesh_alloc_local_,
         &chunk_mesh_alloc_,
-        &count_free_pages_,
         &dirty_list_,
         &mesh_buffers_status_,
         &vb_heads_,
         &vb_state_,
         &ib_heads_,
         &ib_state_,
-        &vb_alloc_stack_,
-        &ib_alloc_stack_,
-        &debug_counters_vb_,
         &verify_debug_stack_
     };
 
@@ -1743,9 +1514,6 @@ void VoxelGridGPU::load_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         "vb_state",
         "ib_heads",
         "ib_state",
-        "vb_alloc_stack",
-        "ib_alloc_stack",
-        "debug_counters",
         "verify_debug_stack"
     };
     
@@ -1758,9 +1526,6 @@ void VoxelGridGPU::load_verify_mesh_buffers_dumps(std::filesystem::path dir) {
         &vb_state_,
         &ib_heads_,
         &ib_state_,
-        &vb_alloc_stack_,
-        &ib_alloc_stack_,
-        &debug_counters_vb_,
         &verify_debug_stack_
     };
 
@@ -1816,49 +1581,6 @@ std::set<uint32_t> VoxelGridGPU::find_limbo_pages(SSBO& heads_buffer, SSBO& stat
 
     return limbo;
 }
-
-// struct PushLoopData {
-//     uint32_t old_h;
-//     uint32_t next_val;
-//     uint32_t old_value_of_next_val;
-//     uint32_t new_tag;
-//     uint32_t new_head;
-//     uint32_t was_head;
-// };
-
-// struct PushData {
-//     uint32_t input_start_page;
-//     uint32_t input_order;
-//     uint32_t old_state_of_input_start_page;
-//     uint32_t count_loop_cycles;
-//     PushLoopData loop_data[32];
-// };
-
-// struct MergeData {
-//     uint32_t cur_start;
-//     uint32_t cur_order;
-//     uint32_t cur_state;
-//     uint32_t buddy_size;
-//     uint32_t start_buddy;
-//     uint32_t buddy_state;
-// };
-
-// struct DebugStackElement {
-//     uint32_t dirty_idx; +
-//     uint32_t chunk_id; +
-//     uint32_t a_i_startPage; +
-//     uint32_t i_order; +
-//     uint32_t prev_alloc_state; +
-//     uint32_t count_merges; +
-//     MergeData merge_data[33]; +
-//     uint32_t result_start; +
-//     uint32_t result_order; +
-//     uint32_t state_before_change; +
-//     uint32_t state_after_change; +
-//     PushData push_data; --------------------
-//     uint32_t current_head; +
-//     uint32_t bool_push_result; +
-// };
 
 void VoxelGridGPU::print_verify_debug_stack(uint32_t offset, int count_elements_to_print) {
     uint32_t debug_stack_size;

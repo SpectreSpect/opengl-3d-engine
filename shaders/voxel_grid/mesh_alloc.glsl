@@ -16,7 +16,6 @@ layout(std430, binding=7) coherent buffer BBState { uint bb_state[]; };
 layout(std430, binding=8) coherent buffer BBNodes  { Node bb_nodes[];  };
 layout(std430, binding=9) coherent buffer BBFreeNodesList  { uint bb_free_nodes_counter; uint bb_free_nodes_list[];  };
 layout(std430, binding=10) coherent buffer BBReturnedNodesList  { uint bb_returned_nodes_counter; uint bb_returned_nodes_list[]; };
-layout(std430, binding=11) buffer DebugBuffer { uint stats[]; };
 
 uniform uint bb_pages;
 uniform uint bb_page_elements;  // например 256

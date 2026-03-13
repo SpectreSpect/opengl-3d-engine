@@ -16,8 +16,6 @@ layout(std430, binding=7) buffer IBFreeNodesList  { uint ib_free_nodes_counter; 
 
 uniform uint u_vb_max_order;
 uniform uint u_ib_max_order;
-uniform uint u_vb_index_bits;
-uniform uint u_ib_index_bits;
 
 // ----- include -----
 #include "common/common.glsl"
