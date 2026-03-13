@@ -54,7 +54,7 @@ public:
     uint32_t chunk_hash_table_size;
     uint32_t count_evict_buckets;
     uint32_t min_free_chunks;
-    uint32_t tomb_fraction_to_rebuild;
+    float tomb_fraction_to_rebuild;
     uint32_t eviction_bucket_shell_thickness;
     uint32_t vox_per_chunk;
 
@@ -197,7 +197,7 @@ public:
         float chunk_hash_table_size_factor, 
         uint32_t count_evict_buckets,
         uint32_t min_free_chunks,
-        uint32_t tomb_fraction_to_rebuild,
+        float tomb_fraction_to_rebuild,
         float eviction_bucket_shell_thickness,
         uint32_t vb_page_size_order_of_two,
         uint32_t ib_page_size_order_of_two,
@@ -250,9 +250,11 @@ public:
     ComputeProgram prog_fill_chunk_hash_table_;
     ComputeProgram prog_clear_chunk_hash_table_;
     ComputeProgram prog_reset_evicted_list_and_buckets_;
+    ComputeProgram prog_hash_table_conditional_dispatch_adapter_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     SSBO dispatch_args;
+    SSBO dispatch_args_additional;
     SSBO voxels_;
     SSBO chunk_meta_;
     SSBO chunk_hash_keys_;
@@ -313,8 +315,9 @@ public:
 
     void print_chunks_hash_table_log(); 
 
-    void clear_chunk_hash_table(); 
-    void fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); 
+    void clear_chunk_hash_table(const SSBO& dispatch_args); 
+    void fill_chunk_hash_table(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
+    void conditional_prepare_rebuild(SSBO& clear_dispatch_args, SSBO& fill_dispatch_args);
     void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); 
 
     void prepare_dispatch_args(

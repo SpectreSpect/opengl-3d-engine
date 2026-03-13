@@ -61,6 +61,7 @@ public:
     ComputeShader fill_chunk_hash_table_cs;
     ComputeShader clear_chunk_hash_table_cs;
     ComputeShader reset_evicted_list_and_buckets_cs;
+    ComputeShader hash_table_conditional_dispatch_adapter_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

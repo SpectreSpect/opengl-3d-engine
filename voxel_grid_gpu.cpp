@@ -8,7 +8,7 @@ VoxelGridGPU::VoxelGridGPU(
     float chunk_hash_table_size_factor, 
     uint32_t count_evict_buckets,
     uint32_t min_free_chunks,
-    uint32_t tomb_fraction_to_rebuild,
+    float tomb_fraction_to_rebuild,
     float eviction_bucket_shell_thickness,
     uint32_t vb_page_size_order_of_two,
     uint32_t ib_page_size_order_of_two,
@@ -36,6 +36,7 @@ VoxelGridGPU::VoxelGridGPU(
     init_programs(shader_manager);
 
     dispatch_args = SSBO::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, shader_manager);
+    dispatch_args_additional = SSBO::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, shader_manager);
     
     chunk_meta_ = SSBO(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     free_list_ = SSBO(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
@@ -421,6 +422,7 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_fill_chunk_hash_table_ = ComputeProgram(&shader_manager.fill_chunk_hash_table_cs);
     prog_clear_chunk_hash_table_ = ComputeProgram(&shader_manager.clear_chunk_hash_table_cs);
     prog_reset_evicted_list_and_buckets_ = ComputeProgram(&shader_manager.reset_evicted_list_and_buckets_cs);
+    prog_hash_table_conditional_dispatch_adapter_ = ComputeProgram(&shader_manager.hash_table_conditional_dispatch_adapter_cs);
 
     prog_vf_voxel_mesh_diffusion_spec_ = VfProgram(&shader_manager.voxel_mesh_vs, &shader_manager.voxel_mesh_fs);
 }
@@ -499,6 +501,7 @@ void VoxelGridGPU::init_mesh_pool() {
 
 void VoxelGridGPU::print_chunks_hash_table_log() {
     std::vector<uint32_t> hash_table_vals(chunk_hash_table_size);
+    uint32_t count_tombs_gpu = chunk_hash_vals_.read_scalar<uint32_t>(0u);
 
     chunk_hash_vals_.read_subdata(sizeof(uint32_t), hash_table_vals.data(), sizeof(uint32_t) * chunk_hash_table_size);
 
@@ -523,30 +526,35 @@ void VoxelGridGPU::print_chunks_hash_table_log() {
     std::cout << "SLOT_TOMB: " << count_tomb_slots << "(" 
               << std::fixed << std::setprecision(2) << (float)count_tomb_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
     
+    std::cout << "SLOT_TOMB_GPU: " << count_tombs_gpu << std::endl;
+    
     std::cout << "SLOT_ALLOC: " << count_alloc_slots << "(" 
               << std::fixed << std::setprecision(2) << (float)count_alloc_slots / chunk_hash_table_size * 100.0f << "%)" << std::endl;
 
     std::cout << std::endl;
 }
 
-void VoxelGridGPU::clear_chunk_hash_table() {
+void VoxelGridGPU::clear_chunk_hash_table(const SSBO& dispatch_args) {
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
+
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_clear_chunk_hash_table_.use();
     glUniform1ui(glGetUniformLocation(prog_clear_chunk_hash_table_.id, "u_hash_table_size"), chunk_hash_table_size);
     
-    uint32_t slot_groups = math_utils::div_up_u32(chunk_hash_table_size, 256u);
-    prog_clear_chunk_hash_table_.dispatch_compute(slot_groups, 1, 1);
+    glDispatchComputeIndirect(0);
 
-    glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset) {
+void VoxelGridGPU::fill_chunk_hash_table(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
     chunk_hash_keys_.bind_base(0);
     chunk_hash_vals_.bind_base(1);
     chunk_meta_.bind_base(2);
     enqueued_.bind_base(3);
+
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_fill_chunk_hash_table_.use();
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_max_chunks"), count_active_chunks);
@@ -554,15 +562,33 @@ void VoxelGridGPU::fill_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offse
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_pack_bits"), pack_bits);
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_pack_offset"), pack_offset);
 
-    uint32_t chunk_groups = math_utils::div_up_u32(count_active_chunks, 256u);
-    prog_fill_chunk_hash_table_.dispatch_compute(chunk_groups, 1, 1);
+    glDispatchComputeIndirect(0);
+
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+void VoxelGridGPU::conditional_prepare_rebuild(SSBO& clear_dispatch_args, SSBO& fill_dispatch_args) {
+    chunk_hash_vals_.bind_base(0);
+    clear_dispatch_args.bind_base(1);
+    fill_dispatch_args.bind_base(2);
+    
+    uint32_t tombs_to_rebuild = (uint32_t)(tomb_fraction_to_rebuild * chunk_hash_table_size);
+
+    prog_hash_table_conditional_dispatch_adapter_.use();
+    glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_max_chunks"), count_active_chunks);
+    glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_tombs_to_rebuild"), tombs_to_rebuild);
+
+    prog_hash_table_conditional_dispatch_adapter_.dispatch_compute(1, 1, 1);
 
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void VoxelGridGPU::rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset) {
-    clear_chunk_hash_table();
-    fill_chunk_hash_table(pack_bits, pack_offset);
+    conditional_prepare_rebuild(dispatch_args, dispatch_args_additional);
+
+    clear_chunk_hash_table(dispatch_args);
+    fill_chunk_hash_table(dispatch_args_additional, pack_bits, pack_offset);
 }
 
 void VoxelGridGPU::prepare_dispatch_args(SSBO& dispatch_args, const DispatchArg& arg_x, const DispatchArg& arg_y, const DispatchArg& arg_z)
@@ -800,12 +826,7 @@ void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pac
     prepare_return_free_alloc_nodes(dispatch_args);
     return_free_alloc_nodes(dispatch_args);
 
-    static double t0 = math_utils::ms_now() / 1000.0;
-    double t1 = math_utils::ms_now() / 1000.0;
-    if (t1 - t0 >= 10.0) {
-        rebuild_chunk_hash_table(pack_bits, pack_offset);
-        t0 = math_utils::ms_now() / 1000.0;
-    }
+    rebuild_chunk_hash_table(pack_bits, pack_offset);
 }
 
 void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
