@@ -57,6 +57,7 @@ public:
     uint32_t min_free_chunks;
     uint32_t max_evict_chunks;
     uint32_t eviction_bucket_shell_thickness;
+    uint32_t vox_per_chunk;
 
     const uint32_t min_free_pages = 1024;
 
@@ -206,9 +207,9 @@ public:
     void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
     void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
                                                     const glm::vec3& cam_pos);
-    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
-    void generate_terrain(uint32_t seed, uint32_t load_count);
     void reset_load_list_counter();
+    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
+    void generate_terrain(const SSBO& dispatch_args, uint32_t seed);
     void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
     
     virtual void draw(RenderState state) override;
