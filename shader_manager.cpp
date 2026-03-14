@@ -87,5 +87,9 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
         p / "shaders" / "light_system" / "light_indices_for_clusters_cs.glsl",
         include_directories
     );
+
+    test_hash_table_cs = ComputeShader(p / "shaders" / "test_hash_table.glsl", include_directories, "/home/spectre/Projects/test_open_3d/shaders/test_hash_table_FULL.glsl");
+
+    add_point_cloud_to_map_cs = ComputeShader(p / "shaders" / "add_point_cloud_to_map_cs.glsl", include_directories, "/home/spectre/Projects/test_open_3d/shaders/add_point_cloud_to_map_cs_FULL.glsl");
 }
 

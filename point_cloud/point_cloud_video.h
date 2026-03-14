@@ -21,7 +21,7 @@ public:
     bool looped = true;
 
     PointCloudVideo() = default;
-    void load_from_file(const std::filesystem::path& csv_path);
+    void load_from_file(const std::filesystem::path& csv_path, int max_frames = -1);
     size_t get_frame_id(float time, size_t search_start_id = 0);
     void move(float time = 0.0f);
     void pause();

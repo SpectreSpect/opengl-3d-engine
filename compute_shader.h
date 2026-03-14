@@ -1,12 +1,14 @@
 #pragma once
 #include "shader.h"
+#include <fstream>
 
 class ComputeShader : public Shader {
 public:
     ComputeShader() = default;
     ComputeShader(
         const std::filesystem::path& path, 
-        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>(),
+        const std::filesystem::path& debug_path = "" 
     );
 
     ComputeShader(const ComputeShader&) = delete;

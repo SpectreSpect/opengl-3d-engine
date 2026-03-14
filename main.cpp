@@ -64,325 +64,60 @@
 #include <random>
 #include "gicp.h"
 
-
-
-struct VoxelKey {
-    int x = 0;
-    int y = 0;
-    int z = 0;
-
-    bool operator==(const VoxelKey& other) const {
-        return x == other.x && y == other.y && z == other.z;
-    }
+struct alignas(16) HashPoint {
+    glm::vec4 position;
+    glm::vec4 normal;
 };
 
-struct VoxelKeyHash {
-    std::size_t operator()(const VoxelKey& k) const {
-        // Simple integer hash combine
-        std::size_t h1 = std::hash<int>{}(k.x);
-        std::size_t h2 = std::hash<int>{}(k.y);
-        std::size_t h3 = std::hash<int>{}(k.z);
+struct alignas(16) HashTableSlot {
+    glm::uvec2     hash_key;
+    std::uint32_t  _pad0[2];     // forces hash_value to offset 16
 
-        std::size_t seed = h1;
-        seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        return seed;
-    }
+    HashPoint      hash_value;   // offset 16, size 32
+    std::uint32_t  hash_state;   // offset 48
+    std::uint32_t  _pad1[3];     // tail pad so sizeof == 64
 };
 
-struct VoxelCell {
-    glm::vec3 sum_pos{0.0f};
-    glm::vec3 sum_normal{0.0f};
 
-    std::uint32_t point_count = 0;
-    std::uint32_t normal_count = 0;
 
-    void add_point(const glm::vec3& p) {
-        sum_pos += p;
-        point_count++;
+bool next_pos(glm::ivec3 origin, int layer, glm::ivec3& index_pos, glm::ivec3& out_pos) {
+    const int dim = 1 + layer * 2;
+
+    // current position
+    int x = index_pos.x;
+    int y = index_pos.y;
+    int z = index_pos.z;
+
+    // emit current position first
+    out_pos = origin + glm::ivec3(x, y, z) - glm::ivec3(layer);
+
+    // advance to next position
+    if ((z == 0 || z == dim - 1) || (y == 0 || y == dim - 1)) {
+        x++;
+    } else {
+        if (x == dim - 1)
+            x++;
+        else
+            x = dim - 1;
     }
 
-    void add_normal(const glm::vec3& n) {
-        float len2 = glm::dot(n, n);
-        if (len2 < 1e-12f)
-            return;
+    if (x >= dim) {
+        x = 0;
+        z++;
 
-        sum_normal += glm::normalize(n);
-        normal_count++;
-    }
-
-    void add(const glm::vec3& p) {
-        add_point(p);
-    }
-
-    void add(const glm::vec3& p, const glm::vec3& n) {
-        add_point(p);
-        add_normal(n);
-    }
-
-    glm::vec3 centroid() const {
-        if (point_count == 0)
-            return glm::vec3(0.0f);
-
-        return sum_pos / static_cast<float>(point_count);
-    }
-
-    glm::vec3 average_normal() const {
-        if (normal_count == 0)
-            return glm::vec3(0.0f);
-
-        float len2 = glm::dot(sum_normal, sum_normal);
-        if (len2 < 1e-12f)
-            return glm::vec3(0.0f);
-
-        return glm::normalize(sum_normal);
-    }
-};
-
-class VoxelMap {
-public:
-    explicit VoxelMap(float voxel_size)
-        : voxel_size_(std::max(voxel_size, 1e-6f)),
-          inv_voxel_size_(1.0f / voxel_size_) {}
-
-    void clear() {
-        cells_.clear();
-    }
-
-    std::size_t voxel_count() const {
-        return cells_.size();
-    }
-
-    float voxel_size() const {
-        return voxel_size_;
-    }
-
-    VoxelKey point_to_key(const glm::vec3& p) const {
-        return VoxelKey{
-            static_cast<int>(std::floor(p.x * inv_voxel_size_)),
-            static_cast<int>(std::floor(p.y * inv_voxel_size_)),
-            static_cast<int>(std::floor(p.z * inv_voxel_size_))
-        };
-    }
-
-    glm::vec3 key_to_center(const VoxelKey& k) const {
-        return glm::vec3(
-            (static_cast<float>(k.x) + 0.5f) * voxel_size_,
-            (static_cast<float>(k.y) + 0.5f) * voxel_size_,
-            (static_cast<float>(k.z) + 0.5f) * voxel_size_
-        );
-    }
-
-    void insert_point(const glm::vec3& world_p) {
-        VoxelKey key = point_to_key(world_p);
-        cells_[key].add(world_p);
-    }
-
-    void insert_point(const glm::vec3& world_p, const glm::vec3& world_n) {
-        VoxelKey key = point_to_key(world_p);
-        cells_[key].add(world_p, world_n);
-    }
-
-    void insert_points(const std::vector<glm::vec3>& world_points) {
-        for (const glm::vec3& p : world_points) {
-            insert_point(p);
+        if (z >= dim) {
+            z = 0;
+            y++;
         }
     }
 
-    void insert_points(const std::vector<glm::vec3>& world_points,
-                       const std::vector<glm::vec3>& world_normals) {
-        if (world_points.size() != world_normals.size())
-            return;
+    index_pos = glm::ivec3(x, y, z);
 
-        for (std::size_t i = 0; i < world_points.size(); i++) {
-            insert_point(world_points[i], world_normals[i]);
-        }
-    }
-
-    std::vector<glm::vec3> extract_centroids() const {
-        std::vector<glm::vec3> out;
-        out.reserve(cells_.size());
-
-        for (const auto& [key, cell] : cells_) {
-            if (cell.point_count == 0)
-                continue;
-
-            out.push_back(cell.centroid());
-        }
-
-        return out;
-    }
-
-    void extract_centroids_and_normals(std::vector<glm::vec3>& points,
-                                       std::vector<glm::vec3>& normals) const {
-        points.clear();
-        normals.clear();
-
-        points.reserve(cells_.size());
-        normals.reserve(cells_.size());
-
-        for (const auto& [key, cell] : cells_) {
-            if (cell.point_count == 0)
-                continue;
-
-            points.push_back(cell.centroid());
-            normals.push_back(cell.average_normal());
-        }
-    }
-
-    void extract_local_centroids_and_normals(const glm::vec3& center,
-                                             float radius,
-                                             std::vector<glm::vec3>& points,
-                                             std::vector<glm::vec3>& normals) const {
-        points.clear();
-        normals.clear();
-
-        float radius_sq = radius * radius;
-
-        for (const auto& [key, cell] : cells_) {
-            if (cell.point_count == 0)
-                continue;
-
-            glm::vec3 c = cell.centroid();
-            float d2 = glm::distance2(c, center);
-            if (d2 > radius_sq)
-                continue;
-
-            points.push_back(c);
-            normals.push_back(cell.average_normal());
-        }
-    }
-
-    std::vector<PointInstance> extract_point_instances(const glm::vec4& color = glm::vec4(1, 1, 1, 1)) const {
-        std::vector<PointInstance> out;
-        out.reserve(cells_.size());
-
-        for (const auto& [key, cell] : cells_) {
-            if (cell.point_count == 0)
-                continue;
-
-            PointInstance p;
-            p.pos = glm::vec4(cell.centroid(), 1.0f);
-            p.color = color;
-            out.push_back(p);
-        }
-
-        return out;
-    }
-
-private:
-    float voxel_size_;
-    float inv_voxel_size_;
-
-    std::unordered_map<VoxelKey, VoxelCell, VoxelKeyHash> cells_;
-};
-
-// float clear_col[4] = {0.15f, 0.15f, 0.18f, 1.0f};
-// float clear_col[4] = {0.1f, 0.1f, 0.1f, 1.0f};
-float clear_col[4] = {0.1f, 0.1f, 0.1f, 1.0f};
-
-void set_light_position(SSBO& light_source_ssbo, size_t index, const glm::vec4 &pos) {
-    size_t offset = index * sizeof(LightSource);
-    light_source_ssbo.update_subdata(offset, &pos, sizeof(pos));
+    return (y >= dim);
 }
 
-void insert_scan_into_voxel_map(const PointCloud& scan_point_cloud,
-                                const std::vector<glm::vec3>& scan_normals,
-                                VoxelMap& voxel_map)
-{
-    const std::vector<PointInstance>& pts = scan_point_cloud.points;
 
-    if (pts.size() != scan_normals.size()) {
-        std::cout << "insert_scan_into_voxel_map: pts.size() != scan_normals.size()\n";
-        return;
-    }
-
-    for (size_t i = 0; i < pts.size(); i++) {
-        glm::vec3 p_local = glm::vec3(pts[i].pos);
-        glm::vec3 p_world = GICP::transform_point_world(scan_point_cloud, p_local);
-
-        glm::vec3 n_world = GICP::transform_normal_world(scan_point_cloud, scan_normals[i]);
-
-        if (glm::dot(n_world, n_world) < 1e-12f)
-            continue;
-
-        voxel_map.insert_point(p_world, n_world);
-    }
-}
-
-void rebuild_map_point_cloud_from_voxel_map(VoxelMap& voxel_map,
-                                            PointCloud& map_point_cloud,
-                                            std::vector<glm::vec3>& map_normals)
-{
-    std::vector<glm::vec3> map_points_world;
-    voxel_map.extract_centroids_and_normals(map_points_world, map_normals);
-
-    std::vector<PointInstance> instances;
-    instances.reserve(map_points_world.size());
-
-    for (size_t i = 0; i < map_points_world.size(); i++) {
-        PointInstance p{};
-        p.pos = glm::vec4(map_points_world[i], 1.0f);
-        p.color = glm::vec4(1.0f, 0.0f, 1.0f, 1.0f); // blue map
-        instances.push_back(p);
-    }
-
-    map_point_cloud.points = instances;
-    map_point_cloud.position = glm::vec3(0.0f);
-    map_point_cloud.rotation = glm::vec3(0.0f);
-    map_point_cloud.scale = glm::vec3(1.0f);
-
-    map_point_cloud.update_points(map_point_cloud.points);
-}
-
-void initialize_map_from_first_scan(const PointCloud& first_scan_point_cloud,
-                                    const std::vector<glm::vec3>& first_scan_normals,
-                                    VoxelMap& voxel_map,
-                                    PointCloud& map_point_cloud,
-                                    std::vector<glm::vec3>& map_normals)
-{
-    voxel_map.clear();
-
-    insert_scan_into_voxel_map(first_scan_point_cloud, first_scan_normals, voxel_map);
-    rebuild_map_point_cloud_from_voxel_map(voxel_map, map_point_cloud, map_normals);
-}
-
-double align_scan_to_map_and_fuse(PointCloud& scan_point_cloud,
-                                  const std::vector<glm::vec3>& scan_normals,
-                                  PointCloud& map_point_cloud,
-                                  const std::vector<glm::vec3>& map_normals,
-                                  VoxelMap& voxel_map,
-                                  int max_iterations = 10,
-                                  double rmse_epsilon = 1e-4)
-{
-    if (map_point_cloud.points.empty()) {
-        std::cout << "align_scan_to_map_and_fuse: map is empty\n";
-        return -1.0;
-    }
-
-    double last_rmse = -1.0;
-    double rmse = -1.0;
-
-    for (int iter = 0; iter < max_iterations; iter++) {
-        rmse = GICP::step(scan_point_cloud, map_point_cloud, scan_normals, map_normals);
-
-        if (rmse < 0.0) {
-            std::cout << "gicp_step failed\n";
-            return -1.0;
-        }
-
-        if (last_rmse > 0.0 && std::abs(last_rmse - rmse) < rmse_epsilon) {
-            break;
-        }
-
-        last_rmse = rmse;
-    }
-
-    // After the scan is aligned, fuse it into the voxel map
-    insert_scan_into_voxel_map(scan_point_cloud, scan_normals, voxel_map);
-
-    return rmse;
-}
+float clear_col[4] = {0.2f, 0.2f, 0.2f, 1.0f};
 
 int main() {
     Engine3D engine = Engine3D();
@@ -393,270 +128,251 @@ int main() {
     Camera camera;
     window.set_camera(&camera);
     FPSCameraController camera_controller = FPSCameraController(&camera);
-    
     camera_controller.speed = 50;
 
-    VoxelGrid* voxel_grid = new VoxelGrid({16, 16, 16}, 1.0f, {24, 10, 24});
-    voxel_grid->update(&window, &camera);
-    sleep(1);
 
-    glm::vec3 origin = glm::vec3(0.0f, 10.0f, 0.0f);
+    // uint32_t u_hash_table_size = 100000;
 
-    std::vector<Line*> point_cloud_video_lines;
-    std::vector<Point*> point_cloud_video_points;
-    std::vector<Mesh*> lidar_meshes;
+    // SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
+
+    // ComputeProgram test_hash_table_program = ComputeProgram(&engine.shader_manager->test_hash_table_cs);
+    // ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
+
+    
+
+
+
+    // hash_table_ssbo.bind_base(0);
+
+    // // hash_table_size
+    // test_hash_table_program.set_uint("u_hash_table_size", u_hash_table_size);
+
+    // test_hash_table_program.use();
+    // test_hash_table_program.dispatch_compute(1, 1, 1);
+    // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+
+    // HashTableSlot hash_table[u_hash_table_size] = {};
+    // hash_table_ssbo.read_subdata(sizeof(std::uint32_t) * 4, hash_table, sizeof(HashTableSlot) * (u_hash_table_size - 1));
+
+    // for (int i = 0; i < u_hash_table_size; i++) {
+    //     std::cout << "(" << hash_table[i].hash_value.x << " " << hash_table[i].hash_value.y << " " << hash_table[i].hash_value.z << ")" << std::endl;
+    // }
+
+    std::vector<LineInstance> layer_line_instances;
+    std::vector<LineInstance> layer_line_instances_blue;
+    // layer_line_instances.push_back({glm::vec3(0, 0, 0), glm::vec3(5, 0, 0)});
+    Line layer_line;
+    Line layer_line_blue;
+    layer_line_blue.color = glm::vec4(0, 0, 1, 1);
+
+    // for (int layer = 0; layer < 3; layer++) {
+    //     int x = 0;
+    //     int y = 0;
+    //     int z = 0;
+
+    //     int x_prev = 0;
+    //     int y_prev = 0;
+    //     int z_prev = 0;
+
+    //     float dim_size = 1 + layer * 2;
+    //     while(x < dim_size) {
+    //         while (y < dim_size) {
+    //             while (z < dim_size) {
+    //                 if (x != 0 && y != 0 && z != 0) {
+    //                     LineInstance line_instance;
+
+    //                     line_instance.p0 = glm::vec3(x_prev, y_prev, z_prev);
+    //                     line_instance.p1 = glm::vec3(x, y, z);
+
+    //                     layer_line_instances.push_back(line_instance);
+
+    //                     x_prev = x;
+    //                     y_prev = y;
+    //                     z_prev = z;
+    //                 }
+                    
+    //                 if ((x != 0) || (x != (dim_size - 1)) && (y != 0) || (y != (dim_size - 1))) {
+    //                     if (z == dim_size - 1)
+    //                         z += 1;
+    //                     else
+    //                         z = dim_size - 1;
+    //                 }
+    //                 else
+    //                     z += 1;
+    //             }
+
+    //             if ((x != 0) || (x != (dim_size - 1)) && (z != 0) || (z != (dim_size - 1))) {
+    //                 if (y == dim_size - 1)
+    //                     y += 1;
+    //                 else
+    //                     y = dim_size - 1;
+    //             }
+    //             else
+    //                 y += 1;
+    //         }
+
+    //         if ((z != 0) || (z != (dim_size - 1)) && (y != 0) || (y != (dim_size - 1))) {
+    //             if (x == dim_size - 1)
+    //                 x += 1;
+    //             else
+    //                 x = dim_size - 1;
+    //         }
+    //         else
+    //             x += 1;
+    //     }
+    // }
+
+    // glm::ivec3 voxel_origin = glm::ivec3(0, 0, 0);
+    // glm::ivec3 index_pos = glm::ivec3(0, 0, 0);
+    // for (int layer = 0; layer < 3; layer++) {
+    //     glm::ivec3 cur_pos = glm::ivec3(0, 0, 0);
+    //     bool finished = false;
+    //     while (!finished) {
+    //         finished = next_pos(voxel_origin, layer, index_pos, cur_pos);
+
+    //         std::cout << "(" << cur_pos.x << ", " << cur_pos.y << ", " << cur_pos.z << ")" << std::endl;
+
+    //         LineInstance line_instance;
+    //         line_instance.p0 = cur_pos;
+    //         line_instance.p1 = cur_pos;
+    //         line_instance.p1.x += 0.2f;
+    //     }
+    // }
+
+
+    glm::ivec3 voxel_origin(0, 0, 0);
+
+    // for (int layer = 2; layer < 3; layer++) {
+    //     glm::ivec3 index_pos(0, 0, 0); // reset every layer
+    //     glm::ivec3 cur_pos(0, 0, 0);
+
+    //     bool finished = false;
+    //     while (!finished) {
+    //         finished = next_pos(voxel_origin, layer, index_pos, cur_pos);
+
+    //         std::cout << "(" << cur_pos.x << ", " << cur_pos.y << ", " << cur_pos.z << ")\n";
+    //         LineInstance line_instance;
+    //         line_instance.p0 = cur_pos;
+    //         line_instance.p1 = cur_pos;
+    //         line_instance.p1.x += 0.2f;
+
+    //         layer_line_instances.push_back(line_instance);
+    //     }
+    // }
+
+    for (int layer = 0; layer < 3; layer++) {
+    const int dim = 1 + layer * 2;
+
+        for (int y = 0; y < dim; y++) {
+            const bool on_y_edge = (y == 0 || y == dim - 1);
+
+            for (int z = 0; z < dim; z++) {
+                const bool on_z_edge = (z == 0 || z == dim - 1);
+
+                int x = 0;
+                while (x < dim) {
+                    glm::ivec3 pos = voxel_origin + glm::ivec3(x, y, z) - glm::ivec3(layer);
+
+                    LineInstance line_instance;
+                    line_instance.p0 = pos;
+                    line_instance.p1 = pos;
+                    line_instance.p1.x += 0.5f;
+
+                    if (layer % 2 == 0)
+                        layer_line_instances.push_back(line_instance);
+                    else
+                        layer_line_instances_blue.push_back(line_instance);
+
+                    if (on_y_edge || on_z_edge) {
+                        x++;
+                    } else {
+                        x = (x == dim - 1) ? x + 1 : dim - 1;
+                    }
+                }
+            }
+        }
+    }
 
     PointCloudVideo point_cloud_video = PointCloudVideo();
-    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv");
+    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
     
-    std::vector<PointInstance> target_points;
-    std::vector<glm::vec3> target_normals;
+    // ComputeProgram test_hash_table_program = ComputeProgram(&engine.shader_manager->test_hash_table_cs);
+    ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
 
-    std::vector<PointInstance> source_points;
-    std::vector<PointInstance> source_points_for_drawing;
+    uint32_t u_hash_table_size = 16;
+    SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
 
-    // Small known transform used to generate source from target
-    glm::vec3 source_rotation = glm::radians(glm::vec3(5.0f, -3.0f, 2.0f)); // pitch, yaw, roll-ish
-    glm::vec3 source_translation = glm::vec3(12.0f, -4.0f, 7.0f);
+    std::vector<PointInstance> test_point_instances;
 
-    // Build rotation matrix once
-    glm::mat4 R4 = glm::yawPitchRoll(
-        source_rotation.y, // yaw   around Y
-        source_rotation.x, // pitch around X
-        source_rotation.z  // roll  around Z
-    );
-    glm::mat3 initial_R = glm::mat3(R4);
+    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
+    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
+    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
+    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
 
-    size_t size_x = 50;
-    size_t size_z = 50;
-    std::mt19937 rng(1337);
+    // Point map_points;
 
-    // Gaussian noise
-    std::normal_distribution<float> tangent_noise_dist(0.0f, 0.18f); // lateral jitter
-    std::normal_distribution<float> normal_noise_dist(0.0f, 0.05f);  // smaller normal jitter
-
-    // Random dropout
-    std::uniform_real_distribution<float> keep_dist(0.0f, 1.0f);
-    float keep_probability = 0.88f; // keep ~88% of source points
-
-    float amplitude = static_cast<float>(size_x) / 8.0f;
-
-    for (int x = 0; x < size_x; x++) {
-        for (int z = 0; z < size_z; z++) {
-            PointInstance new_point{};
-
-            new_point.pos.x = static_cast<float>(x);
-            new_point.pos.z = static_cast<float>(z);
-            new_point.pos.w = 1.0f;
-
-            // Normalize grid coords to [-1, 1]
-            float u = 2.0f * static_cast<float>(x) / static_cast<float>(size_x - 1) - 1.0f;
-            float v = 2.0f * static_cast<float>(z) / static_cast<float>(size_z - 1) - 1.0f;
-
-            // Two asymmetric Gaussian features
-            float du1 = u - 0.35f;
-            float dv1 = v + 0.20f;
-            float e1 = std::exp(-(du1 * du1 + dv1 * dv1) / 0.08f);
-
-            float du2 = u + 0.45f;
-            float dv2 = v - 0.35f;
-            float e2 = std::exp(-(du2 * du2 + dv2 * dv2) / 0.05f);
-
-            // Non-repeating asymmetric height function
-            float h =
-                0.35f * u
-                + 0.18f * v
-                + 0.55f * u * u
-                - 0.30f * v * v
-                + 0.22f * u * v
-                + 0.65f * e1
-                - 0.40f * e2;
-
-            new_point.pos.y = h * amplitude;
-            new_point.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-
-            target_points.push_back(new_point);
-
-            // --- Analytic normal ---
-            float du_dx = 2.0f / static_cast<float>(size_x - 1);
-            float dv_dz = 2.0f / static_cast<float>(size_z - 1);
-
-            float df_du =
-                0.35f
-                + 1.10f * u
-                + 0.22f * v
-                + 0.65f * e1 * (-2.0f * du1 / 0.08f)
-                - 0.40f * e2 * (-2.0f * du2 / 0.05f);
-
-            float df_dv =
-                0.18f
-                - 0.60f * v
-                + 0.22f * u
-                + 0.65f * e1 * (-2.0f * dv1 / 0.08f)
-                - 0.40f * e2 * (-2.0f * dv2 / 0.05f);
-
-            float dy_dx = amplitude * df_du * du_dx;
-            float dy_dz = amplitude * df_dv * dv_dz;
-
-            glm::vec3 normal(-dy_dx, 1.0f, -dy_dz);
-            normal = glm::normalize(normal);
-
-            target_normals.push_back(normal);
-
-            // --------------------------
-            // Build perturbed source point
-            // --------------------------
-
-            // Optional dropout: source scan sees only part of the surface samples
-            if (keep_dist(rng) > keep_probability) {
-                continue;
-            }
-
-            PointInstance src_point = new_point;
-            glm::vec3 p3 = glm::vec3(new_point.pos);
-
-            // First apply the rigid transform
-            glm::vec3 transformed = initial_R * p3 + source_translation;
-
-            // Build a tangent basis from the target normal
-            glm::vec3 helper = (std::abs(normal.y) < 0.9f)
-                ? glm::vec3(0.0f, 1.0f, 0.0f)
-                : glm::vec3(1.0f, 0.0f, 0.0f);
-
-            glm::vec3 tangent1 = glm::normalize(glm::cross(helper, normal));
-            glm::vec3 tangent2 = glm::normalize(glm::cross(normal, tangent1));
-
-            // LiDAR-ish perturbation:
-            // mostly tangential jitter, smaller normal jitter
-            float t1 = tangent_noise_dist(rng);
-            float t2 = tangent_noise_dist(rng);
-            float n_off = normal_noise_dist(rng);
-
-            glm::vec3 local_offset =
-                tangent1 * t1 +
-                tangent2 * t2 +
-                normal * n_off;
-
-            transformed += local_offset;
-
-            src_point.pos = glm::vec4(transformed, 1.0f);
-            src_point.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-
-            source_points.push_back(src_point);
-            source_points_for_drawing.push_back(src_point);
-        }
-    }
+    // map_points.set_points(test_point_instances);
+    // map_points.set_points(map_point_ssbo, output_num_points);
     
-    PointCloud target_point_cloud;
-    PointCloud source_point_cloud;
-    PointCloud source_point_cloud_for_drawing;
-    target_point_cloud.update_points(target_points);
-    source_point_cloud.update_points(source_points);
+    // point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo;
+
+    SSBO point_ssbo = SSBO(*point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo);
     
+    PointInstance temp_point;
+    temp_point.pos = glm::vec4(1, 2, 3, 4);
 
-    glm::mat3 R = glm::mat3(1.0f);
-    glm::vec3 t = glm::vec3(0.0f);
+    int max_points_count = 1000;
+    SSBO map_point_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_points_count), GL_DYNAMIC_DRAW, temp_point, *engine.shader_manager);
+    // SSBO map_point_ssbo = SSBO(*map_points.instance_vbo);
     
+    SSBO num_point_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
+
+    // std::uint32_t num_points = point_cloud_video.frames[0].point_cloud.points.size();
+    std::uint32_t num_points = max_points_count;
+    int x_count = math_utils::div_up_u32(num_points, 256);
     
-    source_point_cloud_for_drawing.update_points(source_points_for_drawing);
+    hash_table_ssbo.bind_base(0);
+    map_point_ssbo.bind_base(1);
+    num_point_ssbo.bind_base(2);
+    // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+    add_point_cloud_to_map_program.set_uint("num_threads", num_points);
 
+    add_point_cloud_to_map_program.use();
+    add_point_cloud_to_map_program.dispatch_compute(x_count, 1, 1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+    int read_num = 4;
 
-    CirlceInstance circle_instance;
-    // circle_instance.color = glm::vec4(1, 1, 1, 1);
-    circle_instance.color = glm::vec4(0.8, 0.8, 0.2, 1);
+    // HashTableSlot hash_table[u_hash_table_size] = {};
+    // hash_table_ssbo.read_subdata(sizeof(std::uint32_t) * 4, hash_table, sizeof(HashTableSlot) * (read_num - 1));
 
-    std::vector<CirlceInstance> instances;
-
-    int row_size = 8;
-    for (int x = 0; x < row_size; x++)
-        for (int z = 0; z < row_size; z++) {
-            circle_instance.position_radius.x = (x + 0.5) * 2;
-            circle_instance.position_radius.z = (z + 0.5) * 2;
-
-            circle_instance.color = glm::vec4((float)x / (float)row_size, 0, (float)z / (float)row_size, 1);
-
-            instances.push_back(circle_instance);
-        }
-    
-    CircleCloud circle_cloud = CircleCloud();
-    circle_cloud.set_instances(instances);
-
-    LightSource light_source;
-    light_source.position = glm::vec4(-15, 2, 2, 8);
-    light_source.color = glm::vec4(1, 0, 0, 1);
-    engine.lighting_system.set_light_source(0, light_source);
-
-    light_source.position = glm::vec4(-15, 2, -2, 8);
-    light_source.color = glm::vec4(0, 1, 0, 1);
-    engine.lighting_system.set_light_source(1, light_source);
-
-    light_source.position = glm::vec4(-13, 2, 0, 8);
-    light_source.color = glm::vec4(0, 0, 1, 1);
-    engine.lighting_system.set_light_source(2, light_source);
-
-    light_source.position = glm::vec4(-17, 2, 0, 8);
-    light_source.color = glm::vec4(1, 1, 1, 1);
-    engine.lighting_system.set_light_source(3, light_source);
-
-    Sphere sphere = Sphere();
-    sphere.mesh->position.x = -14;
-    sphere.mesh->position.y = 1;
-
-    PBRSkybox skybox = PBRSkybox(engine.texture_manager->st_peters_square_night_4k);
-
-    
-
-    int id_1 = 200;
-    int id_2 = 221;
-
-    for (int i = 0; i < point_cloud_video.frames[id_1].point_cloud.points.size(); i++) {
-        point_cloud_video.frames[id_1].point_cloud.points[i].color = glm::vec4(0, 0, 1, 1);
-    }
-    point_cloud_video.frames[id_1].point_cloud.update_points(point_cloud_video.frames[id_1].point_cloud.points);
-
-    // for (int i = 0; i < point_cloud_video.frames[id_2].point_cloud.points.size(); i++) {
-    //     point_cloud_video.frames[id_2].point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+    // for (int i = 0; i < read_num; i++) {
+    //     std::cout << "(" << hash_table[i].hash_value.position.x << " " << hash_table[i].hash_value.position.y << " " << hash_table[i].hash_value.position.z << ")" << std::endl;
     // }
-    // point_cloud_video.frames[id_2].point_cloud.update_points(point_cloud_video.frames[id_2].point_cloud.points);
-    VoxelMap voxel_map(0.5f); // choose voxel size
-    PointCloud map_point_cloud;
-    std::vector<glm::vec3> map_normals;
-    // initialize_map_from_first_scan(point_cloud_video.frames[0].point_cloud,
-    //                                 point_cloud_video.frames[0].normals,
-    //                                 voxel_map,
-    //                                 map_point_cloud,
-    //                                 map_normals);
-    
-    // for (int i = 1; i < point_cloud_video.frames.size(); i++) {
-    //     PointCloud& scan_cloud = point_cloud_video.frames[i].point_cloud;
-    //     std::vector<glm::vec3>& scan_normals = point_cloud_video.frames[i].normals;
 
-    //     double rmse = align_scan_to_map_and_fuse(scan_cloud,
-    //                                             scan_normals,
-    //                                             map_point_cloud,
-    //                                             map_normals,
-    //                                             voxel_map,
-    //                                             10,
-    //                                             1e-4);
+    PointInstance points[max_points_count] = {};
+    map_point_ssbo.read_subdata(0u, points, sizeof(PointInstance) * max_points_count);
 
-    //     if (rmse < 0.0) {
-    //         std::cout << "Failed to align frame " << i << "\n";
-    //         continue;
-    //     }
+    for (int i = 0; i < read_num; i++) {
+        std::cout << "(" << points[i].pos.x << " " << points[i].pos.y << " " << points[i].pos.z << ")" << std::endl;
+        // std::cout << points[i] << std::endl;
+    }
 
-    //     rebuild_map_point_cloud_from_voxel_map(voxel_map, map_point_cloud, map_normals);
+    uint32_t output_num_points;
+    num_point_ssbo.read_subdata(0u, &output_num_points, sizeof(uint32_t));
 
-    //     std::cout << "Frame " << i << " fused into map, rmse = " << rmse << "\n";
-    // }
-    
+
+
+    layer_line.set_lines(layer_line_instances);
+    layer_line_blue.set_lines(layer_line_instances_blue);
+
+    Point map_points(map_point_ssbo, output_num_points);
+    // map_points.instance_count = 4;
     
 
 
-
-    // remove_outlires(point_cloud_video.frames[id_2].point_cloud, point_cloud_video.frames[id_2].normals, point_cloud_video.frames[id_1].point_cloud, 5.0f);
-    point_cloud_video.frames[id_2].point_cloud.update_points(point_cloud_video.frames[id_2].point_cloud.points);
-        
+    
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
     float timer = 0.0f;
@@ -674,40 +390,14 @@ int main() {
         engine.update_lighting_system(camera, window);
         window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        // window.draw(&skybox, &camera);
+        // window.draw(&layer_line, &camera);
+        // window.draw(&layer_line_blue, &camera);
+        window.draw(&map_points, &camera);
 
-        skybox.attach_environment(*engine.default_program);
-        skybox.attach_environment(*engine.default_circle_program);
-
-        // sphere.mesh->position.x = -14 + cos(timer) * 4;
-        // sphere.mesh->position.z = 0 + sin(timer) * 4;
-
-        // voxel_grid->update(&window, &camera);
-        // window.draw(voxel_grid, &camera);
-
-        // window.draw(&point_cloud_mesh, &camera);
-
-        // window.draw(&target_point_cloud, &camera);
-        // window.draw(&source_point_cloud, &camera);
-
-        // point_cloud_video.update(delta_time);
-        // window.draw(&point_cloud_video.frames[id_1], &camera);
-        window.draw(&map_point_cloud, &camera);
         
-        // window.draw(&point_cloud_video.frames[id_2], &camera);
-        window.draw(&point_cloud_video.frames[cur_frame], &camera);
-        // window.draw(&point_cloud_video.frames[61], &camera);
-
         
 
 
-        // window.draw(&source_point_cloud_for_drawing, &camera);
-        
-        
-        
-        
-        // window.draw(&circle_cloud, &camera);
-        // window.draw(sphere.mesh, &camera);
 
         ui::begin_frame();
         ui::update_mouse_mode(&window);
@@ -720,58 +410,6 @@ int main() {
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "fps: %.3f", fps);
-        ImGui::TextColored(ImVec4(0.5,0.5,1,1), "current frame: %d", (int)point_cloud_video.current_frame);
-        ImGui::InputInt("current frame", &cur_frame);
-        
-
-        ImGui::SliderFloat("Relative threshold", &rel_thresh, 0.0f, 10.0f);
-
-        if (ImGui::Button("ICP Step")) {
-            // icp_step(source_points, target_points, target_normals, R, t);
-            // icp_step(source_point_cloud, target_point_cloud, target_normals);
-            GICP::step(point_cloud_video.frames[cur_frame].point_cloud, point_cloud_video.frames[id_1].point_cloud, point_cloud_video.frames[cur_frame].normals, point_cloud_video.frames[id_1].normals);
-            point_cloud_video.frames[cur_frame].point_cloud.update_points(point_cloud_video.frames[cur_frame].point_cloud.points);
-            // icp_step(point_cloud_video.frames[id_2].point_cloud, point_cloud_video.frames[id_1].point_cloud, point_cloud_video.frames[id_1].normals);
-            
-
-            // for (size_t i = 0; i < source_points.size(); i++) {
-            //     glm::vec3 p = R * glm::vec3(source_points[i].pos) + t;
-            //     source_points[i].pos = glm::vec4(p, 1.0f);
-            // }
-
-            // R = glm::mat3(1.0f);
-            // t = glm::vec3(0.0f);
-
-            // source_point_cloud.update_points(source_points);
-        }
-
-        if (ImGui::Button("Initialize Map From Current Frame")) {
-            initialize_map_from_first_scan(point_cloud_video.frames[cur_frame].point_cloud,
-                                        point_cloud_video.frames[cur_frame].normals,
-                                        voxel_map,
-                                        map_point_cloud,
-                                        map_normals);
-            map_initialized = true;
-        }
-
-        if (ImGui::Button("Align Current Frame To Map And Fuse")) {
-            if (!map_initialized) {
-                std::cout << "Map is not initialized\n";
-            } else {
-                double rmse = align_scan_to_map_and_fuse(point_cloud_video.frames[cur_frame].point_cloud,
-                                                        point_cloud_video.frames[cur_frame].normals,
-                                                        map_point_cloud,
-                                                        map_normals,
-                                                        voxel_map,
-                                                        10,
-                                                        1e-4);
-
-                if (rmse >= 0.0) {
-                    rebuild_map_point_cloud_from_voxel_map(voxel_map, map_point_cloud, map_normals);
-                    std::cout << "Fused frame " << cur_frame << ", rmse = " << rmse << "\n";
-                }
-            }
-        }
 
         ImGui::End();
 

@@ -22,6 +22,7 @@ struct alignas(16) PointInstance {
 class Point : public Drawable, public Transformable {
 public:
     Point();
+    Point(SSBO& instance_ssbo, int instance_count);
     ~Point();
 
     float size_px = 2.0f;
@@ -31,13 +32,15 @@ public:
     bool round = true;
 
     void set_points(const std::vector<PointInstance>& points);
+    void set_points(SSBO& points, int num_points);
     void draw(RenderState state) override;
     VBO* instance_vbo = nullptr;   // dynamic: pos/color per point
 
+    int instance_count = 0;
 private:
     VAO* vao = nullptr;
     VBO* quad_vbo = nullptr;       // static: 4 corners
     EBO* quad_ebo = nullptr;       // static: 6 indices
     
-    int instance_count = 0;
+    
 };

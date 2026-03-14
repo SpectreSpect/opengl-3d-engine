@@ -10,7 +10,7 @@ static inline bool parse_f(const std::string& s, float& out) {
     try { out = std::stof(s); return true; } catch (...) { return false; }
 }
 
-void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path) {
+void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path, int max_frames) {
     std::ifstream in(csv_path);
     if (!in) throw std::runtime_error("Failed to open: " + csv_path.string());
 
@@ -18,7 +18,12 @@ void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path) {
     std::filesystem::path video_dir_path = csv_path.parent_path();
     std::string line;
 
+    int loaded_count = 0;
+
     while (std::getline(in, line)) {
+        if (loaded_count > max_frames)
+            break;
+
         if (line.empty()) continue;
 
         std::vector<std::string> tok;
@@ -45,6 +50,8 @@ void PointCloudVideo::load_from_file(const std::filesystem::path& csv_path) {
         e.rotation_rpy = glm::vec3(rr, pp, yy);
 
         entries.push_back(std::move(e));
+
+        loaded_count++;
     }
 
     std::sort(entries.begin(), entries.end(),
