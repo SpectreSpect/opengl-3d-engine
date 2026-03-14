@@ -13,6 +13,7 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t vb_page_size_order_of_two,
     uint32_t ib_page_size_order_of_two,
     float buddy_allocator_nodes_factor,
+    float render_distance,
     ShaderManager& shader_manager)
  {
     assert(chunk_hash_table_size_factor >= 1.0f);
@@ -24,6 +25,7 @@ VoxelGridGPU::VoxelGridGPU(
     this->min_free_chunks = min_free_chunks;
     this->tomb_fraction_to_rebuild = tomb_fraction_to_rebuild;
     this->eviction_bucket_shell_thickness = eviction_bucket_shell_thickness;
+    this->render_distance = render_distance;
     this->shader_manager = &shader_manager;
 
     vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
@@ -132,7 +134,7 @@ void VoxelGridGPU::draw(RenderState state) {
     state.transform *= get_model_matrix();
 
     build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
-    build_indirect_draw_commands_frustum(state.vp, math_utils::BITS, math_utils::OFFSET);
+    build_indirect_draw_commands_frustum(state.vp, state.camera->position, math_utils::BITS, math_utils::OFFSET);
     draw_indirect(vao.id, state.transform, state.vp, state.camera->position);
 }
 
@@ -1278,7 +1280,7 @@ void VoxelGridGPU::reset_cmd_count() {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack_bits, int pack_offset) {
+void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, const glm::vec3& cam_pos, uint32_t pack_bits, int pack_offset) {
     auto planes = math_utils::extract_frustum_planes(view_proj);
 
     chunk_meta_.bind_base_as_ssbo(0);
@@ -1297,6 +1299,9 @@ void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack
     glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_vb_page_verts"), vb_page_size_);
     glUniform1ui(glGetUniformLocation(prog_build_indirect_cmds_.id, "u_ib_page_inds"), ib_page_size_);
 
+    glUniform3f(glGetUniformLocation(prog_build_indirect_cmds_.id, "cam_pos"), cam_pos.x, cam_pos.y, cam_pos.z);
+    glUniform1f(glGetUniformLocation(prog_build_indirect_cmds_.id, "render_distance"), render_distance);
+
     // u_frustum_planes[6]
     GLint loc = glGetUniformLocation(prog_build_indirect_cmds_.id, "u_frustum_planes");
     glUniform4fv(loc, 6, &planes[0].x);
@@ -1307,10 +1312,11 @@ void VoxelGridGPU::build_draw_commands(const glm::mat4& view_proj, uint32_t pack
 }
 
 void VoxelGridGPU::build_indirect_draw_commands_frustum(const glm::mat4& viewProj,
+                                                        const glm::vec3& cam_pos,
                                                         uint32_t pack_bits,
                                                         int pack_offset) {
     reset_cmd_count();
-    build_draw_commands(viewProj, pack_bits, pack_offset);
+    build_draw_commands(viewProj, cam_pos, pack_bits, pack_offset);
 }
 
 void VoxelGridGPU::draw_indirect(const GLuint vao, const glm::mat4& world, const glm::mat4& proj_view, const glm::vec3& cam_pos) {

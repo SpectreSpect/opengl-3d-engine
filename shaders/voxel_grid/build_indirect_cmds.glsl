@@ -22,6 +22,9 @@ uniform int  u_pack_offset;
 uniform uint u_vb_page_verts;
 uniform uint u_ib_page_inds;
 
+uniform vec3 cam_pos;
+uniform float render_distance;
+
 // 6 плоскостей фрустума в world space: ax+by+cz+d >= 0 (внутри)
 uniform vec4 u_frustum_planes[6];
 
@@ -57,6 +60,10 @@ void main() {
 
     vec3 minP = vec3(chunkCoord * u_chunk_dim) * u_voxel_size;
     vec3 center = minP + 0.5 * chunkSize;
+
+    vec3 diff = center - cam_pos;
+    float distance_to_chunk_2 = dot(diff, diff);
+    if (distance_to_chunk_2 > render_distance * render_distance) return;
 
     float radius = length(chunkSize) * 0.5;
 

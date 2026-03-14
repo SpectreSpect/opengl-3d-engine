@@ -55,6 +55,7 @@ public:
     float tomb_fraction_to_rebuild;
     uint32_t eviction_bucket_shell_thickness;
     uint32_t vox_per_chunk;
+    float render_distance;
 
     const uint32_t min_free_pages = 1024;
 
@@ -200,6 +201,7 @@ public:
         uint32_t vb_page_size_order_of_two,
         uint32_t ib_page_size_order_of_two,
         float buddy_allocator_nodes_factor,
+        float render_distance,
         ShaderManager& shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
@@ -304,7 +306,6 @@ public:
 
     VAO vao;
 
-
     void init_programs(ShaderManager& shader_manager);
     void world_init_gpu();
     void init_mesh_pool();
@@ -348,8 +349,8 @@ public:
     void build_mesh_from_dirty(uint32_t pack_bits, int pack_offset); 
 
     void reset_cmd_count();
-    void build_draw_commands(const glm::mat4& view_proj, uint32_t pack_bits, int pack_offset); 
-    void build_indirect_draw_commands_frustum(const glm::mat4& viewProj, uint32_t pack_bits, int pack_offset); 
+    void build_draw_commands(const glm::mat4& view_proj, const glm::vec3& cam_pos, uint32_t pack_bits, int pack_offset); 
+    void build_indirect_draw_commands_frustum(const glm::mat4& viewProj, const glm::vec3& cam_pos, uint32_t pack_bits, int pack_offset); 
 
     void draw_indirect(const GLuint vao, const glm::mat4& world, const glm::mat4& proj_view, const glm::vec3& cam_pos); 
 

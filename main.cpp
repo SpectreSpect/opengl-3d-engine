@@ -15,6 +15,7 @@
 #include <fstream>
 
 #include <functional>
+#include <thread>
 
 #include "engine3d.h"
 
@@ -208,7 +209,7 @@ int main() {
     window.set_camera(&camera);
 
     FPSCameraController camera_controller = FPSCameraController(&camera);
-    camera_controller.speed = 50;
+    camera_controller.speed = 100;
 
     // GlslPreprocessor preprocessor;
     // std::string file_str = preprocessor.load(executable_dir() / "shaders" / "avoxel_grid_packed" / "mesh_alloc.glsl");
@@ -235,16 +236,17 @@ int main() {
     VoxelGridGPU voxel_grid_gpu = VoxelGridGPU(
         glm::ivec3(chunk_size), // chunk_size
         glm::vec3(voxel_size), // voxel_size
-        10'000, // count_active_chunks
-        1'000'000, // max_quads
+        30'000, // count_active_chunks
+        3'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         4096, // count_evict_buckets
-        5'000, // min_free_chunks
+        10'000, // min_free_chunks
         0.2f, // tomb_fraction_to_rebuild
         chunk_size * voxel_size * 1, // eviction_bucket_shell_thickness
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
         1.0, // buddy_allocator_nodes_factor
+        chunk_size * voxel_size * 30,
         shader_manager
     );
 
@@ -266,7 +268,7 @@ int main() {
         glm::mat4 view_matrix = window.camera->get_view_matrix();
         glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
         glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
-        voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+        voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, window.camera->position, math_utils::BITS, math_utils::OFFSET);
     };
 
     std::function<void()> draw_indirect_fn = [&]() {
@@ -337,7 +339,9 @@ int main() {
         
         
         voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
-        // window.draw(&voxel_grid_gpu, &camera);
+
+        
+        window.draw(&voxel_grid_gpu, &camera);
 
         ImGui::Begin("Debug");
 
@@ -366,6 +370,12 @@ int main() {
         if (ImGui::Button("Print chunks hash table log")) {
             voxel_grid_gpu.print_chunks_hash_table_log();
         }
+
+        float render_distance_in_chunks = voxel_grid_gpu.render_distance / (voxel_grid_gpu.voxel_size.x * voxel_grid_gpu.chunk_size.x);
+        if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 30.0f)) {
+            voxel_grid_gpu.render_distance = render_distance_in_chunks * voxel_grid_gpu.voxel_size.x * voxel_grid_gpu.chunk_size.x;
+        }
+
 
         if (ImGui::Button("Print vb free list")) {
             std::vector<VoxelGridGPU::AllocNode> vb_nodes(voxel_grid_gpu.count_vb_nodes_);
@@ -867,7 +877,7 @@ int main() {
             glm::mat4 view_matrix = window.camera->get_view_matrix();
             glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
             glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
-            voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+            voxel_grid_gpu.build_indirect_draw_commands_frustum(view_proj_matrix, window.camera->position, math_utils::BITS, math_utils::OFFSET);
         }
 
         ImGui::Spacing();
@@ -884,7 +894,7 @@ int main() {
             glm::mat4 view_matrix = window.camera->get_view_matrix();
             glm::mat4 proj_matrix = window.camera->get_projection_matrix(aspect);
             glm::mat4 view_proj_matrix = proj_matrix * view_matrix;
-            voxel_grid_gpu.build_draw_commands(view_proj_matrix, math_utils::BITS, math_utils::OFFSET);
+            voxel_grid_gpu.build_draw_commands(view_proj_matrix, window.camera->position, math_utils::BITS, math_utils::OFFSET);
         }
         ImGui::End();
 
