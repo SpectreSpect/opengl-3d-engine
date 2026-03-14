@@ -300,49 +300,37 @@ int main() {
     // ComputeProgram test_hash_table_program = ComputeProgram(&engine.shader_manager->test_hash_table_cs);
     ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
 
-    uint32_t u_hash_table_size = 16;
+    uint32_t u_hash_table_size = 100000;
+    int max_map_points_count = 5000;
+
+
+
     SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
 
-    std::vector<PointInstance> test_point_instances;
-
-    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
-    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
-    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
-    // test_point_instances.push_back({glm::vec4(0, 0, 0, 1), glm::vec4(1, 1, 1, 1)});
-
-    // Point map_points;
-
-    // map_points.set_points(test_point_instances);
-    // map_points.set_points(map_point_ssbo, output_num_points);
+    point_cloud_video.frames[0].point_cloud.sync_gpu();
+    SSBO source_point_ssbo = SSBO(*point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo);
     
-    // point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo;
 
-    SSBO point_ssbo = SSBO(*point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo);
     
-    PointInstance temp_point;
-    temp_point.pos = glm::vec4(1, 2, 3, 4);
-
-    int max_points_count = 1000;
-    SSBO map_point_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_points_count), GL_DYNAMIC_DRAW, temp_point, *engine.shader_manager);
-    // SSBO map_point_ssbo = SSBO(*map_points.instance_vbo);
-    
+    SSBO map_point_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
     SSBO num_point_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
 
     // std::uint32_t num_points = point_cloud_video.frames[0].point_cloud.points.size();
-    std::uint32_t num_points = max_points_count;
-    int x_count = math_utils::div_up_u32(num_points, 256);
+    std::uint32_t num_source_points = point_cloud_video.frames[0].point_cloud.point_renderer.instance_count;
+    int x_count = math_utils::div_up_u32(num_source_points, 256);
     
     hash_table_ssbo.bind_base(0);
     map_point_ssbo.bind_base(1);
     num_point_ssbo.bind_base(2);
+    source_point_ssbo.bind_base(3);
     // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-    add_point_cloud_to_map_program.set_uint("num_threads", num_points);
+    add_point_cloud_to_map_program.set_uint("num_source_points", num_source_points);
 
     add_point_cloud_to_map_program.use();
     add_point_cloud_to_map_program.dispatch_compute(x_count, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-    int read_num = 4;
+    // int read_num = 4;
 
     // HashTableSlot hash_table[u_hash_table_size] = {};
     // hash_table_ssbo.read_subdata(sizeof(std::uint32_t) * 4, hash_table, sizeof(HashTableSlot) * (read_num - 1));
@@ -351,13 +339,13 @@ int main() {
     //     std::cout << "(" << hash_table[i].hash_value.position.x << " " << hash_table[i].hash_value.position.y << " " << hash_table[i].hash_value.position.z << ")" << std::endl;
     // }
 
-    PointInstance points[max_points_count] = {};
-    map_point_ssbo.read_subdata(0u, points, sizeof(PointInstance) * max_points_count);
+    // PointInstance points[max_points_count] = {};
+    // map_point_ssbo.read_subdata(0u, points, sizeof(PointInstance) * max_points_count);
 
-    for (int i = 0; i < read_num; i++) {
-        std::cout << "(" << points[i].pos.x << " " << points[i].pos.y << " " << points[i].pos.z << ")" << std::endl;
-        // std::cout << points[i] << std::endl;
-    }
+    // for (int i = 0; i < read_num; i++) {
+    //     std::cout << "(" << points[i].pos.x << " " << points[i].pos.y << " " << points[i].pos.z << ")" << std::endl;
+    //     // std::cout << points[i] << std::endl;
+    // }
 
     uint32_t output_num_points;
     num_point_ssbo.read_subdata(0u, &output_num_points, sizeof(uint32_t));

@@ -165,8 +165,9 @@ struct HashTableSlot {
 // layout(std430, binding=0) coherent buffer HashTable {uint count_tomb; HashTableSlot hash_table[]; }; 
 layout(std430, binding=0) coherent buffer HashTable {uint count_tomb; HashTableSlot hash_table[]; }; 
 // layout(std430, binding=1) coherent buffer Points {uint num_points; PointInstance points[]; }; 
-layout(std430, binding=1) coherent buffer Points {PointInstance points[]; }; 
-layout(std430, binding=2) coherent buffer NumPoints {uint num_points; }; 
+layout(std430, binding=1) coherent buffer MapPoints {PointInstance map_points[]; }; 
+layout(std430, binding=2) coherent buffer NumPoints {uint num_map_points; }; 
+layout(std430, binding=3) coherent buffer SourcePoints {PointInstance source_points[];}; 
 
 
 
@@ -592,24 +593,24 @@ bool set_chunk(HASH_KEY_TYPE key, HASH_VALUE_TYPE chunk_id) {
 // }
 
 
-uniform uint num_threads;
+uniform uint num_source_points;
 
 
 void main() {
-    uint thread_id = gl_GlobalInvocationID.x;
+    uint source_point_id = gl_GlobalInvocationID.x;
 
 
-    if (thread_id > num_threads) 
+    if (source_point_id > num_source_points) 
         return;
     
-    PointInstance point;
+    // PointInstance point;
     // point.position = vec4(thread_id, 0, 0, 1);
     
 
-    uint point_id = atomicAdd(num_points, 1u);
-    point.position = vec4(point_id, 3, 0, 0);
-    point.color = vec4(5, 5, 5, 5);
-    points[point_id] = point;
+    uint point_id = atomicAdd(num_map_points, 1u);
+    // point.position = vec4(point_id, 3, 0, 0);
+    // point.color = vec4(5, 5, 5, 5);
+    map_points[point_id] = source_points[source_point_id];
 
     // uint slot_id = 0u;
     // bool created = false;

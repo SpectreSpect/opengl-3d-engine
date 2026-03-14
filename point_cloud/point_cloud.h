@@ -65,11 +65,12 @@ public:
     void draw(RenderState state) override;
 
     std::vector<PointInstance> points;
-        
+    
+    void sync_gpu();
 private:
     bool needs_gpu_sync = true;
     
     
 
-    void sync_gpu();
+    
 };
