@@ -2,8 +2,8 @@
 
 Mesh::Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, VertexLayout* vertex_layout) {
     vao = new VAO();
-    vbo = new VBO(vertices.data(), vertices.size() * sizeof(float));
-    ebo = new EBO(indices.data(), indices.size() * sizeof(unsigned int));
+    vbo = new BufferObject(vertices.size() * sizeof(float), GL_STATIC_DRAW, vertices.data());
+    ebo = new BufferObject(indices.size() * sizeof(unsigned int), GL_STATIC_DRAW, indices.data());
     this->vertex_layout = vertex_layout;
 
     vao->setup(*vbo, *ebo, *vertex_layout);
@@ -17,18 +17,18 @@ Mesh::~Mesh() {
 
 void Mesh::update(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, GLenum usage) {
     if (vbo)
-        vbo->update_mapped(vertices.data(), vertices.size() * sizeof(float), usage);
+        vbo->update_subdata(0, vertices.size() * sizeof(float), vertices.data());
     
     if (ebo)
-        ebo->update_mapped(indices.data(), indices.size() * sizeof(unsigned int), usage);
+        ebo->update_subdata(0, indices.size() * sizeof(unsigned int), indices.data());
 }
 
 void Mesh::update(const void* vertex_data, size_t vertex_data_size, const void* index_data, size_t index_data_size, GLenum usage) {
     if (vbo)
-        vbo->update_mapped(vertex_data, vertex_data_size, usage);
+        vbo->update_subdata(0, vertex_data_size, vertex_data);
     
     if (ebo)
-        ebo->update_mapped(index_data, index_data_size, usage);
+        ebo->update_subdata(0, index_data_size, index_data);
 }
 
 void Mesh::draw(RenderState state) {
@@ -46,6 +46,6 @@ void Mesh::draw(RenderState state) {
     }
 
     vao->bind();
-    glDrawElements(GL_TRIANGLES, ebo->num_indices, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, ebo->size_bytes() / sizeof(uint32_t), GL_UNSIGNED_INT, 0);
     vao->unbind();
 }

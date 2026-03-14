@@ -21,8 +21,6 @@ add_executable(app
   engine3d.cpp
   window.cpp
   vao.cpp
-  vbo.cpp
-  ebo.cpp
   vertex_shader.cpp
   fragment_shader.cpp
   program.cpp
@@ -48,7 +46,6 @@ add_executable(app
   compute_shader.cpp
   vf_program.cpp
   compute_program.cpp
-  ssbo.cpp
   voxel_rasterizator_gpu.cpp
   voxel_grid_gpu.cpp
   shader_manager.cpp
@@ -56,6 +53,7 @@ add_executable(app
   buffer_dispatch_arg.cpp
   value_dispatch_arg.cpp
   glsl_preprocessor.cpp
+  buffer_object.cpp
 )
 
 

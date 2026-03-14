@@ -1,5 +1,5 @@
 #pragma once
 
 namespace config {
-    inline constexpr bool allow_lock_ssbo = true;
+    inline constexpr bool allow_lock_BufferObject = true;
 }

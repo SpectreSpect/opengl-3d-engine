@@ -1,36 +1,36 @@
-// ssbo.cpp
-#include "ssbo.h"
+// BufferObject.cpp
+#include "BufferObject.h"
 
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
-SSBO SSBO::prefab_buffer;
-std::mutex SSBO::prefab_buffer_mutex;
+BufferObject BufferObject::prefab_buffer;
+std::mutex BufferObject::prefab_buffer_mutex;
 
 static void require_gl_buffer_storage() {
     // Для persistent нужен OpenGL 4.4 или расширение ARB_buffer_storage
     if (!(GLEW_VERSION_4_4 || GLEW_ARB_buffer_storage)) {
-        throw std::runtime_error("SSBO persistent mapping requires OpenGL 4.4 or GL_ARB_buffer_storage");
+        throw std::runtime_error("BufferObject persistent mapping requires OpenGL 4.4 or GL_ARB_buffer_storage");
     }
 }
 
-SSBO::SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data) {
+BufferObject::BufferObject(std::size_t size_bytes, GLenum usage, const void* initial_data) {
     init_with_initial_data(size_bytes, usage, initial_data);
 }
 
-SSBO::SSBO(std::filesystem::path path_to_ssbo_dump_file) {
-    read_binary_dump(path_to_ssbo_dump_file);
+BufferObject::BufferObject(std::filesystem::path path_to_BufferObject_dump_file) {
+    read_binary_dump(path_to_BufferObject_dump_file);
 }
 
-void SSBO::init_with_initial_data(std::size_t size_bytes, GLenum usage, const void* initial_data) {
+void BufferObject::init_with_initial_data(std::size_t size_bytes, GLenum usage, const void* initial_data) {
     if (size_bytes == 0) {
-        throw std::invalid_argument("SSBO: size_bytes must be > 0");
+        throw std::invalid_argument("BufferObject: size_bytes must be > 0");
     }
 
     glGenBuffers(1, &id_);
     if (id_ == 0) {
-        throw std::runtime_error("SSBO: glGenBuffers failed (no GL context?)");
+        throw std::runtime_error("BufferObject: glGenBuffers failed (no GL context?)");
     }
 
     usage_ = usage;
@@ -45,7 +45,7 @@ void SSBO::init_with_initial_data(std::size_t size_bytes, GLenum usage, const vo
     unbind();
 }
 
-SSBO SSBO::create_persistent(std::size_t size_bytes,
+BufferObject BufferObject::create_persistent(std::size_t size_bytes,
                             GLbitfield storage_flags,
                             GLbitfield map_flags,
                             const void* initial_data)
@@ -53,19 +53,19 @@ SSBO SSBO::create_persistent(std::size_t size_bytes,
     require_gl_buffer_storage();
 
     if (size_bytes == 0) {
-        throw std::invalid_argument("SSBO: size_bytes must be > 0");
+        throw std::invalid_argument("BufferObject: size_bytes must be > 0");
     }
     if ((storage_flags & GL_MAP_PERSISTENT_BIT) == 0 || (map_flags & GL_MAP_PERSISTENT_BIT) == 0) {
-        throw std::invalid_argument("SSBO persistent: GL_MAP_PERSISTENT_BIT must be set in both storage_flags and map_flags");
+        throw std::invalid_argument("BufferObject persistent: GL_MAP_PERSISTENT_BIT must be set in both storage_flags and map_flags");
     }
     if ((map_flags & GL_MAP_WRITE_BIT) == 0) {
-        throw std::invalid_argument("SSBO persistent: map_flags must include GL_MAP_WRITE_BIT (for uploads)");
+        throw std::invalid_argument("BufferObject persistent: map_flags must include GL_MAP_WRITE_BIT (for uploads)");
     }
 
-    SSBO b;
+    BufferObject b;
     glGenBuffers(1, &b.id_);
     if (b.id_ == 0) {
-        throw std::runtime_error("SSBO: glGenBuffers failed (no GL context?)");
+        throw std::runtime_error("BufferObject: glGenBuffers failed (no GL context?)");
     }
 
     b.usage_ = GL_DYNAMIC_DRAW; // usage тут не используется (bufferStorage), но оставим “разумное”
@@ -87,7 +87,7 @@ SSBO SSBO::create_persistent(std::size_t size_bytes,
     if (!ptr) {
         b.unbind();
         b.destroy();
-        throw std::runtime_error("SSBO persistent: glMapBufferRange failed");
+        throw std::runtime_error("BufferObject persistent: glMapBufferRange failed");
     }
 
     b.mapped_ptr_ = ptr;
@@ -96,11 +96,11 @@ SSBO SSBO::create_persistent(std::size_t size_bytes,
     return b;
 }
 
-SSBO::~SSBO() {
+BufferObject::~BufferObject() {
     destroy();
 }
 
-void SSBO::destroy() noexcept {
+void BufferObject::destroy() noexcept {
     if (id_ != 0) {
         // Если буфер маппился — аккуратно размэпим
         // (в persistent режиме это допустимо сделать перед удалением)
@@ -121,11 +121,11 @@ void SSBO::destroy() noexcept {
     map_flags_ = 0;
 }
 
-SSBO::SSBO(SSBO&& other) noexcept {
+BufferObject::BufferObject(BufferObject&& other) noexcept {
     move_from(std::move(other));
 }
 
-SSBO& SSBO::operator=(SSBO&& other) noexcept {
+BufferObject& BufferObject::operator=(BufferObject&& other) noexcept {
     if (this != &other) {
         destroy();
         move_from(std::move(other));
@@ -133,7 +133,7 @@ SSBO& SSBO::operator=(SSBO&& other) noexcept {
     return *this;
 }
 
-void SSBO::move_from(SSBO&& other) noexcept {
+void BufferObject::move_from(BufferObject&& other) noexcept {
     id_ = other.id_;
     size_bytes_ = other.size_bytes_;
     capacity_bytes_ = other.capacity_bytes_;
@@ -150,11 +150,11 @@ void SSBO::move_from(SSBO&& other) noexcept {
     other.map_flags_ = 0;
 }
 
-void SSBO::bind() const noexcept {
+void BufferObject::bind() const noexcept {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, id_);
 }
 
-std::filesystem::path SSBO::make_csv_dump(
+std::filesystem::path BufferObject::make_csv_dump(
     const std::filesystem::path& path,
     const std::map<std::string, DumpType>& structure_field_sizes_bytes,
     size_t offset_bytes,
@@ -165,7 +165,7 @@ std::filesystem::path SSBO::make_csv_dump(
     constexpr size_t UINT_SIZE  = 4;
     constexpr size_t INT_SIZE   = 4;
     constexpr size_t FLOAT_SIZE = 4;
-    constexpr size_t BOOL_SIZE  = 4; // часто в SSBO булевы поля выравниваются на 4 байта
+    constexpr size_t BOOL_SIZE  = 4; // часто в BufferObject булевы поля выравниваются на 4 байта
 
     // ----- Проверки -----
     if (count_structures == 0) {
@@ -206,7 +206,7 @@ std::filesystem::path SSBO::make_csv_dump(
             localtime_r(&tnow, &tm);
 #endif
             std::ostringstream name;
-            name << "ssbo_dump_"
+            name << "BufferObject_dump_"
                  << std::put_time(&tm, "%Y%m%d_%H%M%S")
                  << ".csv";
             out_file /= name.str();
@@ -317,7 +317,7 @@ std::filesystem::path SSBO::make_csv_dump(
     return out_file;
 }
 
-std::filesystem::path SSBO::make_binary_dump(const std::filesystem::path& file_path) {
+std::filesystem::path BufferObject::make_binary_dump(const std::filesystem::path& file_path) {
     std::vector<std::byte> buffer(size_bytes_);
     read_subdata(0, buffer.data(), size_bytes_);
 
@@ -334,7 +334,7 @@ std::filesystem::path SSBO::make_binary_dump(const std::filesystem::path& file_p
     return file_path;
 }
 
-void SSBO::read_binary_dump(const std::filesystem::path& file_path) {
+void BufferObject::read_binary_dump(const std::filesystem::path& file_path) {
     std::ifstream in(file_path, std::ios::binary);
     if (!in)
         throw std::runtime_error("Failed to open file");
@@ -360,15 +360,15 @@ void SSBO::read_binary_dump(const std::filesystem::path& file_path) {
     update_subdata(0, buffer.data(), size_bytes_);
 }
 
-void SSBO::unbind() noexcept {
+void BufferObject::unbind() noexcept {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 
-void SSBO::bind_base(GLuint binding) const noexcept {
+void BufferObject::bind_base(GLuint binding) const noexcept {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, id_);
 }
 
-void SSBO::bind_range(GLuint binding, std::size_t offset_bytes, std::size_t size_bytes) const noexcept {
+void BufferObject::bind_range(GLuint binding, std::size_t offset_bytes, std::size_t size_bytes) const noexcept {
     glBindBufferRange(GL_SHADER_STORAGE_BUFFER,
                       binding,
                       id_,
@@ -376,14 +376,14 @@ void SSBO::bind_range(GLuint binding, std::size_t offset_bytes, std::size_t size
                       static_cast<GLsizeiptr>(size_bytes));
 }
 
-void SSBO::realloc(std::size_t new_capacity_bytes, GLenum usage, const void* data) {
+void BufferObject::realloc(std::size_t new_capacity_bytes, GLenum usage, const void* data) {
     if (new_capacity_bytes == 0) {
-        throw std::invalid_argument("SSBO::realloc: new_capacity_bytes must be > 0");
+        throw std::invalid_argument("BufferObject::realloc: new_capacity_bytes must be > 0");
     }
     if (is_persistent()) {
         // Persistent буфер нельзя просто так realloc-нуть через glBufferData.
-        // (Можно создать новый SSBO и move-assign.)
-        throw std::runtime_error("SSBO::realloc: not supported for persistent-mapped buffers (create a new buffer and move-assign)");
+        // (Можно создать новый BufferObject и move-assign.)
+        throw std::runtime_error("BufferObject::realloc: not supported for persistent-mapped buffers (create a new buffer and move-assign)");
     }
 
     usage_ = usage;
@@ -398,20 +398,20 @@ void SSBO::realloc(std::size_t new_capacity_bytes, GLenum usage, const void* dat
     unbind();
 }
 
-void SSBO::ensure_capacity(std::size_t min_capacity_bytes) {
+void BufferObject::ensure_capacity(std::size_t min_capacity_bytes) {
     if (min_capacity_bytes <= capacity_bytes_) return;
     if (is_persistent()) {
-        throw std::runtime_error("SSBO::ensure_capacity: not supported for persistent-mapped buffers (create a new larger buffer)");
+        throw std::runtime_error("BufferObject::ensure_capacity: not supported for persistent-mapped buffers (create a new larger buffer)");
     }
 
     std::size_t new_cap = std::max(min_capacity_bytes, capacity_bytes_ ? capacity_bytes_ * 2 : min_capacity_bytes);
     realloc(new_cap, usage_, nullptr); // orphan
 }
 
-void SSBO::update_subdata(std::size_t offset_bytes, const void* data, std::size_t data_bytes) {
+void BufferObject::update_subdata(std::size_t offset_bytes, const void* data, std::size_t data_bytes) {
     if (!data || data_bytes == 0) return;
     if (offset_bytes + data_bytes > capacity_bytes_) {
-        throw std::out_of_range("SSBO::update_subdata: write out of buffer capacity");
+        throw std::out_of_range("BufferObject::update_subdata: write out of buffer capacity");
     }
 
     bind();
@@ -424,12 +424,12 @@ void SSBO::update_subdata(std::size_t offset_bytes, const void* data, std::size_
     size_bytes_ = std::max(size_bytes_, offset_bytes + data_bytes);
 }
 
-void SSBO::update_discard(const void* data, std::size_t data_bytes) {
+void BufferObject::update_discard(const void* data, std::size_t data_bytes) {
     if (!data || data_bytes == 0) return;
 
     if (is_persistent()) {
         if (data_bytes > capacity_bytes_) {
-            throw std::runtime_error("SSBO::update_discard: persistent buffer too small (create a new larger buffer and move-assign)");
+            throw std::runtime_error("BufferObject::update_discard: persistent buffer too small (create a new larger buffer and move-assign)");
         }
         std::memcpy(mapped_ptr_, data, data_bytes);
         size_bytes_ = data_bytes;
@@ -464,7 +464,7 @@ void SSBO::update_discard(const void* data, std::size_t data_bytes) {
         GLboolean ok = glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
         unbind();
         if (ok == GL_FALSE) {
-            throw std::runtime_error("SSBO::update_discard: glUnmapBuffer reported GL_FALSE");
+            throw std::runtime_error("BufferObject::update_discard: glUnmapBuffer reported GL_FALSE");
         }
     } else {
         // fallback
@@ -475,7 +475,7 @@ void SSBO::update_discard(const void* data, std::size_t data_bytes) {
     size_bytes_ = data_bytes;
 }
 
-void* SSBO::map_range(std::size_t offset_bytes, std::size_t length_bytes, GLbitfield access_flags) {
+void* BufferObject::map_range(std::size_t offset_bytes, std::size_t length_bytes, GLbitfield access_flags) {
     if (is_persistent()) {
         // В persistent режиме смысла мапить заново нет — уже есть mapped_ptr_
         // (если всё-таки нужно — лучше сделать отдельный метод, но обычно не надо)
@@ -492,14 +492,14 @@ void* SSBO::map_range(std::size_t offset_bytes, std::size_t length_bytes, GLbitf
     return ptr;
 }
 
-bool SSBO::unmap() {
+bool BufferObject::unmap() {
     if (is_persistent()) return true; // persistent не размапливаем “по ходу”
     GLboolean ok = glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
     unbind();
     return ok == GL_TRUE;
 }
 
-void SSBO::flush_range(std::size_t offset_bytes, std::size_t length_bytes) {
+void BufferObject::flush_range(std::size_t offset_bytes, std::size_t length_bytes) {
     if (!is_persistent()) return;
     if ((storage_flags_ & GL_MAP_COHERENT_BIT) != 0) return; // coherent -> flush не нужен
 
@@ -510,10 +510,10 @@ void SSBO::flush_range(std::size_t offset_bytes, std::size_t length_bytes) {
     unbind();
 }
 
-void SSBO::read_subdata(std::size_t offset_bytes, void* out, std::size_t out_bytes) const {
+void BufferObject::read_subdata(std::size_t offset_bytes, void* out, std::size_t out_bytes) const {
     if (!out || out_bytes == 0) return;
     if (offset_bytes + out_bytes > capacity_bytes_) {
-        throw std::out_of_range("SSBO::read_subdata: out of range");
+        throw std::out_of_range("BufferObject::read_subdata: out of range");
     }
     
     bind();
@@ -524,12 +524,12 @@ void SSBO::read_subdata(std::size_t offset_bytes, void* out, std::size_t out_byt
     unbind();
 }
 
-uint32_t SSBO::read_u32(std::size_t offset_bytes) const {
+uint32_t BufferObject::read_u32(std::size_t offset_bytes) const {
     uint32_t v = 0;
     read_subdata(offset_bytes, &v, sizeof(uint32_t));
     return v;
 }
 
-GLuint SSBO::id() const {
+GLuint BufferObject::id() const {
     return id_;
 }

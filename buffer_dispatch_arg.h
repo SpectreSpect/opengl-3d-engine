@@ -3,5 +3,5 @@
 
 class BufferDispatchArg : public DispatchArg {
 public:
-    BufferDispatchArg(const SSBO* arg_buffer, uint32_t offset_bytes, uint32_t workgroup_size = USE_DEFAULT_WORKGROUP_SIZE);
+    BufferDispatchArg(const BufferObject* arg_buffer, uint32_t offset_bytes, uint32_t workgroup_size = USE_DEFAULT_WORKGROUP_SIZE);
 };

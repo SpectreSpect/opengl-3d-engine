@@ -1,6 +1,6 @@
 // main.cpp
 
-#define ALLOW_LOCK_SSBO
+#define ALLOW_LOCK_BufferObject
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -19,8 +19,7 @@
 #include "engine3d.h"
 
 #include "vao.h"
-#include "vbo.h"
-#include "ebo.h"
+#include "buffer_object.h"
 #include "vertex_layout.h"
 #include "program.h"
 #include "camera.h"
@@ -370,13 +369,13 @@ int main() {
 
         if (ImGui::Button("Print vb free list")) {
             std::vector<VoxelGridGPU::AllocNode> vb_nodes(voxel_grid_gpu.count_vb_nodes_);
-            voxel_grid_gpu.vb_nodes_.read_subdata(0, vb_nodes.data(), sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_vb_nodes_);
+            voxel_grid_gpu.vb_nodes_.read_subdata(0, sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_vb_nodes_, vb_nodes.data());
 
             std::vector<uint32_t> vb_heads(voxel_grid_gpu.vb_order_ + 1);
-            voxel_grid_gpu.vb_heads_.read_subdata(0, vb_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.vb_order_ + 1));
+            voxel_grid_gpu.vb_heads_.read_subdata(0, sizeof(uint32_t) * (voxel_grid_gpu.vb_order_ + 1), vb_heads.data());
 
             std::vector<uint32_t> vb_states(voxel_grid_gpu.count_vb_pages_);
-            voxel_grid_gpu.vb_state_.read_subdata(0, vb_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
+            voxel_grid_gpu.vb_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_, vb_states.data());
 
             for (uint32_t i = 0; i < voxel_grid_gpu.vb_order_ + 1; i++) {
                 uint32_t order = i;
@@ -400,13 +399,13 @@ int main() {
 
         if (ImGui::Button("Print ib free list")) {
             std::vector<VoxelGridGPU::AllocNode> ib_nodes(voxel_grid_gpu.count_ib_nodes_);
-            voxel_grid_gpu.ib_nodes_.read_subdata(0, ib_nodes.data(), sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_ib_nodes_);
+            voxel_grid_gpu.ib_nodes_.read_subdata(0, sizeof(VoxelGridGPU::AllocNode) * voxel_grid_gpu.count_ib_nodes_, ib_nodes.data());
 
             std::vector<uint32_t> ib_heads(voxel_grid_gpu.ib_order_ + 1);
-            voxel_grid_gpu.ib_heads_.read_subdata(0, ib_heads.data(), sizeof(uint32_t) * (voxel_grid_gpu.ib_order_ + 1));
+            voxel_grid_gpu.ib_heads_.read_subdata(0, sizeof(uint32_t) * (voxel_grid_gpu.ib_order_ + 1), ib_heads.data());
 
             std::vector<uint32_t> ib_states(voxel_grid_gpu.count_ib_pages_);
-            voxel_grid_gpu.ib_state_.read_subdata(0, ib_states.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
+            voxel_grid_gpu.ib_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_, ib_states.data());
 
             for (uint32_t i = 0; i < voxel_grid_gpu.ib_order_ + 1; i++) {
                 uint32_t order = i;
@@ -470,7 +469,7 @@ int main() {
 
         if (ImGui::Button("Save VB states dump")) {
             std::vector<uint32_t> vb_state(voxel_grid_gpu.count_vb_pages_);
-            voxel_grid_gpu.vb_state_.read_subdata(0, vb_state.data(), sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_);
+            voxel_grid_gpu.vb_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid_gpu.count_vb_pages_, vb_state.data());
 
             std::filesystem::path vb_states_dir = state_dumps_dir / "vb";
             std::filesystem::create_directories(vb_states_dir);
@@ -494,7 +493,7 @@ int main() {
 
         if (ImGui::Button("Save ib states dump")) {
             std::vector<uint32_t> ib_state(voxel_grid_gpu.count_ib_pages_);
-            voxel_grid_gpu.ib_state_.read_subdata(0, ib_state.data(), sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_);
+            voxel_grid_gpu.ib_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid_gpu.count_ib_pages_, ib_state.data());
 
             std::filesystem::path ib_states_dir = state_dumps_dir / "ib";
             std::filesystem::create_directories(ib_states_dir);
@@ -712,10 +711,10 @@ int main() {
             uint32_t dirty_count;
 
             if (vb_button || ib_button) {
-                voxel_grid_gpu.chunk_mesh_alloc_.read_subdata(0, alloc_meta.data(), sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid_gpu.count_active_chunks);
-                voxel_grid_gpu.mesh_buffers_status_.read_subdata(sizeof(uint32_t), &dirty_count, sizeof(uint32_t));
+                voxel_grid_gpu.chunk_mesh_alloc_.read_subdata(0, sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid_gpu.count_active_chunks, alloc_meta.data());
+                voxel_grid_gpu.mesh_buffers_status_.read_subdata(sizeof(uint32_t), sizeof(uint32_t), &dirty_count);
                 dirty_list.resize(dirty_count);
-                voxel_grid_gpu.dirty_list_.read_subdata(0, dirty_list.data(), sizeof(uint32_t) * dirty_count);
+                voxel_grid_gpu.dirty_list_.read_subdata(0, sizeof(uint32_t) * dirty_count, dirty_list.data());
             }
             
             if (vb_button) {

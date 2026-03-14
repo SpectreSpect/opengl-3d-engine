@@ -1,7 +1,6 @@
 #pragma once
 #include "vao.h"
-#include "vbo.h"
-#include "ebo.h"
+#include "buffer_object.h"
 #include "vertex_layout.h"
 #include "program.h"
 #include "drawable.h"
@@ -11,8 +10,8 @@
 class Mesh : public Drawable, public Transformable {
 public:
     VAO* vao;
-    VBO* vbo;
-    EBO* ebo;
+    BufferObject* vbo;
+    BufferObject* ebo;
     VertexLayout* vertex_layout;
     
     

@@ -16,15 +16,15 @@ VoxelRasterizatorGPU::VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& sh
     prog_roi_finalize_ = ComputeProgram(&shader_manager.roi_finalize_cs);
     prog_build_active_chunks_ = ComputeProgram(&shader_manager.build_active_chunks_cs);
 
-    total_pairs_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
-    active_chunks_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
+    total_pairs_BufferObject_ = BufferObject(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
+    active_chunks_BufferObject_ = BufferObject(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
     active_cap_bytes_ = sizeof(uint32_t);
 
-    active_count_ssbo_ = SSBO(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
+    active_count_BufferObject_ = BufferObject(sizeof(uint32_t), GL_DYNAMIC_DRAW, nullptr);
     active_count_cap_bytes_ = sizeof(uint32_t);
 
     roi_out_cap_bytes_ = sizeof(int) * 4 + sizeof(uint32_t) * 4;
-    roi_out_ssbo_ = SSBO(roi_out_cap_bytes_, GL_DYNAMIC_DRAW, nullptr);
+    roi_out_BufferObject_ = BufferObject(roi_out_cap_bytes_, GL_DYNAMIC_DRAW, nullptr);
 }
 
 VoxelRasterizatorGPU::~VoxelRasterizatorGPU() {
@@ -44,7 +44,7 @@ void VoxelRasterizatorGPU::ensure_roi_reduce_level(uint32_t level, uint32_t numP
     }
     
     if (need > roi_reduce_caps_[level]) {
-        roi_reduce_levels_[level] = SSBO(need, GL_DYNAMIC_DRAW, nullptr);
+        roi_reduce_levels_[level] = BufferObject(need, GL_DYNAMIC_DRAW, nullptr);
         roi_reduce_caps_[level] = need;
     }
 }
@@ -52,7 +52,7 @@ void VoxelRasterizatorGPU::ensure_roi_reduce_level(uint32_t level, uint32_t numP
 void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int chunk_size, int pad_voxels) {
     glm::mat4 transform = mesh.get_model_matrix();
 
-    uint32_t indexCount = uint32_t(mesh.ebo->size_bytes / sizeof(uint32_t));
+    uint32_t indexCount = uint32_t(mesh.ebo->size_bytes() / sizeof(uint32_t));
     if (indexCount == 0) { set_roi({0,0,0}, {0,0,0}); return; }
 
     const uint32_t strideF = mesh.vertex_layout->attributes[0].stride / sizeof(float);
@@ -63,9 +63,9 @@ void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int
     uint32_t numPairs = math_utils::div_up_u32(indexCount, 256u);
     ensure_roi_reduce_level(0, numPairs);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.vbo->id);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mesh.ebo->id);
-    roi_reduce_levels_[0].bind_base(2);
+    mesh.vbo->bind_base_as_ssbo(0);
+    mesh.ebo->bind_base_as_ssbo(1);
+    roi_reduce_levels_[0].bind_base_as_ssbo(2);
 
     prog_roi_reduce_indices_.use();
     glUniformMatrix4fv(glGetUniformLocation(prog_roi_reduce_indices_.id, "uTransform"), 1, GL_FALSE, &transform[0][0]);
@@ -83,8 +83,8 @@ void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int
         uint32_t nextPairs = math_utils::div_up_u32(numPairs, 256u);
         ensure_roi_reduce_level(level + 1, nextPairs);
 
-        roi_reduce_levels_[level].bind_base(0);
-        roi_reduce_levels_[level + 1].bind_base(1);
+        roi_reduce_levels_[level].bind_base_as_ssbo(0);
+        roi_reduce_levels_[level + 1].bind_base_as_ssbo(1);
 
         prog_roi_reduce_pairs_.use();
         glUniform1ui(glGetUniformLocation(prog_roi_reduce_pairs_.id, "uPairCount"), numPairs);
@@ -96,8 +96,8 @@ void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int
     }
 
     // finalize
-    roi_reduce_levels_[level].bind_base(0);
-    roi_out_ssbo_.bind_base(1);
+    roi_reduce_levels_[level].bind_base_as_ssbo(0);
+    roi_out_BufferObject_.bind_base_as_ssbo(1);
 
     prog_roi_finalize_.use();
     glUniform1i(glGetUniformLocation(prog_roi_finalize_.id, "uChunkSize"), chunk_size);
@@ -108,7 +108,7 @@ void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int
 
     // readback 32 байта
     struct RoiGPU { glm::ivec4 origin; glm::uvec4 dim; } roi{};
-    roi_out_ssbo_.read_subdata(0, &roi, sizeof(RoiGPU));
+    roi_out_BufferObject_.read_subdata(0, sizeof(RoiGPU), &roi);
     set_roi(glm::ivec3(roi.origin), glm::uvec3(roi.dim));
 }
 
@@ -123,21 +123,21 @@ void VoxelRasterizatorGPU::ensure_roi_buffers(size_t vertex_count, size_t tri_co
     // counters uint[chunk_count] GPU->CPU
     size_t need_counters = (size_t)chunk_count * sizeof(uint32_t);
     if (need_counters > counters_cap_bytes_) {
-        counters_ssbo_ = SSBO(need_counters, readUsage, nullptr);
+        counters_BufferObject_ = BufferObject(need_counters, readUsage, nullptr);
         counters_cap_bytes_ = need_counters;
     }
 
     // offsets uint[chunk_count+1]
     size_t need_offsets = ((size_t)chunk_count + 1) * sizeof(uint32_t);
     if (need_offsets > offsets_cap_bytes_) {
-        offsets_ssbo_ = SSBO(need_offsets, GL_DYNAMIC_DRAW, nullptr);
+        offsets_BufferObject_ = BufferObject(need_offsets, GL_DYNAMIC_DRAW, nullptr);
         offsets_cap_bytes_ = need_offsets;
     }
 
     // cursor uint[chunk_count] GPU->CPU (только дебаг)
     size_t need_cursor = (size_t)chunk_count * sizeof(uint32_t);
     if (need_cursor > cursor_cap_bytes_) {
-        cursor_ssbo_ = SSBO(need_cursor, readUsage, nullptr);
+        cursor_BufferObject_ = BufferObject(need_cursor, readUsage, nullptr);
         cursor_cap_bytes_ = need_cursor;
     }
 }
@@ -152,7 +152,7 @@ void VoxelRasterizatorGPU::ensure_active_chunk_buffers(uint32_t chunk_voxel_coun
     // triangleIndices uint[pair_capacity]
     size_t need_pairs = (size_t)pair_capacity * sizeof(uint32_t);
     if (need_pairs > tri_indices_cap_bytes_) {
-        tri_indices_ssbo_ = SSBO(need_pairs, GL_DYNAMIC_DRAW, nullptr);
+        tri_indices_BufferObject_ = BufferObject(need_pairs, GL_DYNAMIC_DRAW, nullptr);
         tri_indices_cap_bytes_ = need_pairs;
     }
 
@@ -160,13 +160,13 @@ void VoxelRasterizatorGPU::ensure_active_chunk_buffers(uint32_t chunk_voxel_coun
     const uint64_t total_vox = uint64_t(activeCount) * uint64_t(chunk_voxel_count);
     size_t need_vox = size_t(total_vox * sizeof(uint32_t));
     if (need_vox > vox_cap_bytes_) {
-        voxels_ssbo_ = SSBO(need_vox, readUsage, nullptr);
+        voxels_BufferObject_ = BufferObject(need_vox, readUsage, nullptr);
         vox_cap_bytes_ = need_vox;
     }
 
     size_t need_active = std::max<size_t>(1, activeCount) * sizeof(uint32_t);
     if (need_active > active_cap_bytes_) {
-        active_chunks_ssbo_ = SSBO(need_active, GL_DYNAMIC_DRAW, nullptr);
+        active_chunks_BufferObject_ = BufferObject(need_active, GL_DYNAMIC_DRAW, nullptr);
         active_cap_bytes_ = need_active;
     }
 }
@@ -179,22 +179,22 @@ void VoxelRasterizatorGPU::ensure_scan_level(uint32_t level, uint32_t numBlocks)
     }
     size_t need = (size_t)numBlocks * sizeof(uint32_t);
     if (need > scan_caps_[level]) {
-        scan_sums_[level] = std::make_unique<SSBO>(need, GL_DYNAMIC_DRAW, nullptr);
-        scan_prefix_[level] = std::make_unique<SSBO>(need, GL_DYNAMIC_DRAW, nullptr);
+        scan_sums_[level] = std::make_unique<BufferObject>(need, GL_DYNAMIC_DRAW, nullptr);
+        scan_prefix_[level] = std::make_unique<BufferObject>(need, GL_DYNAMIC_DRAW, nullptr);
         scan_caps_[level] = need;
     }
 }
 
-void VoxelRasterizatorGPU::gpu_exclusive_scan_u32_impl(SSBO& in_u32, SSBO& out_u32, uint32_t n, uint32_t level) {
+void VoxelRasterizatorGPU::gpu_exclusive_scan_u32_impl(BufferObject& in_u32, BufferObject& out_u32, uint32_t n, uint32_t level) {
     if (n == 0) return;
 
     uint32_t numBlocks = math_utils::div_up_u32(n, 256u);
     ensure_scan_level(level, numBlocks);
 
     // 1) scan blocks: out = exclusive scan(in), sums = per-block sum
-    in_u32.bind_base(0);
-    out_u32.bind_base(1);
-    scan_sums_[level]->bind_base(2);
+    in_u32.bind_base_as_ssbo(0);
+    out_u32.bind_base_as_ssbo(1);
+    scan_sums_[level]->bind_base_as_ssbo(2);
 
     prog_scan_blocks_.use();
     glUniform1ui(glGetUniformLocation(prog_scan_blocks_.id, "uN"), n);
@@ -207,8 +207,8 @@ void VoxelRasterizatorGPU::gpu_exclusive_scan_u32_impl(SSBO& in_u32, SSBO& out_u
     gpu_exclusive_scan_u32_impl(*scan_sums_[level], *scan_prefix_[level], numBlocks, level + 1);
 
     // 3) add prefix[block] to out
-    out_u32.bind_base(0);
-    scan_prefix_[level]->bind_base(1);
+    out_u32.bind_base_as_ssbo(0);
+    scan_prefix_[level]->bind_base_as_ssbo(1);
 
     prog_add_block_offsets_.use();
     glUniform1ui(glGetUniformLocation(prog_add_block_offsets_.id, "uN"), n);
@@ -216,7 +216,7 @@ void VoxelRasterizatorGPU::gpu_exclusive_scan_u32_impl(SSBO& in_u32, SSBO& out_u
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelRasterizatorGPU::gpu_exclusive_scan_u32(SSBO& in_u32, SSBO& out_u32, uint32_t n) {
+void VoxelRasterizatorGPU::gpu_exclusive_scan_u32(BufferObject& in_u32, BufferObject& out_u32, uint32_t n) {
     gpu_exclusive_scan_u32_impl(in_u32, out_u32, n, 0);
 }
 
@@ -229,10 +229,9 @@ glm::ivec3 VoxelRasterizatorGPU::idx_to_chunk(uint32_t idx) {
 
 void VoxelRasterizatorGPU::clear_counters() {
     uint32_t zero = 0;
-    counters_ssbo_.bind();
+    counters_BufferObject_.bind_as_ssbo();
     glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
     glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-    SSBO::unbind();
 }
 
 void VoxelRasterizatorGPU::count_triangles_in_chunks(
@@ -247,9 +246,9 @@ void VoxelRasterizatorGPU::count_triangles_in_chunks(
     const int pos_attr_id = mesh.vertex_layout->find_attribute_id_by_name("position");
     const uint32_t pos_offset_f = mesh.vertex_layout->attributes[pos_attr_id].offset / sizeof(float);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.vbo->id);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mesh.ebo->id);
-    counters_ssbo_.bind_base(2);
+    mesh.vbo->bind_base_as_ssbo(0);
+    mesh.ebo->bind_base_as_ssbo(1);
+    counters_BufferObject_.bind_base_as_ssbo(2);
 
     prog_count_.use();
     glUniformMatrix4fv(glGetUniformLocation(prog_count_.id, "uTransform"), 1, GL_FALSE, &transform[0][0]);
@@ -281,10 +280,10 @@ void VoxelRasterizatorGPU::fill_triangle_indices(
     const int pos_attr_id = mesh.vertex_layout->find_attribute_id_by_name("position");
     const uint32_t pos_offset_f = mesh.vertex_layout->attributes[pos_attr_id].offset / sizeof(float);
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.vbo->id);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mesh.ebo->id);
-    cursor_ssbo_.bind_base(2);
-    tri_indices_ssbo_.bind_base(3);
+    mesh.vbo->bind_base_as_ssbo(0);
+    mesh.ebo->bind_base_as_ssbo(1);
+    cursor_BufferObject_.bind_base_as_ssbo(2);
+    tri_indices_BufferObject_.bind_base_as_ssbo(3);
 
     prog_fill_.use();
     glUniformMatrix4fv(glGetUniformLocation(prog_fill_.id, "uTransform"), 1, GL_FALSE, &transform[0][0]);
@@ -314,7 +313,7 @@ void VoxelRasterizatorGPU::clear_active_voxels(int chunk_size, uint32_t active_c
     uint32_t groupsY = active_count;
     uint32_t groupsZ = 1;
 
-    voxels_ssbo_.bind_base(0);
+    voxels_BufferObject_.bind_base_as_ssbo(0);
 
     prog_clear_.use();
     glUniform1ui(glGetUniformLocation(prog_clear_.id, "uChunkVoxelCount"), chunkVoxelCount);
@@ -344,12 +343,12 @@ void VoxelRasterizatorGPU::voxelize_chunks(
     uint32_t groupsY = active_count;
     uint32_t groupsZ = 1;
 
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.vbo->id);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mesh.ebo->id);
-    offsets_ssbo_.bind_base(2);
-    tri_indices_ssbo_.bind_base(3);
-    voxels_ssbo_.bind_base(4);
-    active_chunks_ssbo_.bind_base(5);
+    mesh.vbo->bind_base_as_ssbo(0);
+    mesh.ebo->bind_base_as_ssbo(1);
+    offsets_BufferObject_.bind_base_as_ssbo(2);
+    tri_indices_BufferObject_.bind_base_as_ssbo(3);
+    voxels_BufferObject_.bind_base_as_ssbo(4);
+    active_chunks_BufferObject_.bind_base_as_ssbo(5);
     
     prog_voxelize_.use();
     glUniformMatrix4fv(glGetUniformLocation(prog_voxelize_.id, "uTransform"), 1, GL_FALSE, &transform[0][0]);
@@ -371,26 +370,26 @@ void VoxelRasterizatorGPU::voxelize_chunks(
 void VoxelRasterizatorGPU::ensure_active_index_capacity(uint32_t chunk_count) {
     size_t need = std::max<uint32_t>(1u, chunk_count) * sizeof(uint32_t);
     if (need > active_cap_bytes_) {
-        active_chunks_ssbo_ = SSBO(need, GL_DYNAMIC_DRAW, nullptr);
+        active_chunks_BufferObject_ = BufferObject(need, GL_DYNAMIC_DRAW, nullptr);
         active_cap_bytes_ = need;
     }
 }
 
 void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_count) {
     // 1) offsets[0..n-1] = exclusive_scan(counters)
-    gpu_exclusive_scan_u32(counters_ssbo_, offsets_ssbo_, chunk_count);
+    gpu_exclusive_scan_u32(counters_BufferObject_, offsets_BufferObject_, chunk_count);
 
     uint32_t o0=0, o1=0, o255=0, o256=0, olast=0;
-    offsets_ssbo_.read_subdata(0 * 4, &o0, 4);
-    offsets_ssbo_.read_subdata(1 * 4, &o1, 4);
-    offsets_ssbo_.read_subdata(255 * 4, &o255, 4);
-    offsets_ssbo_.read_subdata(256 * 4, &o256, 4);
-    offsets_ssbo_.read_subdata((chunk_count_-1) * 4, &olast, 4);
+    offsets_BufferObject_.read_subdata(0 * 4, 4, &o0);
+    offsets_BufferObject_.read_subdata(1 * 4, 4, &o1);
+    offsets_BufferObject_.read_subdata(255 * 4, 4, &o255);
+    offsets_BufferObject_.read_subdata(256 * 4, 4, &o256);
+    offsets_BufferObject_.read_subdata((chunk_count_-1) * 4, 4, &olast);
 
     // 2) offsets[n] + totalPairs[0]
-    counters_ssbo_.bind_base(0);
-    offsets_ssbo_.bind_base(1);
-    total_pairs_ssbo_.bind_base(2);
+    counters_BufferObject_.bind_base_as_ssbo(0);
+    offsets_BufferObject_.bind_base_as_ssbo(1);
+    total_pairs_BufferObject_.bind_base_as_ssbo(2);
 
     prog_fix_last_.use();
     glUniform1ui(glGetUniformLocation(prog_fix_last_.id, "uN"), chunk_count);
@@ -398,8 +397,8 @@ void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_cou
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // 3) cursor = offsets[0..n-1]
-    offsets_ssbo_.bind_base(0);
-    cursor_ssbo_.bind_base(1);
+    offsets_BufferObject_.bind_base_as_ssbo(0);
+    cursor_BufferObject_.bind_base_as_ssbo(1);
 
     prog_copy_offsets_to_cursor_.use();
     glUniform1ui(glGetUniformLocation(prog_copy_offsets_to_cursor_.id, "uN"), chunk_count);
@@ -411,18 +410,17 @@ void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_cou
     // 4) activeCount = 0
     {
         uint32_t zero = 0;
-        active_count_ssbo_.bind();
+        active_count_BufferObject_.bind_as_ssbo();
         glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
-        SSBO::unbind();
     }
 
     // 5) activeChunks capacity >= chunk_count
     ensure_active_index_capacity(chunk_count);
 
     // 6) build activeChunks + activeCount
-    counters_ssbo_.bind_base(0);
-    active_chunks_ssbo_.bind_base(1);
-    active_count_ssbo_.bind_base(2);
+    counters_BufferObject_.bind_base_as_ssbo(0);
+    active_chunks_BufferObject_.bind_base_as_ssbo(1);
+    active_count_BufferObject_.bind_base_as_ssbo(2);
 
     prog_build_active_chunks_.use();
     glUniform1ui(glGetUniformLocation(prog_build_active_chunks_.id, "uN"), chunk_count);
@@ -457,8 +455,8 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
 
     const size_t stride_f = mesh.vertex_layout->attributes[0].stride / sizeof(float);
 
-    const size_t vertex_count = mesh.vbo->size_bytes / (sizeof(float) * stride_f);
-    const uint32_t tri_count  = mesh.ebo->size_bytes / (sizeof(uint32_t) * 3);
+    const size_t vertex_count = mesh.vbo->size_bytes() / (sizeof(float) * stride_f);
+    const uint32_t tri_count  = mesh.ebo->size_bytes() / (sizeof(uint32_t) * 3);
     if (vertex_count == 0 || tri_count == 0) {
         last_total_pairs_ = 0;
         return;
@@ -499,10 +497,10 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
     #endif
 
     uint32_t totalPairs = 0;
-    total_pairs_ssbo_.read_subdata(0, &totalPairs, sizeof(uint32_t));
+    total_pairs_BufferObject_.read_subdata(0, sizeof(uint32_t), &totalPairs);
 
     uint32_t activeCount = 0;
-    active_count_ssbo_.read_subdata(0, &activeCount, sizeof(uint32_t));
+    active_count_BufferObject_.read_subdata(0, sizeof(uint32_t), &activeCount);
 
     last_total_pairs_ = totalPairs;
 
@@ -526,8 +524,8 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
     #endif
 
     // На этом этапе на GPU готов CSR:
-    // offsets_ssbo_ (uint[chunkCount+1])
-    // tri_indices_ssbo_ (uint[totalPairs])
+    // offsets_BufferObject_ (uint[chunkCount+1])
+    // tri_indices_BufferObject_ (uint[totalPairs])
     //
     // Дальше Pass 4: "один workgroup на чанк" и растеризация по списку треугольников.
     clear_active_voxels(chunk_size, activeCount);
@@ -540,10 +538,10 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
 
     // Pass 5: Считывание данных
     std::vector<uint32_t> active(activeCount);
-    active_chunks_ssbo_.read_subdata(0, active.data(), activeCount * sizeof(uint32_t));
+    active_chunks_BufferObject_.read_subdata(0, activeCount * sizeof(uint32_t), active.data());
 
     std::vector<uint32_t> vox(activeCount * chunk_voxel_count);
-    voxels_ssbo_.read_subdata(0, vox.data(), vox.size() * sizeof(uint32_t));
+    voxels_BufferObject_.read_subdata(0, vox.size() * sizeof(uint32_t), vox.data());
 
     std::vector<glm::ivec3> voxel_positions;
     voxel_positions.reserve(activeCount * chunk_voxel_count);

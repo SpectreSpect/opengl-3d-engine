@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "ssbo.h"
+#include "buffer_object.h"
 #include "shader_manager.h"
 #include "compute_program.h"
 #include "vf_program.h"
@@ -21,8 +21,6 @@
 #include "transformable.h"
 #include "drawable.h"
 #include "vao.h"
-#include "vbo.h"
-#include "ebo.h"
 #include "path_utils.h"
 #include "buffer_dispatch_arg.h"
 #include "value_dispatch_arg.h"
@@ -212,7 +210,7 @@ public:
                                                     const glm::vec3& cam_pos);
     void reset_load_list_counter();
     void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
-    void generate_terrain(const SSBO& dispatch_args, uint32_t seed);
+    void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
     void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
     
     virtual void draw(RenderState state) override;
@@ -253,44 +251,44 @@ public:
     ComputeProgram prog_hash_table_conditional_dispatch_adapter_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
-    SSBO dispatch_args;
-    SSBO dispatch_args_additional;
-    SSBO voxels_;
-    SSBO chunk_meta_;
-    SSBO chunk_hash_keys_;
-    SSBO chunk_hash_vals_;
-    SSBO free_list_;
-    SSBO mesh_buffers_status_;
-    SSBO voxel_write_list_;
-    SSBO enqueued_;
-    SSBO dirty_list_;
-    SSBO global_vertex_buffer_;
-    SSBO global_index_buffer_;
-    SSBO voxel_prifab_;
-    SSBO dirty_quad_count_;
-    SSBO emit_counters_;
-    SSBO indirect_cmds_;
-    SSBO bucket_heads_;
-    SSBO bucket_next_;
-    SSBO load_list_;
-    SSBO failed_dirty_list_;
-    SSBO verify_debug_stack_;
-    SSBO evicted_chunks_list_;
+    BufferObject dispatch_args;
+    BufferObject dispatch_args_additional;
+    BufferObject voxels_;
+    BufferObject chunk_meta_;
+    BufferObject chunk_hash_keys_;
+    BufferObject chunk_hash_vals_;
+    BufferObject free_list_;
+    BufferObject mesh_buffers_status_;
+    BufferObject voxel_write_list_;
+    BufferObject enqueued_;
+    BufferObject dirty_list_;
+    BufferObject global_vertex_buffer_;
+    BufferObject global_index_buffer_;
+    BufferObject voxel_prifab_;
+    BufferObject dirty_quad_count_;
+    BufferObject emit_counters_;
+    BufferObject indirect_cmds_;
+    BufferObject bucket_heads_;
+    BufferObject bucket_next_;
+    BufferObject load_list_;
+    BufferObject failed_dirty_list_;
+    BufferObject verify_debug_stack_;
+    BufferObject evicted_chunks_list_;
 
-    SSBO vb_heads_;
-    SSBO vb_state_;
-    SSBO vb_nodes_;
-    SSBO vb_free_nodes_list_;
-    SSBO vb_returned_nodes_list;
+    BufferObject vb_heads_;
+    BufferObject vb_state_;
+    BufferObject vb_nodes_;
+    BufferObject vb_free_nodes_list_;
+    BufferObject vb_returned_nodes_list;
 
-    SSBO ib_heads_;
-    SSBO ib_state_;
-    SSBO ib_nodes_;
-    SSBO ib_free_nodes_list_;
-    SSBO ib_returned_nodes_list;
+    BufferObject ib_heads_;
+    BufferObject ib_state_;
+    BufferObject ib_nodes_;
+    BufferObject ib_free_nodes_list_;
+    BufferObject ib_returned_nodes_list;
 
-    SSBO chunk_mesh_alloc_local_;
-    SSBO chunk_mesh_alloc_;
+    BufferObject chunk_mesh_alloc_local_;
+    BufferObject chunk_mesh_alloc_;
 
     uint32_t vb_page_size_ = 0;
     uint32_t count_vb_pages_ = 0;
@@ -304,8 +302,6 @@ public:
     uint32_t ib_order_ = 0;
     uint32_t max_mesh_indices_ = 0;
 
-    VBO vbo;
-    EBO ebo;
     VAO vao;
 
 
@@ -315,13 +311,13 @@ public:
 
     void print_chunks_hash_table_log(); 
 
-    void clear_chunk_hash_table(const SSBO& dispatch_args); 
-    void fill_chunk_hash_table(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
-    void conditional_prepare_rebuild(SSBO& clear_dispatch_args, SSBO& fill_dispatch_args);
+    void clear_chunk_hash_table(const BufferObject& dispatch_args); 
+    void fill_chunk_hash_table(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
+    void conditional_prepare_rebuild(BufferObject& clear_dispatch_args, BufferObject& fill_dispatch_args);
     void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); 
 
     void prepare_dispatch_args(
-        SSBO& dispatch_args,
+        BufferObject& dispatch_args,
         const DispatchArg& arg_x = ValueDispatchArg(1u),
         const DispatchArg& arg_y = ValueDispatchArg(1u),
         const DispatchArg& arg_z = ValueDispatchArg(1u)
@@ -331,23 +327,23 @@ public:
 
     void reset_heads(); 
     void build_bucket_lists(const glm::vec3& cam_pos); 
-    void prepare_evict_lowpriority_chunks(const SSBO& dispatch_args); 
-    void evict_lowpriority_chunks(const SSBO& dispatch_args); 
-    void free_evicted_chunks_mesh(const SSBO& dispatch_args); 
+    void prepare_evict_lowpriority_chunks(const BufferObject& dispatch_args); 
+    void evict_lowpriority_chunks(const BufferObject& dispatch_args); 
+    void free_evicted_chunks_mesh(const BufferObject& dispatch_args); 
     void reset_evicted_list_and_buckets();
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); 
     void ensure_voxel_write_list(size_t count); 
 
-    void mesh_reset(const SSBO& dispatch_args); 
-    void mesh_count(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
-    void mesh_alloc_vb(const SSBO& dispatch_args); 
-    void mesh_alloc_ib(const SSBO& dispatch_args); 
-    void mesh_alloc(const SSBO& dispatch_args); 
-    void verify_mesh_allocation(const SSBO& dispatch_args); 
-    void prepare_return_free_alloc_nodes(SSBO& dispatch_args); 
-    void return_free_alloc_nodes(const SSBO& dispatch_args); 
-    void mesh_emit(const SSBO& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
-    void mesh_finalize(const SSBO& dispatch_args); 
+    void mesh_reset(const BufferObject& dispatch_args); 
+    void mesh_count(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
+    void mesh_alloc_vb(const BufferObject& dispatch_args); 
+    void mesh_alloc_ib(const BufferObject& dispatch_args); 
+    void mesh_alloc(const BufferObject& dispatch_args); 
+    void verify_mesh_allocation(const BufferObject& dispatch_args); 
+    void prepare_return_free_alloc_nodes(BufferObject& dispatch_args); 
+    void return_free_alloc_nodes(const BufferObject& dispatch_args); 
+    void mesh_emit(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
+    void mesh_finalize(const BufferObject& dispatch_args); 
     void reset_dirty_count(); 
     void build_mesh_from_dirty(uint32_t pack_bits, int pack_offset); 
 
@@ -371,7 +367,7 @@ public:
     void save_verify_mesh_buffers_dumps(std::filesystem::path dir); 
     void load_verify_mesh_buffers_dumps(std::filesystem::path dir); 
     
-    std::set<uint32_t> find_limbo_pages(SSBO& heads_buffer, SSBO& states_buffer, SSBO& next_buffer, uint32_t max_order_in_heads_buffer, uint32_t count_pages_in_states_buffer); 
+    std::set<uint32_t> find_limbo_pages(BufferObject& heads_buffer, BufferObject& states_buffer, BufferObject& next_buffer, uint32_t max_order_in_heads_buffer, uint32_t count_pages_in_states_buffer); 
     void print_verify_debug_stack(uint32_t offset, int count_elements_to_print = -1);
     void print_dirty_list();
     void print_dirty_list_emit_counters();

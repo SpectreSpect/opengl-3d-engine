@@ -1,4 +1,4 @@
-// ssbo.h
+// BufferObject.h
 #pragma once
 
 #include <GL/glew.h>
@@ -15,9 +15,9 @@
 #include "shader_manager.h"
 #include "config.h"
 
-class SSBO {
+class BufferObject {
 public:
-    static SSBO prefab_buffer;
+    static BufferObject prefab_buffer;
     static std::mutex prefab_buffer_mutex;
 
     enum DumpType {
@@ -27,61 +27,61 @@ public:
         BOOL = 3
     };
 
-    SSBO() noexcept = default;
+    BufferObject() noexcept = default;
 
     // Обычное выделение через glBufferData
-    SSBO(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
-    SSBO(std::filesystem::path path_to_ssbo_dump_file);
+    BufferObject(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
+    BufferObject(std::filesystem::path path_to_BufferObject_dump_file);
 
     template<class T>
-    static inline SSBO from_fill(
+    static inline BufferObject from_fill(
         std::size_t size_bytes, 
         GLenum usage, 
         T fill_value, 
         ComputeProgram& clear_buffer_prog, 
-        SSBO& prefab_buffer = SSBO::prefab_buffer,
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
         uint32_t invocation_stride = 4u) 
     {
         if (size_bytes == sizeof(T)) {
             // Короткий путь
-            return SSBO(size_bytes, usage, &fill_value);
+            return BufferObject(size_bytes, usage, &fill_value);
         }
 
-        SSBO ssbo(size_bytes, usage);
-        ssbo.update_subdata_fill(0, fill_value, size_bytes, clear_buffer_prog, prefab_buffer, invocation_stride);
+        BufferObject BufferObject(size_bytes, usage);
+        BufferObject.update_subdata_fill(0, fill_value, size_bytes, clear_buffer_prog, prefab_buffer, invocation_stride);
 
-        return ssbo;
+        return BufferObject;
     }
 
     template<class T>
-    static inline SSBO from_fill(
+    static inline BufferObject from_fill(
         std::size_t size_bytes, 
         GLenum usage, 
         T fill_value, 
         ShaderManager& shader_manager, 
-        SSBO& prefab_buffer = SSBO::prefab_buffer,
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
         uint32_t invocation_stride = 4u)
     {
-        return SSBO::from_fill(size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
+        return BufferObject::from_fill(size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
     }
 
     void init_with_initial_data(std::size_t size_bytes, GLenum usage, const void* initial_data = nullptr);
 
-    // Создание SSBO с persistent mapping (OpenGL 4.4 / GL_ARB_buffer_storage)
+    // Создание BufferObject с persistent mapping (OpenGL 4.4 / GL_ARB_buffer_storage)
     // storage_flags обычно: GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | (опц.) GL_MAP_COHERENT_BIT
     // map_flags должны быть совместимы и включать GL_MAP_PERSISTENT_BIT.
-    static SSBO create_persistent(std::size_t size_bytes,
+    static BufferObject create_persistent(std::size_t size_bytes,
                                  GLbitfield storage_flags,
                                  GLbitfield map_flags,
                                  const void* initial_data = nullptr);
 
-    ~SSBO();
+    ~BufferObject();
 
-    SSBO(const SSBO&) = delete;
-    SSBO& operator=(const SSBO&) = delete;
+    BufferObject(const BufferObject&) = delete;
+    BufferObject& operator=(const BufferObject&) = delete;
 
-    SSBO(SSBO&& other) noexcept;
-    SSBO& operator=(SSBO&& other) noexcept;
+    BufferObject(BufferObject&& other) noexcept;
+    BufferObject& operator=(BufferObject&& other) noexcept;
 
     // --- basic info ---
     GLuint handle() const noexcept { return id_; }
@@ -118,7 +118,7 @@ public:
         T fill_value, 
         uint32_t size_bytes, 
         ComputeProgram& clear_buffer_prog, 
-        SSBO& prefab_buffer = SSBO::prefab_buffer,
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
         uint32_t invocation_stride = 4u) 
     {
         if (size_bytes == 0u) return;
@@ -190,10 +190,10 @@ public:
         if (&prefab_buffer == &this->prefab_buffer) {
             lock.lock(); // Чтобы не возникало проблем в случае многопоточности
 
-            if constexpr (!config::allow_lock_ssbo) {
-                std::cout << "SSBO is blocking threads! Pass your SSBO prefab_buffer to "
-                            "SSBO::update_subdata_fill() or SSBO::from_fill() to avoid blocking. "
-                            "If you want to suppress this message, set config::allow_lock_ssbo = true."
+            if constexpr (!config::allow_lock_BufferObject) {
+                std::cout << "BufferObject is blocking threads! Pass your BufferObject prefab_buffer to "
+                            "BufferObject::update_subdata_fill() or BufferObject::from_fill() to avoid blocking. "
+                            "If you want to suppress this message, set config::allow_lock_BufferObject = true."
                         << std::endl;
             }
         }
@@ -204,7 +204,7 @@ public:
             std::byte* initial_data = new std::byte[min_prefab_capacity_bytes]{};
             std::memcpy(initial_data, &fill_value, sizeof(T));
 
-            prefab_buffer = SSBO(min_prefab_capacity_bytes, GL_DYNAMIC_DRAW, initial_data);
+            prefab_buffer = BufferObject(min_prefab_capacity_bytes, GL_DYNAMIC_DRAW, initial_data);
             delete[] initial_data;
         } else {
             prefab_buffer.update_subdata(0, &fill_value, sizeof(T));
@@ -237,7 +237,7 @@ public:
         T fill_value, 
         uint32_t size_bytes, 
         ShaderManager& shader_manager, 
-        SSBO& prefab_buffer = SSBO::prefab_buffer,
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
         uint32_t invocation_stride = 4u)  
     {
         update_subdata_fill(offset_bytes, fill_value, size_bytes, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
@@ -283,7 +283,7 @@ public:
 
 private:
     void destroy() noexcept;
-    void move_from(SSBO&& other) noexcept;
+    void move_from(BufferObject&& other) noexcept;
 
 private:
     GLuint id_ = 0;

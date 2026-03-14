@@ -24,8 +24,11 @@ VAO& VAO::operator=(VAO&& o) noexcept {
 
 VAO& VAO::init_vao() & {
     glGenVertexArrays(1, &this->id);
-    if (this->id == 0)
-        throw std::runtime_error("Failed to create VAO");
+    if (this->id == 0) {
+        std::string message = "Failed to create VAO";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
     
     return *this;
 }
@@ -36,11 +39,11 @@ VAO&& VAO::init_vao() && {
 }
 
 
-void VAO::setup(const VBO& vbo, const EBO& ebo, const VertexLayout& vertex_layout) {
+void VAO::setup(const BufferObject& vbo, const BufferObject& ebo, const VertexLayout& vertex_layout) {
     this->bind();
 
-    vbo.bind();
-    ebo.bind();
+    vbo.bind_as_vbo();
+    ebo.bind_as_ebo();
     vertex_layout.apply();
 
     this->unbind();
@@ -53,17 +56,3 @@ void VAO::bind() const {
 void VAO::unbind() {
     glBindVertexArray(0);
 }
-    // GLint posAttribIndex = 0;
-    // GLint posSize = 3;
-    // GLsizei stride = 6 * sizeof(float);
-    // const void* posOffset = (void*)0;
-    // GLint colorAttribIndex = 1; // ??
-    // GLint colorSize = 3;
-    // const void* colorOffset =(void*)(3 * sizeof(float));
-
-    // glVertexAttribPointer(posAttribIndex, posSize, GL_FLOAT, GL_FALSE, stride, posOffset);
-
-    // if (colorAttribIndex >= 0) {
-    //     glEnableVertexAttribArray(colorAttribIndex);
-    //     glVertexAttribPointer(colorAttribIndex, colorSize, GL_FLOAT, GL_FALSE, stride, colorOffset);
-    // }
