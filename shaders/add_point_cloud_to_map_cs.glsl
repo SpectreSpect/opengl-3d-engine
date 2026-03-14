@@ -99,21 +99,43 @@ void main() {
     uint source_point_id = gl_GlobalInvocationID.x;
 
 
+
+
     if (source_point_id > num_source_points) 
         return;
+    
+    const uint pack_bits   = 21u;
+    const uint pack_offset = 1048575u;
+
+    float voxel_size = 1.0f;
     
     // PointInstance point;
     // point.position = vec4(thread_id, 0, 0, 1);
     
 
-    uint point_id = atomicAdd(num_map_points, 1u);
+    
     // point.position = vec4(point_id, 3, 0, 0);
     // point.color = vec4(5, 5, 5, 5);
-    map_points[point_id] = source_points[source_point_id];
+    // map_points[point_id] = source_points[source_point_id];
+    vec3 source_pos = source_points[source_point_id].position.xyz;
+    
+    ivec3 voxel_coord = ivec3(floor(source_pos / voxel_size));
 
-    // uint slot_id = 0u;
-    // bool created = false;
-    // get_or_create_chunk(uvec2(point_id, 12u), slot_id, created);
+    uvec2 key = pack_key_uvec2(voxel_coord, pack_offset, pack_bits);
+
+    uint slot_id = 0u;
+    bool created = false;
+    get_or_create_chunk(key, slot_id, created);
+
+    uint map_point_id = 0;
+    if (created) {
+        map_point_id = atomicAdd(num_map_points, 1u);
+        hash_table[slot_id].hash_value = map_point_id;
+    } else {
+        map_point_id = hash_table[slot_id].hash_value;
+    }
+
+    map_points[map_point_id] = source_points[source_point_id];
 
     // hash_table[slot_id].hash_value = point_id;
 }

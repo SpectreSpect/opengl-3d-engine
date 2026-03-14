@@ -303,14 +303,10 @@ int main() {
     uint32_t u_hash_table_size = 100000;
     int max_map_points_count = 5000;
 
-
-
     SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
 
     point_cloud_video.frames[0].point_cloud.sync_gpu();
     SSBO source_point_ssbo = SSBO(*point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo);
-    
-
     
     SSBO map_point_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
     SSBO num_point_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
