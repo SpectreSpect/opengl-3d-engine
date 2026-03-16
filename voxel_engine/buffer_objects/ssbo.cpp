@@ -317,7 +317,7 @@ std::filesystem::path BufferObject::make_csv_dump(
     return out_file;
 }
 
-std::filesystem::path BufferObject::make_binary_dump(const std::filesystem::path& file_path) {
+std::filesystem::path BufferObject::make_binary_dump(const std::filesystem::path& file_path) const {
     std::vector<std::byte> buffer(size_bytes_);
     read_subdata(0, buffer.data(), size_bytes_);
 

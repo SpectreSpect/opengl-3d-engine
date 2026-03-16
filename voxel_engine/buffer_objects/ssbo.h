@@ -92,7 +92,7 @@ public:
     std::filesystem::path make_csv_dump(const std::filesystem::path& path, const std::map<std::string, DumpType>& structure_field_sizes_bytes,
                                               size_t offset_bytes, size_t count_structures) const;
     
-    std::filesystem::path make_binary_dump(const std::filesystem::path& file_path);
+    std::filesystem::path make_binary_dump(const std::filesystem::path& file_path) const;
     void read_binary_dump(const std::filesystem::path& file_path);
 
     // --- binding ---

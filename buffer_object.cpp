@@ -54,7 +54,7 @@ BufferObject& BufferObject::operator=(BufferObject&& other) noexcept {
     return *this;
 }
 
-std::filesystem::path BufferObject::make_binary_dump(const std::filesystem::path& file_path) {
+std::filesystem::path BufferObject::make_binary_dump(const std::filesystem::path& file_path) const {
     std::vector<std::byte> buffer(size_bytes_);
     read_subdata(0, size_bytes_, buffer.data());
 

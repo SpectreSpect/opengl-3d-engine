@@ -217,9 +217,6 @@ public:
     
     virtual void draw(RenderState state) override;
 
-    //debug
-    void print_counters();
-    void print_count_free_mesh_alloc();
 
     ShaderManager* shader_manager = nullptr;
 
@@ -310,8 +307,6 @@ public:
     void world_init_gpu();
     void init_mesh_pool();
 
-    void print_chunks_hash_table_log(); 
-
     void clear_chunk_hash_table(const BufferObject& dispatch_args); 
     void fill_chunk_hash_table(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
     void conditional_prepare_rebuild(BufferObject& clear_dispatch_args, BufferObject& fill_dispatch_args);
@@ -323,8 +318,6 @@ public:
         const DispatchArg& arg_y = ValueDispatchArg(1u),
         const DispatchArg& arg_z = ValueDispatchArg(1u)
     );
-
-    void print_eviction_log(const glm::vec3& camera_pos); 
 
     void reset_heads(); 
     void build_bucket_lists(const glm::vec3& cam_pos); 
@@ -357,20 +350,4 @@ public:
     void init_draw_buffers(); 
 
     void mark_all_used_chunks_as_dirty(); // Говно медленное 
-
-    void read_states_data(
-        std::unordered_map<uint32_t, uint32_t>& meta_alloc_vb_out, 
-        std::unordered_map<uint32_t, uint32_t>& meta_alloc_ib_out,
-        std::unordered_map<uint32_t, uint32_t>& states_alloc_vb_out, 
-        std::unordered_map<uint32_t, uint32_t>& states_alloc_ib_out
-    ); 
-
-    void save_verify_mesh_buffers_dumps(std::filesystem::path dir); 
-    void load_verify_mesh_buffers_dumps(std::filesystem::path dir); 
-    
-    std::set<uint32_t> find_limbo_pages(BufferObject& heads_buffer, BufferObject& states_buffer, BufferObject& next_buffer, uint32_t max_order_in_heads_buffer, uint32_t count_pages_in_states_buffer); 
-    void print_verify_debug_stack(uint32_t offset, int count_elements_to_print = -1);
-    void print_dirty_list();
-    void print_dirty_list_emit_counters();
-    void print_dirty_list_quad_count();
 };

@@ -59,7 +59,7 @@ public:
         return BufferObject::from_fill(size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
     }
 
-    std::filesystem::path make_binary_dump(const std::filesystem::path& file_path);
+    std::filesystem::path make_binary_dump(const std::filesystem::path& file_path) const;
     void read_binary_dump(const std::filesystem::path& file_path);
 
     void realloc(GLsizeiptr size_bytes, GLenum usage, const void* data = nullptr);
