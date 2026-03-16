@@ -55,6 +55,7 @@ add_executable(app
   glsl_preprocessor.cpp
   buffer_object.cpp
   voxel_grid_gpu_debugger.cpp
+  gpu_timestamp.cpp
 )
 
 

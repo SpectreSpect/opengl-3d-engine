@@ -20,15 +20,15 @@ public:
     std::shared_ptr<VoxelGridGPU> voxel_grid;
     std::shared_ptr<Window> window;
 
-    bool voxel_grid_draw_streaming[3] = {false};
-    std::array<std::function<void()>, 3> voxel_grid_draw_steps;
-    std::string voxel_grid_draw_steps_names[3] = {"build_mesh_from_dirty()", "build_indirect_draw_commands_frustum_fn()", "draw_indirect()"};
+    static constexpr int COUNT_DRAWING_STEPS = 3;
+    bool voxel_grid_draw_streaming[COUNT_DRAWING_STEPS] = {false};
+    std::array<std::function<void()>, COUNT_DRAWING_STEPS> voxel_grid_draw_steps;
+    std::string voxel_grid_draw_steps_names[COUNT_DRAWING_STEPS] = {"build_mesh_from_dirty()", "build_indirect_draw_commands_frustum_fn()", "draw_indirect()"};
 
-    bool voxel_grid_generation_streaming[3] = {false};
-    std::array<std::function<void()>, 3> voxel_grid_generation_steps;
-    std::string voxel_grid_generation_steps_names[3] = {"mark_chunk_to_generate()", "generate_terrain()", "reset_load_list_counter()"};
-
-    
+    static constexpr int COUNT_GENERATION_STEPS = 4; 
+    bool voxel_grid_generation_streaming[COUNT_GENERATION_STEPS] = {false};
+    std::array<std::function<void()>, COUNT_GENERATION_STEPS> voxel_grid_generation_steps;
+    std::string voxel_grid_generation_steps_names[COUNT_GENERATION_STEPS] = {"reset_load_list_counter()", "ensure_free_chunks_gpu()", "mark_chunk_to_generate()", "generate_terrain()"};
 
     VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window);
 

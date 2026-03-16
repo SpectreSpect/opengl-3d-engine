@@ -26,16 +26,20 @@ uniform float f_eviction_bucket_shell_thickness;
 // -------------------
 
 void push_bucket(uint b, uint chunkId) {
-    for (;;) {
-        uint old = atomicAdd(bucket_heads[b].id, 0u);
-        bucket_next[chunkId] = old;
-        memoryBarrierBuffer(); // next должен стать видим до публикации head
-        uint prev = atomicCompSwap(bucket_heads[b].id, old, chunkId);
-        if (prev == old) {
-            atomicAdd(bucket_heads[b].count, 1u);
-            break;
-        }
-    }
+    uint old = atomicExchange(bucket_heads[b].id, chunkId);
+    bucket_next[chunkId] = old;
+    atomicAdd(bucket_heads[b].count, 1u);
+
+    // for (;;) {
+    //     uint old = atomicAdd(bucket_heads[b].id, 0u);
+    //     bucket_next[chunkId] = old;
+    //     memoryBarrierBuffer(); // next должен стать видим до публикации head
+    //     uint prev = atomicCompSwap(bucket_heads[b].id, old, chunkId);
+    //     if (prev == old) {
+    //         atomicAdd(bucket_heads[b].count, 1u);
+    //         break;
+    //     }
+    // }
 }
 
 uint bucket_for_coord(ivec3 chunkCoord) {

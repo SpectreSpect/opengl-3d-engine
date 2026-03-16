@@ -188,12 +188,12 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
 #ifndef NOT_INCLUDE_LOOKUP_REMOVE
 #ifndef HASH_TABLE_LOOKUP_REMOVE_CHUNK
 #define HASH_TABLE_LOOKUP_REMOVE_CHUNK
-uint lookup_chunk(uvec2 key) {
+uint lookup_chunk(uvec2 key, bool read_only = true) {
     uint mask = u_hash_table_size - 1u;
     uint idx  = hash_uvec2(key) & mask;
 
     for (uint probe = 0u; probe < MAX_PROBES;) {
-        uint v = atomicAdd(hash_vals[idx], 0u);
+        uint v = read_only ? atomicAdd(hash_vals[idx], 0u) : hash_vals[idx];
 
         if (v == SLOT_LOCKED) continue;
 
@@ -207,7 +207,8 @@ uint lookup_chunk(uvec2 key) {
 
         // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
         // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
-        memoryBarrierBuffer();
+        if (read_only)
+            memoryBarrierBuffer();
 
         if (all(equal(hash_keys[idx], key))) 
             return v;

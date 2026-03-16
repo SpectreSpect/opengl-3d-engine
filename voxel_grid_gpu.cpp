@@ -66,8 +66,6 @@ VoxelGridGPU::VoxelGridGPU(
 
     evicted_chunks_list_ = BufferObject::from_fill(sizeof(uint32_t) * (count_active_chunks + 1), GL_DYNAMIC_DRAW, 0u, shader_manager);
 
-    // Глобальные буферы (выбери разумный budget!)
-    // Например 2M quads per frame => 8M verts, 12M indices
     vb_page_size_ = 1 << vb_page_size_order_of_two;
     count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 4u), vb_page_size_));
     count_vb_nodes_ = ceil(count_vb_pages_ * buddy_allocator_nodes_factor);
@@ -122,12 +120,9 @@ VoxelGridGPU::VoxelGridGPU(
     chunk_hash_keys_ = BufferObject(sizeof(glm::uvec2) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
     chunk_hash_vals_ = BufferObject(sizeof(uint32_t) * (1 + chunk_hash_table_size), GL_DYNAMIC_DRAW);
 
-    // init_active_chunks(chunk_size, count_active_chunks, init_chunk_voxel_prifab);
-    // init_chunks_hash_table();
     world_init_gpu();
     init_draw_buffers();
     init_mesh_pool();
-    // load_alloc_stacks();
 }
 
 void VoxelGridGPU::draw(RenderState state) {
@@ -436,20 +431,40 @@ void VoxelGridGPU::reset_evicted_list_and_buckets() {
 }
 
 void VoxelGridGPU::ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset) {
+    GPUTimestamp t0;
     reset_heads();
+    GPUTimestamp t1;
     build_bucket_lists(cam_pos);
-
-    prepare_evict_lowpriority_chunks(dispatch_args);
-    evict_lowpriority_chunks(dispatch_args);
-
-    free_evicted_chunks_mesh(dispatch_args); // dispatch_args здесь уже подготовлен
     
+    GPUTimestamp t2;
+    prepare_evict_lowpriority_chunks(dispatch_args);
+    GPUTimestamp t3;
+    evict_lowpriority_chunks(dispatch_args);
+    
+    GPUTimestamp t4;
+    free_evicted_chunks_mesh(dispatch_args); // dispatch_args здесь уже подготовлен
+    GPUTimestamp t5;
     reset_evicted_list_and_buckets();
 
+    GPUTimestamp t6;
     prepare_return_free_alloc_nodes(dispatch_args);
+    GPUTimestamp t7;
     return_free_alloc_nodes(dispatch_args);
 
+    GPUTimestamp t8;
     rebuild_chunk_hash_table(pack_bits, pack_offset);
+    GPUTimestamp t9;
+
+    // std::cout << "reset_heads(): " << t1 - t0 << std::endl;
+    // std::cout << "build_bucket_lists(): " << t2 - t1 << std::endl;
+    // std::cout << "prepare_evict_lowpriority_chunks(): " << t3 - t2 << std::endl;
+    // std::cout << "evict_lowpriority_chunks(): " << t4 - t3 << std::endl;
+    // std::cout << "free_evicted_chunks_mesh(): " << t5 - t4 << std::endl;
+    // std::cout << "reset_evicted_list_and_buckets(): " << t6 - t5 << std::endl;
+    // std::cout << "prepare_return_free_alloc_nodes(): " << t7 - t6 << std::endl;
+    // std::cout << "return_free_alloc_nodes(): " << t8 - t7 << std::endl;
+    // std::cout << "rebuild_chunk_hash_table(): " << t9 - t8 << std::endl;
+    // std::cout << std::endl;
 }
 
 void VoxelGridGPU::ensure_voxel_write_list(size_t count) {
@@ -772,6 +787,7 @@ void VoxelGridGPU::reset_load_list_counter() {
 
 void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks)
 {
+    // GPUTimestamp t0;
     // камера в локальные координаты грида (важно, если VoxelGridGPU трансформируется)
     glm::mat4 invM = glm::inverse(get_model_matrix());
     glm::vec3 cam_local = glm::vec3(invM * glm::vec4(cam_world_pos, 1.0f));
@@ -801,9 +817,13 @@ void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int ra
 
     prog_stream_select_chunks_.dispatch_compute(gx, gy, gz);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // GPUTimestamp t1;
+
+    // std::cout << "mark_chunk_to_generate(): " << t1 - t0 << std::endl;
 }
 
 void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t seed) {
+    // GPUTimestamp t0;
     chunk_hash_keys_.bind_base_as_ssbo(0);
     chunk_hash_vals_.bind_base_as_ssbo(1);
 
@@ -828,16 +848,35 @@ void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t 
     glDispatchComputeIndirect(0);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // GPUTimestamp t1;
+
+    // std::cout << "generate_terrain(): " << t1 - t0 << std::endl;
+    // std::cout << std::endl;
 }
 
 void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {
+    GPUTimestamp t0;
     ensure_free_chunks_gpu(cam_world_pos, math_utils::BITS, math_utils::OFFSET);
 
+    GPUTimestamp t1;
     reset_load_list_counter();
+
+    GPUTimestamp t2;
     mark_chunk_to_generate(cam_world_pos, radius_chunks);
 
+    GPUTimestamp t3;
     prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&load_list_, 0u));
+
+    GPUTimestamp t4;
     generate_terrain(dispatch_args, seed);
+    GPUTimestamp t5;
+
+    std::cout << "ensure_free_chunks_gpu(): " << t1 - t0 << std::endl;
+    std::cout << "reset_load_list_counter(): " << t2 - t1 << std::endl;
+    std::cout << "mark_chunk_to_generate(): " << t3 - t2 << std::endl;
+    std::cout << "prepare_dispatch_args(): " << t4 - t3 << std::endl;
+    std::cout << "generate_terrain(): " << t5 - t4 << std::endl;
+    std::cout << std::endl;
 }
 
 void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {

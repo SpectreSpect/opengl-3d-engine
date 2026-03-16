@@ -25,8 +25,16 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
 
     voxel_grid_draw_steps = {build_mesh_from_dirty_fn, build_indirect_draw_commands_frustum_fn, draw_indirect_fn};
 
+    std::function<void()> ensure_free_chunks_fn = [&]() {
+        voxel_grid->ensure_free_chunks_gpu(window->camera->position, math_utils::BITS, math_utils::OFFSET);
+    };
+
+    std::function<void()> reset_load_list_counter_fn = [&]() {
+        voxel_grid->reset_load_list_counter();
+    };
+
     std::function<void()> mark_chunk_to_generate_fn = [&]() {
-        int radius_chunks = 10;
+        int radius_chunks = 15;
         voxel_grid->mark_chunk_to_generate(window->camera->position, radius_chunks);
     };
 
@@ -36,14 +44,7 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
         voxel_grid->generate_terrain(voxel_grid->dispatch_args, seed);
     };
 
-    std::function<void()> reset_load_list_counter_fn = [&]() {
-        uint32_t load_count = voxel_grid->load_list_.read_scalar<uint32_t>(0);
-        if (load_count == 0) return;
-
-        voxel_grid->reset_load_list_counter();
-    };
-
-    voxel_grid_generation_steps = {mark_chunk_to_generate_fn, generate_terrain_fn, reset_load_list_counter_fn};
+    voxel_grid_generation_steps = {reset_load_list_counter_fn, ensure_free_chunks_fn, mark_chunk_to_generate_fn, generate_terrain_fn};
 }
 
 
@@ -731,7 +732,7 @@ void VoxelGridGPUDebugger::display_draw_pipline_window() {
         ImGui::TableSetupColumn("Run", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableHeadersRow();
 
-        for (uint32_t i = 0; i < 3; i++) {
+        for (uint32_t i = 0; i < COUNT_DRAWING_STEPS; i++) {
             ImGui::TableNextRow(); // ----
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(voxel_grid_draw_steps_names[i].c_str());
@@ -750,7 +751,7 @@ void VoxelGridGPUDebugger::display_draw_pipline_window() {
         ImGui::EndTable();
     }
 
-    for (uint32_t i = 0; i < 3; i++) {
+    for (uint32_t i = 0; i < COUNT_DRAWING_STEPS; i++) {
         if (voxel_grid_draw_streaming[i]) {
             voxel_grid_draw_steps[i]();
         }
@@ -795,13 +796,23 @@ void VoxelGridGPUDebugger::display_chunk_eviction_window() {
 
 void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
     ImGui::Begin("Steam chunks pipeline");
+    
+    if (ImGui::Button("Run all pipeline")) {
+        voxel_grid->stream_chunks_sphere(window->camera->position, 15, 45345345u);
+    }
+
+    ImGui::Separator();
+    ImGui::TextDisabled("Pipeline steps");
+    ImGui::Separator();
+    ImGui::Spacing();
+
     if (ImGui::BeginTable("pipeline_table", 3, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableSetupColumn("Step");
         ImGui::TableSetupColumn("Streaming", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableSetupColumn("Run", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableHeadersRow();
 
-        for (uint32_t i = 0; i < 3; i++) {
+        for (uint32_t i = 0; i < COUNT_GENERATION_STEPS; i++) {
             ImGui::TableNextRow(); // ----
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(voxel_grid_generation_steps_names[i].c_str());
@@ -820,7 +831,7 @@ void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
         ImGui::EndTable();
     }
 
-    for (uint32_t i = 0; i < 3; i++) {
+    for (uint32_t i = 0; i < COUNT_GENERATION_STEPS; i++) {
         if (voxel_grid_generation_streaming[i]) {
             voxel_grid_generation_steps[i]();
         }

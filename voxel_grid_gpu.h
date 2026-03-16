@@ -24,6 +24,7 @@
 #include "path_utils.h"
 #include "buffer_dispatch_arg.h"
 #include "value_dispatch_arg.h"
+#include "gpu_timestamp.h"
 
 #define DONT_CHANGE 0xFFFFFFFF
 

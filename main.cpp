@@ -84,7 +84,7 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
+        // voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
 
         voxel_grid_debugger.dispay_debug_window();

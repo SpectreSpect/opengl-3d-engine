@@ -5,8 +5,8 @@ layout(local_size_x = 256) in;
 #include "common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
+layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
+layout(std430, binding=1) buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer LoadList { uint load_list_counter; uint load_list[]; };
 layout(std430, binding=3) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -72,7 +72,7 @@ void mark_dirty(uint chunkId) {
 }
 
 void try_mark_neighbor(ivec3 ncoord) {
-    uint id = lookup_chunk(pack_key_uvec2(ncoord, u_pack_offset, u_pack_bits));
+    uint id = lookup_chunk(pack_key_uvec2(ncoord, u_pack_offset, u_pack_bits), false);
     if (id == INVALID_ID) return;
 
     // (опционально) "атомарное чтение", чтобы избежать странностей кеша
