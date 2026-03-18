@@ -14,9 +14,32 @@
 #include "voxel_grid_gpu.h"
 #include "voxel_grid_gpu_debugger.h"
 #include "torus.h"
-#include "cube.h"
+
+#include "voxel_rasterizator_gpu.h"
 
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
+
+BufferObject create_voxel_write_rect(glm::ivec3 origin, glm::uvec3 rect_dim, glm::vec3 color) {
+    uint32_t count_voxels = rect_dim.x * rect_dim.y * rect_dim.z;
+    std::vector<VoxelGridGPU::VoxelWriteGPU> voxels(count_voxels);
+
+    uint32_t id = 0;
+    for (uint32_t x = 0u; x < rect_dim.x; x++)
+        for (uint32_t y = 0u; y < rect_dim.y; y++)
+            for (uint32_t z = 0u; z < rect_dim.z; z++) {
+                double ton = 0.5 + ((double)(rand() % 100000) / 100000) * 0.5;
+                voxels[id].world_voxel = glm::ivec4(origin + glm::ivec3(x, y, z), 0);
+                voxels[id].voxel_data = std::move(VoxelGridGPU::VoxelDataGPU(1, 1, 0, glm::ivec3(color * glm::vec3(ton))));
+                voxels[id].set_flags = VoxelGridGPU::OVERWRITE_BIT;
+                id++;
+            }
+    
+    BufferObject voxel_writes(sizeof(uint32_t) * 4 + sizeof(VoxelGridGPU::VoxelWriteGPU) * count_voxels, GL_STATIC_COPY);
+    voxel_writes.update_subdata(0, sizeof(uint32_t), &count_voxels);
+    voxel_writes.update_subdata(sizeof(uint32_t) * 4, sizeof(VoxelGridGPU::VoxelWriteGPU) * count_voxels, voxels.data());
+
+    return voxel_writes;
+}
 
 int main() {
     Engine3D engine = Engine3D();
@@ -56,7 +79,12 @@ int main() {
         shader_manager
     );
 
+    BufferObject write_voxels = create_voxel_write_rect(glm::ivec3(0, 30, 0), glm::ivec3(10, 15, 20), glm::ivec3(66, 135, 245));
+    voxel_grid_gpu.get()->set_voxels(write_voxels);
+
+
     VoxelGridGPUDebugger voxel_grid_debugger(voxel_grid_gpu, window);
+    VoxelRasterizatorGPU voxel_rasterizator(voxel_grid_gpu.get(), shader_manager);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
 

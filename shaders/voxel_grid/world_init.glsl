@@ -34,13 +34,13 @@ void main() {
     }
 
     if (i < u_max_chunks) {
-        free_list[i]   = i;
-        enqueued[i]    = 0u;
+        free_list[i] = i;
+        enqueued[i] = 0u;
 
-        meta[i].used       = 0u;
-        meta[i].key_lo     = 0u;
-        meta[i].key_hi     = 0u;
-        meta[i].dirty_flags= 0u;
+        meta[i].used = 0u;
+        meta[i].key_lo = 0u;
+        meta[i].key_hi = 0u;
+        meta[i].dirty_flags = NEED_GENERATION_FLAG_BIT;
     }
 
     if (i == 0u) {

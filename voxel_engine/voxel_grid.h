@@ -50,7 +50,7 @@ struct GenResult {
 
 class VoxelGrid;
 
-class VoxelGrid : public Drawable, public Gridable, public Transformable  {
+class VoxelGrid : public Drawable, public IGridable, public Transformable  {
 public:
     // int chunk_render_distance = 8;
     glm::ivec3 chunk_render_size;

@@ -1,5 +1,8 @@
 #pragma once
 
+#define DIRTY_FLAG_BIT 1u
+#define NEED_GENERATION_FLAG_BIT 2u
+
 struct ChunkMeta { 
     uint used; 
     uint key_lo; 
@@ -25,17 +28,20 @@ struct Node {
 #define TYPE_SHIFT 16u
 #define VIS_SHIFT  8u
 #define TYPE_MASK  0xFFu
+#define VIS_MASK 0xFFu
 
 struct VoxelData {
     uint type_vis_flags;
     uint color;
 };
 
+#define OVERWRITE_BIT 1u
+
 struct VoxelWrite {
-    ivec4    world_voxel; // xyz use, w unused
+    ivec4 world_voxel; // xyz use, w unused
     VoxelData voxel_data;
-    uint     _pad0;
-    uint     _pad1;
+    uint set_flags;
+    uint _pad1;
 };
 
 struct Vertex {

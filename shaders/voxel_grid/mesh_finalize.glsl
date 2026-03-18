@@ -11,8 +11,6 @@ layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=3) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
 layout(std430, binding=4) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
 
-uniform uint u_dirty_flag_bits;
-
 // ----- include -----
 #include "../utils.glsl"
 // -------------------
@@ -36,5 +34,5 @@ void main() {
     }
 
     // снять dirty флаг(и)
-    meta[chunkId].dirty_flags &= ~u_dirty_flag_bits;
+    meta[chunkId].dirty_flags &= ~DIRTY_FLAG_BIT;
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include "voxel_engine/voxel.h"
 
-class Gridable {
+class IGridable {
 public:
     virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) = 0;
     virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) = 0;

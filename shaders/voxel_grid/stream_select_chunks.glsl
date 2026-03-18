@@ -52,8 +52,9 @@ void main() {
 
     if (!get_or_create_chunk(key, chunkId, created)) return;
 
-    if (created) {
+    if ((meta[chunkId].dirty_flags & NEED_GENERATION_FLAG_BIT) > 0u) {
         uint i = atomicAdd(load_list_counter, 1u);
         if (i < u_max_load_entries) load_list[i] = chunkId;
+        meta[chunkId].dirty_flags = ~NEED_GENERATION_FLAG_BIT;
     }
 }

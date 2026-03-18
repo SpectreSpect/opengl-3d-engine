@@ -30,6 +30,8 @@ uniform uint u_ib_page_inds;
 
 // ----- include -----
 #include "../utils.glsl"
+
+#define NOT_INCLUDE_MARK_DIRTY
 #include "common/chunk_pool.glsl"
 // -------------------
 

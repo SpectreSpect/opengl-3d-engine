@@ -25,10 +25,11 @@
 #include "buffer_dispatch_arg.h"
 #include "value_dispatch_arg.h"
 #include "gpu_timestamp.h"
+#include "gridable_gpu.h"
 
 #define DONT_CHANGE 0xFFFFFFFF
 
-class VoxelGridGPU : public Transformable, public Drawable {
+class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
     static constexpr uint32_t INVALID_ID = 0xFFFFFFFFu;
 
@@ -46,6 +47,11 @@ public:
     static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
     static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
     static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
+
+    static constexpr uint32_t OVERWRITE_BIT = 1u;
+
+    static constexpr uint32_t DIRTY_FLAG_BIT = 1u;
+    static constexpr uint32_t NEED_GENERATION_FLAG_BIT = 2u;
 
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
@@ -104,7 +110,7 @@ public:
     struct alignas(16) VoxelWriteGPU {
         glm::ivec4 world_voxel;  // xyz, w unused
         VoxelDataGPU voxel_data;
-        uint32_t pad0;
+        uint32_t set_flags;
         uint32_t pad1;
     };
     static_assert(sizeof(VoxelWriteGPU) == 32);
@@ -188,37 +194,6 @@ public:
         uint32_t next;
     };
 
-
-    VoxelGridGPU(
-        glm::ivec3 chunk_size, 
-        glm::vec3 voxel_size, 
-        uint32_t count_active_chunks, 
-        uint32_t max_quads,
-        float chunk_hash_table_size_factor, 
-        uint32_t count_evict_buckets,
-        uint32_t min_free_chunks,
-        float tomb_fraction_to_rebuild,
-        float eviction_bucket_shell_thickness,
-        uint32_t vb_page_size_order_of_two,
-        uint32_t ib_page_size_order_of_two,
-        float buddy_allocator_nodes_factor,
-        float render_distance,
-        ShaderManager& shader_manager);
-
-    void apply_writes_to_world_gpu(uint32_t write_count);
-    void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
-
-    void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
-    void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
-                                                    const glm::vec3& cam_pos);
-    void reset_load_list_counter();
-    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
-    void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
-    void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
-    
-    virtual void draw(RenderState state) override;
-
-
     ShaderManager* shader_manager = nullptr;
 
     ComputeProgram prog_dispatch_adapter_;
@@ -249,6 +224,7 @@ public:
     ComputeProgram prog_clear_chunk_hash_table_;
     ComputeProgram prog_reset_evicted_list_and_buckets_;
     ComputeProgram prog_hash_table_conditional_dispatch_adapter_;
+    ComputeProgram prog_set_voxels_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     BufferObject dispatch_args;
@@ -303,6 +279,39 @@ public:
     uint32_t max_mesh_indices_ = 0;
 
     VAO vao;
+
+    VoxelGridGPU(
+        glm::ivec3 chunk_size, 
+        glm::vec3 voxel_size, 
+        uint32_t count_active_chunks, 
+        uint32_t max_quads,
+        float chunk_hash_table_size_factor, 
+        uint32_t count_evict_buckets,
+        uint32_t min_free_chunks,
+        float tomb_fraction_to_rebuild,
+        float eviction_bucket_shell_thickness,
+        uint32_t vb_page_size_order_of_two,
+        uint32_t ib_page_size_order_of_two,
+        float buddy_allocator_nodes_factor,
+        float render_distance,
+        ShaderManager& shader_manager);
+
+    void apply_writes_to_world_gpu(uint32_t write_count);
+    void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
+
+    void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
+    void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
+                                                    const glm::vec3& cam_pos);
+    void reset_load_list_counter();
+    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
+    void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
+    void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
+    
+    virtual void draw(RenderState state) override;
+    virtual void set_voxels(const BufferObject& voxels_write_data) override;
+    virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) override;
+    virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) override;
+    virtual Voxel get_voxel(glm::ivec3 position) const override;
 
     void init_programs(ShaderManager& shader_manager);
     void world_init_gpu();

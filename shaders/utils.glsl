@@ -30,6 +30,14 @@ int floor_div(int a, int d) {
     return q;
 }
 
+ivec3 floor_div(ivec3 a, ivec3 d) {
+    return ivec3(
+        floor_div(a.x, d.x),
+        floor_div(a.y, d.y),
+        floor_div(a.z, d.z)
+    );
+}
+
 int floor_mod(int a, int d) {
     int q = floor_div(a, d);
     return a - q * d; // [0..d-1]

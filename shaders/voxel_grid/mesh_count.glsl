@@ -21,6 +21,8 @@ uniform int  u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
+
+#define NOT_INCLUDE_MARK_DIRTY
 #include "common/chunk_pool.glsl"
 // -------------------
 

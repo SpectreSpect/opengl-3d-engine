@@ -24,9 +24,9 @@
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
 public:
-    Gridable* gridable = nullptr;
+    IGridable* gridable = nullptr;
 
-    VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& shader_manager);
+    VoxelRasterizatorGPU(IGridable* gridable, ShaderManager& shader_manager);
     ~VoxelRasterizatorGPU();
 
     // ROI в координатах ЧАНКОВ (dense grid)
