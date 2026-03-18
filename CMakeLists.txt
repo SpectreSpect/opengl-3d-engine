@@ -31,8 +31,6 @@ add_executable(app
   transformable.cpp
   cube.cpp
   fps_camera_controller.cpp
-  material_template.cpp
-  material_manager.cpp
   imgui_layer.cpp
   voxel_engine/voxel.cpp
   voxel_engine/chunk.cpp
@@ -56,6 +54,7 @@ add_executable(app
   buffer_object.cpp
   voxel_grid_gpu_debugger.cpp
   gpu_timestamp.cpp
+  torus.cpp
 )
 
 

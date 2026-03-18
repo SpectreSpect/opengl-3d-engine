@@ -15,5 +15,8 @@ public:
     glm::vec3 scale{1.0f,1.0f,1.0f};
     glm::vec3 rotation{0.0f,0.0f,0.0f};
 
+    Transformable() = default;
+    Transformable(const glm::vec3& position, const glm::vec3& scale, const glm::vec3& rotation);
+
     glm::mat4 get_model_matrix() const;
 };

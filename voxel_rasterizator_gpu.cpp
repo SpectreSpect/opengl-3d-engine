@@ -52,19 +52,19 @@ void VoxelRasterizatorGPU::ensure_roi_reduce_level(uint32_t level, uint32_t numP
 void VoxelRasterizatorGPU::calculate_roi(const Mesh& mesh, float voxel_size, int chunk_size, int pad_voxels) {
     glm::mat4 transform = mesh.get_model_matrix();
 
-    uint32_t indexCount = uint32_t(mesh.ebo->size_bytes() / sizeof(uint32_t));
+    uint32_t indexCount = uint32_t(mesh.ebo.size_bytes() / sizeof(uint32_t));
     if (indexCount == 0) { set_roi({0,0,0}, {0,0,0}); return; }
 
-    const uint32_t strideF = mesh.vertex_layout->attributes[0].stride / sizeof(float);
-    const int posAttr = mesh.vertex_layout->find_attribute_id_by_name("position");
-    const uint32_t posOffF = mesh.vertex_layout->attributes[posAttr].offset / sizeof(float);
+    const uint32_t strideF = mesh.vertex_layout.attributes[0].stride / sizeof(float);
+    const int posAttr = mesh.vertex_layout.find_attribute_id_by_name("position");
+    const uint32_t posOffF = mesh.vertex_layout.attributes[posAttr].offset / sizeof(float);
 
     // level 0: indices -> group AABB
     uint32_t numPairs = math_utils::div_up_u32(indexCount, 256u);
     ensure_roi_reduce_level(0, numPairs);
 
-    mesh.vbo->bind_base_as_ssbo(0);
-    mesh.ebo->bind_base_as_ssbo(1);
+    mesh.vbo.bind_base_as_ssbo(0);
+    mesh.ebo.bind_base_as_ssbo(1);
     roi_reduce_levels_[0].bind_base_as_ssbo(2);
 
     prog_roi_reduce_indices_.use();
@@ -242,12 +242,12 @@ void VoxelRasterizatorGPU::count_triangles_in_chunks(
 {
     glm::mat4 transform = mesh.get_model_matrix();
 
-    const uint32_t vertex_stride_f = mesh.vertex_layout->attributes[0].stride / sizeof(float);
-    const int pos_attr_id = mesh.vertex_layout->find_attribute_id_by_name("position");
-    const uint32_t pos_offset_f = mesh.vertex_layout->attributes[pos_attr_id].offset / sizeof(float);
+    const uint32_t vertex_stride_f = mesh.vertex_layout.attributes[0].stride / sizeof(float);
+    const int pos_attr_id = mesh.vertex_layout.find_attribute_id_by_name("position");
+    const uint32_t pos_offset_f = mesh.vertex_layout.attributes[pos_attr_id].offset / sizeof(float);
 
-    mesh.vbo->bind_base_as_ssbo(0);
-    mesh.ebo->bind_base_as_ssbo(1);
+    mesh.vbo.bind_base_as_ssbo(0);
+    mesh.ebo.bind_base_as_ssbo(1);
     counters_BufferObject_.bind_base_as_ssbo(2);
 
     prog_count_.use();
@@ -276,12 +276,12 @@ void VoxelRasterizatorGPU::fill_triangle_indices(
 ) {
     glm::mat4 transform = mesh.get_model_matrix();
 
-    const uint32_t vertex_stride_f = mesh.vertex_layout->attributes[0].stride / sizeof(float);
-    const int pos_attr_id = mesh.vertex_layout->find_attribute_id_by_name("position");
-    const uint32_t pos_offset_f = mesh.vertex_layout->attributes[pos_attr_id].offset / sizeof(float);
+    const uint32_t vertex_stride_f = mesh.vertex_layout.attributes[0].stride / sizeof(float);
+    const int pos_attr_id = mesh.vertex_layout.find_attribute_id_by_name("position");
+    const uint32_t pos_offset_f = mesh.vertex_layout.attributes[pos_attr_id].offset / sizeof(float);
 
-    mesh.vbo->bind_base_as_ssbo(0);
-    mesh.ebo->bind_base_as_ssbo(1);
+    mesh.vbo.bind_base_as_ssbo(0);
+    mesh.ebo.bind_base_as_ssbo(1);
     cursor_BufferObject_.bind_base_as_ssbo(2);
     tri_indices_BufferObject_.bind_base_as_ssbo(3);
 
@@ -334,17 +334,17 @@ void VoxelRasterizatorGPU::voxelize_chunks(
 
     glm::mat4 transform = mesh.get_model_matrix();
 
-    const uint32_t vertex_stride_f = mesh.vertex_layout->attributes[0].stride / sizeof(float);
-    const int pos_attr_id = mesh.vertex_layout->find_attribute_id_by_name("position");
-    const uint32_t pos_offset_f = mesh.vertex_layout->attributes[pos_attr_id].offset / sizeof(float);
+    const uint32_t vertex_stride_f = mesh.vertex_layout.attributes[0].stride / sizeof(float);
+    const int pos_attr_id = mesh.vertex_layout.find_attribute_id_by_name("position");
+    const uint32_t pos_offset_f = mesh.vertex_layout.attributes[pos_attr_id].offset / sizeof(float);
 
     // 16 для chunk_size=16 и local_size_x=256
     uint32_t groupsX = math_utils::div_up_u32(chunk_voxel_count, 256u); // 4096/256 = 16
     uint32_t groupsY = active_count;
     uint32_t groupsZ = 1;
 
-    mesh.vbo->bind_base_as_ssbo(0);
-    mesh.ebo->bind_base_as_ssbo(1);
+    mesh.vbo.bind_base_as_ssbo(0);
+    mesh.ebo.bind_base_as_ssbo(1);
     offsets_BufferObject_.bind_base_as_ssbo(2);
     tri_indices_BufferObject_.bind_base_as_ssbo(3);
     voxels_BufferObject_.bind_base_as_ssbo(4);
@@ -453,10 +453,10 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh,
         return;
     }
 
-    const size_t stride_f = mesh.vertex_layout->attributes[0].stride / sizeof(float);
+    const size_t stride_f = mesh.vertex_layout.attributes[0].stride / sizeof(float);
 
-    const size_t vertex_count = mesh.vbo->size_bytes() / (sizeof(float) * stride_f);
-    const uint32_t tri_count  = mesh.ebo->size_bytes() / (sizeof(uint32_t) * 3);
+    const size_t vertex_count = mesh.vbo.size_bytes() / (sizeof(float) * stride_f);
+    const uint32_t tri_count  = mesh.ebo.size_bytes() / (sizeof(uint32_t) * 3);
     if (vertex_count == 0 || tri_count == 0) {
         last_total_pairs_ = 0;
         return;

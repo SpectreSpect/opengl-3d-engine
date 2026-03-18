@@ -1,5 +1,12 @@
  #include "transformable.h"
  
+Transformable::Transformable(const glm::vec3& position, const glm::vec3& scale, const glm::vec3& rotation)
+    :   position(position),
+        scale(scale),
+        rotation(rotation)
+{
+    
+}
 
 glm::mat4 Transformable::get_model_matrix() const {
     // Build S, R, T then compose: model = T * R * S

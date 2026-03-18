@@ -855,28 +855,28 @@ void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t 
 }
 
 void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {
-    GPUTimestamp t0;
+    // GPUTimestamp t0;
     ensure_free_chunks_gpu(cam_world_pos, math_utils::BITS, math_utils::OFFSET);
 
-    GPUTimestamp t1;
+    // GPUTimestamp t1;
     reset_load_list_counter();
 
-    GPUTimestamp t2;
+    // GPUTimestamp t2;
     mark_chunk_to_generate(cam_world_pos, radius_chunks);
 
-    GPUTimestamp t3;
+    // GPUTimestamp t3;
     prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&load_list_, 0u));
 
-    GPUTimestamp t4;
+    // GPUTimestamp t4;
     generate_terrain(dispatch_args, seed);
-    GPUTimestamp t5;
+    // GPUTimestamp t5;
 
-    std::cout << "ensure_free_chunks_gpu(): " << t1 - t0 << std::endl;
-    std::cout << "reset_load_list_counter(): " << t2 - t1 << std::endl;
-    std::cout << "mark_chunk_to_generate(): " << t3 - t2 << std::endl;
-    std::cout << "prepare_dispatch_args(): " << t4 - t3 << std::endl;
-    std::cout << "generate_terrain(): " << t5 - t4 << std::endl;
-    std::cout << std::endl;
+    // std::cout << "ensure_free_chunks_gpu(): " << t1 - t0 << std::endl;
+    // std::cout << "reset_load_list_counter(): " << t2 - t1 << std::endl;
+    // std::cout << "mark_chunk_to_generate(): " << t3 - t2 << std::endl;
+    // std::cout << "prepare_dispatch_args(): " << t4 - t3 << std::endl;
+    // std::cout << "generate_terrain(): " << t5 - t4 << std::endl;
+    // std::cout << std::endl;
 }
 
 void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
@@ -1011,8 +1011,6 @@ void VoxelGridGPU::draw_indirect(const GLuint vao, const glm::mat4& world, const
 }
 
 void VoxelGridGPU::init_draw_buffers() {
-    vao = VAO().init_vao();
-
     static VertexLayout vertex_layout;
     if (vertex_layout.attributes.size() == 0) {
         vertex_layout.add(

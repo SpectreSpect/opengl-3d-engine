@@ -11,7 +11,7 @@ class VAO {
 public:
     GLuint id = 0;
 
-    VAO() = default;
+    VAO();
     ~VAO();
 
     VAO(const BufferObject&) = delete;
@@ -19,8 +19,8 @@ public:
     VAO(VAO&& o) noexcept;
     VAO& operator=(VAO&& o) noexcept;
 
-    VAO& init_vao() &;
-    VAO&& init_vao() &&;
+    // VAO& init_vao() &;
+    // VAO&& init_vao() &&;
     void setup(const BufferObject& vbo, const BufferObject& ebo, const VertexLayout& vertex_layout);
 
     void bind() const;

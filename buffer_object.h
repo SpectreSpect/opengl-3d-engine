@@ -227,7 +227,7 @@ public:
     }
 
     GLuint id() const;
-    std::size_t size_bytes();
+    std::size_t size_bytes() const;
 
 private:
     GLuint id_ = 0;

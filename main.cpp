@@ -13,6 +13,8 @@
 #include "fps_camera_controller.h"
 #include "voxel_grid_gpu.h"
 #include "voxel_grid_gpu_debugger.h"
+#include "torus.h"
+#include "cube.h"
 
 float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 
@@ -32,6 +34,8 @@ int main() {
 
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 100;
+
+    Torus torus(glm::vec3(0), glm::vec3(10), glm::vec3(0));
 
     float voxel_size = 1.0f;
     uint32_t chunk_size = 16u;
@@ -84,8 +88,9 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        // voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
+        voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
+        window->draw(&torus, &camera);
 
         voxel_grid_debugger.dispay_debug_window();
         voxel_grid_debugger.display_build_cmd_window();

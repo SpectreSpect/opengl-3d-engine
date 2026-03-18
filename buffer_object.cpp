@@ -153,6 +153,6 @@ GLuint BufferObject::id() const {
     return id_; 
 }
 
-std::size_t BufferObject::size_bytes() {
+std::size_t BufferObject::size_bytes() const {
     return size_bytes_;
 }
