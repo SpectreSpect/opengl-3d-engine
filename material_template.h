@@ -1,5 +1,5 @@
 #pragma once
-#include "vf_program.h"
+#include "program.h"
 #include "vector"
 #include "string"
 
@@ -17,12 +17,12 @@ struct MaterialParamDesc {
 
 class MaterialTemplate {
 public:
-    VfProgram* program = nullptr;
+    Program* program = nullptr;
 
     std::vector<MaterialParamDesc> params;
     
     MaterialTemplate() = default;
-    MaterialTemplate(VfProgram* program);
+    MaterialTemplate(Program* program);
     MaterialTemplate(std::string vs_path, std::string fs_path);
 
     void bind() const;

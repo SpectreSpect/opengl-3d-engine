@@ -13,15 +13,5 @@
 
 class FragmentShader : public Shader {
 public:
-    FragmentShader() = default;
-    FragmentShader(
-        const std::filesystem::path& path, 
-        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
-    );
-    
-
-    FragmentShader(const FragmentShader&) = delete;
-    FragmentShader& operator=(const FragmentShader&) = delete;
-    FragmentShader(FragmentShader&& o) noexcept;
-    FragmentShader& operator=(FragmentShader&& o) noexcept;
+    FragmentShader(std::string path);
 };

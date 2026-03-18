@@ -4,24 +4,19 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "buffer_object.h"
+#include "vbo.h"
+#include "ebo.h"
 #include "vertex_layout.h"
 
-class VAO {
+class VAO{
 public:
-    GLuint id = 0;
+    GLuint id;
+    // VBO* vbo;
+    // EBO* ebo;
 
-    VAO() = default;
+    VAO();
     ~VAO();
-
-    VAO(const BufferObject&) = delete;
-    VAO& operator=(const VAO&) = delete;
-    VAO(VAO&& o) noexcept;
-    VAO& operator=(VAO&& o) noexcept;
-
-    VAO& init_vao() &;
-    VAO&& init_vao() &&;
-    void setup(const BufferObject& vbo, const BufferObject& ebo, const VertexLayout& vertex_layout);
+    void setup(VBO* vbo, EBO* ebo, VertexLayout* vertex_layout);
 
     void bind() const;
     static void unbind();

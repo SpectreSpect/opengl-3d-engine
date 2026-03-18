@@ -1,14 +1,12 @@
 #include "program.h"
 
-Program::Program() {
-    
-}
-
-Program::Program(std::vector<Shader*> shaders) {
+Program::Program(VertexShader* vertex_shader, FragmentShader* fragment_shader) {
+    // compile shaders and program
+    // GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
+    // GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_src);
     this->id = glCreateProgram();
-    for (Shader* shader : shaders)
-        glAttachShader(this->id, shader->id);
-
+    glAttachShader(this->id, vertex_shader->id);
+    glAttachShader(this->id, fragment_shader->id);
     glLinkProgram(this->id);
     GLint linkok; glGetProgramiv(this->id, GL_LINK_STATUS, &linkok);
     if (!linkok) {
@@ -45,23 +43,4 @@ void Program::set_vec3(const std::string name, const glm::vec3& value) const{
         return;
     }
     glUniform3fv(loc, 1, &value[0]); // set the uniform
-}
-
-void Program::print_program_log(const char* name) {
-    GLint linked = 0;
-    glGetProgramiv(id, GL_LINK_STATUS, &linked);
-
-    GLint len = 0;
-    glGetProgramiv(id, GL_INFO_LOG_LENGTH, &len);
-
-    std::string log;
-    if (len > 1) {
-        log.resize(len);
-        glGetProgramInfoLog(id, len, nullptr, log.data());
-    }
-
-    std::cout << "[LINK] " << name
-              << " id=" << id
-              << " linked=" << linked << "\n";
-    if (!log.empty()) std::cout << log << "\n";
 }

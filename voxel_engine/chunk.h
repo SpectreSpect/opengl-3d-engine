@@ -7,14 +7,18 @@
 
 #include "../mesh.h"
 #include "voxel.h"
-#include "../gridable.h"
-#include "../mesh_data.h"
+
+
+struct MeshData {
+    std::vector<float> vertices;
+    std::vector<unsigned int> indices;
+};
 
 enum class Face {Left, Right, Back, Front, Top, Bottom};
 
 class VoxelGrid;
 
-class Chunk : public Drawable, public Gridable, public Transformable {
+class Chunk : public Drawable, public Transformable {
 public:
     glm::ivec3 size;
     glm::vec3 voxel_size;
@@ -26,7 +30,6 @@ public:
 
     Mesh* mesh = nullptr;
     Chunk(glm::ivec3 size, glm::vec3 voxel_size);
-    // Chunk(glm::ivec3 size, glm::vec3 voxel_size, std::shared_ptr<const std::vector<Voxel>> voxels);
     ~Chunk();
 
     template<class F>
@@ -37,16 +40,6 @@ public:
         apply_edits(*next);
 
         std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(next));
-        revision.fetch_add(1, std::memory_order_relaxed);
-    }
-
-    void clear_voxels();
-
-    virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) override;
-    virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) override;
-    virtual Voxel get_voxel(glm::ivec3 position) const override;
-    void update_voxels(std::shared_ptr<const std::vector<Voxel>> new_voxels) {
-        std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(new_voxels));
         revision.fetch_add(1, std::memory_order_relaxed);
     }
 

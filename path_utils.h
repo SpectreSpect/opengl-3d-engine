@@ -4,6 +4,7 @@
 #include <string>
 
 #if defined(_WIN32)
+  #define NOMINMAX
   #include <windows.h>
 #elif defined(__APPLE__)
   #include <mach-o/dyld.h>
@@ -36,8 +37,4 @@ inline std::filesystem::path executable_path() {
 inline std::filesystem::path executable_dir() {
     auto p = executable_path();
     return p.empty() ? std::filesystem::path{} : p.parent_path();
-}
-
-inline std::string executable_dir_str() {
-    return executable_dir().string();
 }

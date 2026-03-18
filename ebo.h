@@ -15,16 +15,8 @@ public:
     size_t num_indices = 0;
     size_t capacity_bytes = 0;
 
-    EBO() = default;
     EBO(const void* indices, size_t size_bytes);
-    EBO(GLuint id, size_t size_bytes);
     ~EBO();
-
-    EBO(const EBO&) = delete;
-    EBO& operator=(const EBO&) = delete;
-    EBO(EBO&& o) noexcept;
-    EBO& operator=(EBO&& o) noexcept;
-
     void update_mapped(const void* data, size_t new_size_bytes, GLenum usage);
     void bind() const;
     static void unbind();

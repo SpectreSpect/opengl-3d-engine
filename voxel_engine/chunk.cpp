@@ -5,33 +5,34 @@ Chunk::Chunk(glm::ivec3 size, glm::vec3 voxel_size) {
     this->size = size;
     this->voxel_size = voxel_size;
 
-    const size_t count = (size_t)size.x * (size_t)size.y * (size_t)size.z;
-
-    auto v = std::make_shared<std::vector<Voxel>>(count, Voxel{});
-    std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(v));
+    auto v = std::make_shared<std::vector<Voxel>>();
+    v->resize(size.x * size.y * size.z);
+    voxels = v;
 
     this->vertex_layout = new VertexLayout();
-    vertex_layout->add("position", 0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0, 0, {0.0f, 0.0f, 0.0f});
-    vertex_layout->add("normal", 1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float), 0, {0.0f, 1.0f, 0.0f});
-    vertex_layout->add("color", 2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 6 * sizeof(float), 0, {1.0f, 1.0f, 1.0f});
-}
+    vertex_layout->add({
+        0, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        0
+    });
+    vertex_layout->add({
+        1, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        3 * sizeof(float)
+    });
+    vertex_layout->add({
+        2, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        6 * sizeof(float)
+    });
 
+    MeshData mesh_data = Chunk::build(*voxels, size);
+    upload_mesh_gpu(mesh_data);
+}
 
 Chunk::~Chunk() {
     delete mesh;
     delete vertex_layout;
-}
-
-void Chunk::clear_voxels() {
-    edit_voxels([](std::vector<Voxel>& voxels) {
-        for (auto& v : voxels) {
-            Voxel voxel;
-            voxel.color = glm::vec3(1.0f);
-            voxel.visible = false;
-            
-            v = voxel;
-        }
-    });
 }
 
 MeshData Chunk::build(const std::vector<Voxel>& voxels, glm::ivec3 size) {
@@ -178,33 +179,6 @@ bool Chunk::is_free(const std::vector<Voxel>& voxels, glm::ivec3 pos, glm::ivec3
     if (!in_bounds(pos, size)) 
         return true;
     return !voxels[idx(pos, size)].visible; 
-}
-
-void Chunk::set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) {
-    edit_voxels([&](std::vector<Voxel>& current){
-        for (int i = 0; i < voxels.size(); i++) {
-            glm::ivec3 pos = positions[i];
-            if (!in_bounds(pos, size))
-                continue;
-            current[idx(pos, size)] = voxels[i];
-        }
-    });
-}
-
-void Chunk::set_voxel(const Voxel& voxel, glm::ivec3 position) {
-    edit_voxels([&](std::vector<Voxel>& current) {
-        if (in_bounds(position, size))
-            current[idx(position, size)] = voxel;
-    });
-}
-
-Voxel Chunk::get_voxel(glm::ivec3 position) const {
-    auto cur = std::atomic_load(&voxels);
-    if (!in_bounds(position, size)) {
-        throw std::out_of_range("Chunk::get_voxel: position out of bounds");
-    }
-
-    return (*cur)[idx(position, size)];
 }
 
 void Chunk::upload_mesh_gpu(MeshData& mesh_data) {

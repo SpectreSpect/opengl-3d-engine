@@ -2,8 +2,8 @@
 
 
 VBO::VBO(const void* data, size_t size_bytes) {
-    if (size_bytes == 0) {
-        throw std::invalid_argument("VBO: size == 0");
+    if (data == nullptr || size_bytes == 0) {
+        throw std::invalid_argument("VBO: empty data");
     }
     glGenBuffers(1, &id);
     if (id == 0)
@@ -16,48 +16,9 @@ VBO::VBO(const void* data, size_t size_bytes) {
     this->capacity_bytes = size_bytes;
 }
 
-VBO::VBO(GLuint id, size_t size_bytes) {
-    if (size_bytes == 0)
-        throw std::invalid_argument("VBO: size == 0");
-
-    if (id == 0)
-        throw std::runtime_error("VBO: glGenBuffers failed (no GL context?)");
-
-    this->id = id;
-    this->size_bytes = size_bytes;
-    this->capacity_bytes = size_bytes;
-}
-
 VBO::~VBO() {
     if (id != 0)
         glDeleteBuffers(1, &id);
-}
-
-VBO::VBO(VBO&& o) noexcept {
-    size_bytes = o.size_bytes;
-    capacity_bytes = o.capacity_bytes;
-    id = o.id;
-
-    o.size_bytes = 0;
-    o.capacity_bytes = 0;
-    o.id = 0;
-}
-
-VBO& VBO::operator=(VBO&& o) noexcept {
-    if (this != &o) {
-        if (id != 0)
-            glDeleteBuffers(1, &id);
-        
-        size_bytes = o.size_bytes;
-        capacity_bytes = o.capacity_bytes;
-        id = o.id;
-
-        o.size_bytes = 0;
-        o.capacity_bytes = 0;
-        o.id = 0;
-    }
-    
-    return *this;
 }
 
 void VBO::update_mapped(const void* data, size_t new_size_bytes, GLenum usage) {

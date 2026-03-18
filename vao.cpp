@@ -1,50 +1,22 @@
 #include "vao.h"
 
-VAO::~VAO() {
-    if (id != 0)
-        glDeleteVertexArrays(1, &id);
-}
-
-VAO::VAO(VAO&& o) noexcept {
-    id = o.id;
-    o.id = 0;
-}
-
-VAO& VAO::operator=(VAO&& o) noexcept {
-    if (this != &o) {
-        if (id != 0)
-            glDeleteVertexArrays(1, &id);
-
-        id = o.id;
-        o.id = 0;
-    }
-    
-    return *this;
-}
-
-VAO& VAO::init_vao() & {
+VAO::VAO() {
     glGenVertexArrays(1, &this->id);
-    if (this->id == 0) {
-        std::string message = "Failed to create VAO";
-        std::cout << message << std::endl;
-        throw std::runtime_error(message);
-    }
+    if (this->id == 0)
+        throw std::runtime_error("Failed to create VAO");
     
-    return *this;
 }
 
-VAO&& VAO::init_vao() && {
-    static_cast<VAO&>(*this).init_vao();
-    return std::move(*this);
+VAO::~VAO() {
+    glDeleteVertexArrays(1, &id);
 }
 
-
-void VAO::setup(const BufferObject& vbo, const BufferObject& ebo, const VertexLayout& vertex_layout) {
+void VAO::setup(VBO* vbo, EBO* ebo, VertexLayout* vertex_layout) {
     this->bind();
 
-    vbo.bind_as_vbo();
-    ebo.bind_as_ebo();
-    vertex_layout.apply();
+    vbo->bind();
+    ebo->bind();
+    vertex_layout->apply();
 
     this->unbind();
 }
@@ -56,3 +28,17 @@ void VAO::bind() const {
 void VAO::unbind() {
     glBindVertexArray(0);
 }
+    // GLint posAttribIndex = 0;
+    // GLint posSize = 3;
+    // GLsizei stride = 6 * sizeof(float);
+    // const void* posOffset = (void*)0;
+    // GLint colorAttribIndex = 1; // ??
+    // GLint colorSize = 3;
+    // const void* colorOffset =(void*)(3 * sizeof(float));
+
+    // glVertexAttribPointer(posAttribIndex, posSize, GL_FLOAT, GL_FALSE, stride, posOffset);
+
+    // if (colorAttribIndex >= 0) {
+    //     glEnableVertexAttribArray(colorAttribIndex);
+    //     glVertexAttribPointer(colorAttribIndex, colorSize, GL_FLOAT, GL_FALSE, stride, colorOffset);
+    // }
