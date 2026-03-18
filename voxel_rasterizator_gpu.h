@@ -15,31 +15,18 @@
 #include "mesh.h"
 #include "mesh_data.h"
 #include "vertex_layout.h"
-#include "ssbo.h"
+#include "buffer_object.h"
 #include "compute_shader.h"
 #include "compute_program.h"
 #include "math_utils.h"
+#include "shader_manager.h"
 
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
 public:
     Gridable* gridable = nullptr;
 
-    VoxelRasterizatorGPU(
-        Gridable* gridable, 
-        ComputeShader* k_count_cs, 
-        ComputeShader* k_scan_blocks_cs,
-        ComputeShader* k_add_block_offsets_cs,
-        ComputeShader* k_fix_last_cs,
-        ComputeShader* k_copy_offsets_to_cursor_cs,
-        ComputeShader* k_fill_cs,
-        ComputeShader* k_voxelize_cs,
-        ComputeShader* k_clear_cs,
-        ComputeShader* k_roi_reduce_indices_cs,
-        ComputeShader* k_roi_reduce_pairs_cs,
-        ComputeShader* k_roi_finalize_cs,
-        ComputeShader* k_build_active_chunks_cs
-    );
+    VoxelRasterizatorGPU(Gridable* gridable, ShaderManager& shader_manager);
     ~VoxelRasterizatorGPU();
 
     // ROI в координатах ЧАНКОВ (dense grid)
@@ -82,20 +69,20 @@ private:
     ComputeProgram prog_build_active_chunks_;
 
     // GPU buffers
-    SSBO counters_ssbo_;        // uint counters[chunkCount]
-    SSBO offsets_ssbo_;         // uint offsets[chunkCount+1]
-    SSBO cursor_ssbo_;          // uint cursor[chunkCount]
-    SSBO tri_indices_ssbo_;     // uint triId[totalPairs]
-    SSBO total_pairs_ssbo_;     // uint totalPairs (1 элемент)
-    SSBO block_sums_ssbo_;      // uint blockSums[numBlocks]
-    SSBO block_prefix_ssbo_;    // uint blockPrefix[numBlocks]
-    SSBO voxels_ssbo_;          // uint packed RGBA8 per voxel in ROI
-    SSBO roi_out_ssbo_;
-    SSBO active_chunks_ssbo_;
-    SSBO active_count_ssbo_;
-    std::vector<SSBO> roi_reduce_levels_;
+    BufferObject counters_BufferObject_;        // uint counters[chunkCount]
+    BufferObject offsets_BufferObject_;         // uint offsets[chunkCount+1]
+    BufferObject cursor_BufferObject_;          // uint cursor[chunkCount]
+    BufferObject tri_indices_BufferObject_;     // uint triId[totalPairs]
+    BufferObject total_pairs_BufferObject_;     // uint totalPairs (1 элемент)
+    BufferObject block_sums_BufferObject_;      // uint blockSums[numBlocks]
+    BufferObject block_prefix_BufferObject_;    // uint blockPrefix[numBlocks]
+    BufferObject voxels_BufferObject_;          // uint packed RGBA8 per voxel in ROI
+    BufferObject roi_out_BufferObject_;
+    BufferObject active_chunks_BufferObject_;
+    BufferObject active_count_BufferObject_;
+    std::vector<BufferObject> roi_reduce_levels_;
 
-    SSBO debug_ssbo_; // int dbg[32]
+    BufferObject debug_BufferObject_; // int dbg[32]
 
     // capacities (bytes)
     size_t counters_cap_bytes_ = 0;
@@ -113,8 +100,8 @@ private:
     uint32_t chunk_count_ = 1;
 
     // scan scratch уровни (чтобы не было ограничения numBlocks<=256)
-    std::vector<std::unique_ptr<SSBO>> scan_sums_;
-    std::vector<std::unique_ptr<SSBO>> scan_prefix_;
+    std::vector<std::unique_ptr<BufferObject>> scan_sums_;
+    std::vector<std::unique_ptr<BufferObject>> scan_prefix_;
     std::vector<size_t> scan_caps_; // bytes per level
 
 private:
@@ -133,10 +120,10 @@ private:
     void ensure_active_chunk_buffers(uint32_t chunk_voxel_count, uint32_t pair_capacity, uint32_t activeCount);
 
     void ensure_scan_level(uint32_t level, uint32_t numBlocks);
-    void gpu_exclusive_scan_u32_impl(SSBO& in_u32, SSBO& out_u32, uint32_t n, uint32_t level);
+    void gpu_exclusive_scan_u32_impl(BufferObject& in_u32, BufferObject& out_u32, uint32_t n, uint32_t level);
 
     // GPU exclusive scan: in=counters, out=offsets (первые n элементов), блок-суммы в scratch
-    void gpu_exclusive_scan_u32(SSBO& in_u32, SSBO& out_u32, uint32_t n);
+    void gpu_exclusive_scan_u32(BufferObject& in_u32, BufferObject& out_u32, uint32_t n);
 
     glm::ivec3 idx_to_chunk(uint32_t idx);
 };

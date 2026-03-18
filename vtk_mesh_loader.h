@@ -16,7 +16,7 @@ public:
     // int vertex_normal_offset;
 
     VertexLayout vertex_layout;
-    std::vector<float> default_vertex_data;
+    std::vector<std::byte> default_vertex_data;
     size_t vertex_position_offset;
     size_t vertex_normal_offset;
 

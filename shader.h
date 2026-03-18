@@ -13,6 +13,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
+#include <filesystem>
+
+#include "glsl_preprocessor.h"
 
 class Shader {
 public:
@@ -34,6 +38,9 @@ public:
     }
     void print_shader_log(const char* name = "NO NAME");
 
-    static std::string load_text_file(const std::string& path);
-    static GLuint compile_shader(GLenum type, const char* src);
+    static std::string load_text_file(
+        const std::filesystem::path& path, 
+        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+    );
+    static GLuint compile_shader(GLenum type, const char* src, const std::filesystem::path* shader_path = nullptr);
 };

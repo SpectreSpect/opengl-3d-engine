@@ -3,7 +3,11 @@
 
 class ComputeShader : public Shader {
 public:
-    ComputeShader(std::string& path);
+    ComputeShader() = default;
+    ComputeShader(
+        const std::filesystem::path& path, 
+        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+    );
 
     ComputeShader(const ComputeShader&) = delete;
     ComputeShader& operator=(const ComputeShader&) = delete;
