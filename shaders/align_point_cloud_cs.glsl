@@ -24,8 +24,11 @@ struct Location {
 };
 
 struct TestOutput {
-    mat3 output_matrix;
+    vec4 output_vector;
 };
+
+
+
 
 // mat3 euler_xyz_to_mat3(vec3 euler)
 
@@ -56,6 +59,9 @@ layout(std430, binding=6) coherent buffer SharedHAndG {HAndG h_and_g;};
 layout(std430, binding=7) coherent buffer PointCloudLocation {Location source_location;};
 
 layout(std430, binding=9) coherent buffer TestOutputTemp {TestOutput test_output;};
+
+
+
 
 
 uniform uint num_source_points;
@@ -784,7 +790,14 @@ double step()
 #define STATUS_UNLOCKED 0u
 #define STATUS_LOCKED 1u
 
-uniform vec3 uEuler;
+uniform vec3 uCloudRotation;
+uniform vec3 uCloudScale;
+uniform vec3 uLocalN;
+
+
+// vec3 transform_normal_world(vec3 cloud_rotation,
+//                             vec3 cloud_scale,
+//                             vec3 local_n)
 
 
 void main() {
@@ -793,9 +806,6 @@ void main() {
     
 
     // find_closest_id(source_location.position.xyz, vec4(n_src_world, 1.0), max_corr_dist_sq, max_corr_dist, min_normal_dot);
-    
-
-    
 
 
 
@@ -811,7 +821,8 @@ void main() {
 
     // uEuler
 
-    test_output.output_matrix = euler_xyz_to_mat3(uEuler);
+    test_output.output_vector = vec4(transform_normal_world(uCloudRotation, uCloudScale, uLocalN), 999.0);
+    // test_output.output_vector = vec4(15, 16, 17, 18);
 
     // int idx = 0;
     // for (int i = 0; i < 3; i++)

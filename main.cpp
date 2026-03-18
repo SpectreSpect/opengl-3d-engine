@@ -112,6 +112,8 @@ public:
 
     SSBO Mat3Std430_ssbo;
 
+    SSBO transform_normal_world_ssbo;
+
     uint32_t num_map_points = 0;
     ComputeProgram* add_point_cloud_program;
     ComputeProgram* align_point_cloud_program;
@@ -126,6 +128,7 @@ public:
         h_and_g_ssbo = SSBO::from_fill(sizeof(HAndG), GL_DYNAMIC_DRAW, 0u, shader_manager);
         source_location_ssbo = SSBO::from_fill(sizeof(Location), GL_DYNAMIC_DRAW, 0u, shader_manager);
         Mat3Std430_ssbo = SSBO::from_fill(sizeof(Mat3Std430), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        transform_normal_world_ssbo = SSBO::from_fill(sizeof(glm::vec4), GL_DYNAMIC_DRAW, 0u, shader_manager);
         
         this->add_point_cloud_program = &add_point_cloud_program;
         this->align_point_cloud_program = &align_point_cloud_program;
@@ -312,6 +315,44 @@ public:
         return result;
     }
 
+    glm::vec3 transform_normal_world_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, const PointCloud& cloud, const glm::vec3& local_n) {
+        source_point_cloud.sync_gpu();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        transform_normal_world_ssbo.bind_base(9);
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+        align_point_cloud_program->set_vec3("uCloudRotation", cloud.rotation);
+        align_point_cloud_program->set_vec3("uCloudScale", cloud.scale);
+        align_point_cloud_program->set_vec3("uLocalN", local_n);
+
+
+        // align_point_cloud_program->set_vec3("uEuler", euler);
+
+        align_point_cloud_program->use();
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        glm::vec4 out = {};
+        transform_normal_world_ssbo.read_subdata(0u, &out, sizeof(glm::vec4));
+
+        return out;
+    }
+
     Point get_point_cloud() {
         return Point(map_points_ssbo, (int)num_map_points);
     }
@@ -417,62 +458,99 @@ int main() {
     // align_point_cloud
     voxel_map.add_point_cloud(target_point_cloud.point_renderer, target_normals_ssbo);
 
-    std::vector<glm::vec3> euler_tests = {
-        glm::vec3(0, 0, 0),
+    std::vector<glm::vec3> rotation_tests = {
+        glm::radians(glm::vec3(0.0f, 0.0f, 0.0f)),
         glm::radians(glm::vec3(10.0f, 0.0f, 0.0f)),
         glm::radians(glm::vec3(0.0f, 20.0f, 0.0f)),
         glm::radians(glm::vec3(0.0f, 0.0f, 30.0f)),
         glm::radians(glm::vec3(15.0f, 25.0f, 35.0f)),
         glm::radians(glm::vec3(-20.0f, 45.0f, -10.0f)),
-        glm::radians(glm::vec3(89.0f, 1.0f, -45.0f)),
+        glm::radians(glm::vec3(89.0f, 1.0f, -45.0f))
     };
 
+    std::vector<glm::vec3> scale_tests = {
+        glm::vec3(1.0f, 1.0f, 1.0f),
+        glm::vec3(2.0f, 2.0f, 2.0f),
+        glm::vec3(2.0f, 1.0f, 1.0f),
+        glm::vec3(1.0f, 3.0f, 1.0f),
+        glm::vec3(1.0f, 1.0f, 0.5f),
+        glm::vec3(2.0f, 0.5f, 4.0f)
+    };
 
-    // glm::radians(glm::vec3(15.0f, 25.0f, 35.0f)),
+    std::vector<glm::vec3> local_n_tests = {
+        glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)),
+        glm::normalize(glm::vec3(0.0f, 1.0f, 0.0f)),
+        glm::normalize(glm::vec3(0.0f, 0.0f, 1.0f)),
+        glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)),
+        glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f)),
+        glm::normalize(glm::vec3(0.0f, 1.0f, 1.0f)),
+        glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)),
+        glm::normalize(glm::vec3(-1.0f, 4.0f, -2.0f))
+    };
 
+    const float eps = 1e-4f;
 
-    // glm::mat3 result_1 = GICP::euler_xyz_to_mat3(euler_tests[4]);
-    // glm::mat3 result_2 = voxel_map.test(source_point_cloud, source_normals_ssbo, euler_tests[4]);
+    auto is_close_vec3 = [&](const glm::vec3& a, const glm::vec3& b, float eps) {
+        return std::abs(a.x - b.x) <= eps &&
+            std::abs(a.y - b.y) <= eps &&
+            std::abs(a.z - b.z) <= eps;
+    };
 
-    // const float eps = 1e-4f;
-    // bool equal = true;
+    auto is_finite_vec3 = [&](const glm::vec3& v) {
+        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    };
 
-    // for (int c = 0; c < 3; c++) {
-    //     for (int r = 0; r < 3; r++) {
-    //         std::cout << result_1[c][r] << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+    for (int rotation_i = 0; rotation_i < rotation_tests.size(); rotation_i++)
+        for (int scale_i = 0; scale_i < scale_tests.size(); scale_i++)
+            for (int local_n_i = 0; local_n_i < local_n_tests.size(); local_n_i++) {
+                target_point_cloud.rotation = rotation_tests[rotation_i];
+                target_point_cloud.scale = scale_tests[scale_i];
 
-    // std::cout << std::endl;
+                glm::vec3 result_cpu = GICP::transform_normal_world(
+                    target_point_cloud,
+                    local_n_tests[local_n_i]
+                );
 
-    // for (int c = 0; c < 3; c++) {
-    //     for (int r = 0; r < 3; r++) {
-    //         std::cout << result_2[c][r] << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+                glm::vec3 result_gpu = voxel_map.transform_normal_world_test(
+                    source_point_cloud,
+                    source_normals_ssbo,
+                    target_point_cloud,
+                    local_n_tests[local_n_i]
+                );
 
-    for (int i = 0; i < euler_tests.size(); i++) {
-        glm::mat3 result_1 = GICP::euler_xyz_to_mat3(euler_tests[i]);
-        glm::mat3 result_2 = voxel_map.test(source_point_cloud, source_normals_ssbo, euler_tests[i]);
+                bool ok = is_finite_vec3(result_cpu) &&
+                        is_finite_vec3(result_gpu) &&
+                        is_close_vec3(result_cpu, result_gpu, eps);
 
-        const float eps = 1e-4f;
-        bool equal = true;
+                std::cout
+                    // << "rotation[" << rotation_i << "] = ("
+                    // << rotation_tests[rotation_i].x << ", "
+                    // << rotation_tests[rotation_i].y << ", "
+                    // << rotation_tests[rotation_i].z << "), "
 
-        for (int c = 0; c < 3 && equal; c++) {
-            for (int r = 0; r < 3; r++) {
-                if (std::abs(result_1[c][r] - result_2[c][r]) > eps) {
-                    equal = false;
-                    break;
+                    // << "scale[" << scale_i << "] = ("
+                    // << scale_tests[scale_i].x << ", "
+                    // << scale_tests[scale_i].y << ", "
+                    // << scale_tests[scale_i].z << "), "
+
+                    // << "local_n[" << local_n_i << "] = ("
+                    // << local_n_tests[local_n_i].x << ", "
+                    // << local_n_tests[local_n_i].y << ", "
+                    // << local_n_tests[local_n_i].z << ") "
+
+                    << "=> " << (ok ? "OK" : "MISMATCH")
+                    << "\n";
+
+                if (!ok) {
+                    glm::vec3 diff = result_cpu - result_gpu;
+
+                    std::cout
+                        << "  CPU  = (" << result_cpu.x << ", " << result_cpu.y << ", " << result_cpu.z << ")\n"
+                        << "  GPU  = (" << result_gpu.x << ", " << result_gpu.y << ", " << result_gpu.z << ")\n"
+                        << "  DIFF = (" << diff.x << ", " << diff.y << ", " << diff.z << ")\n";
                 }
             }
-        }
 
-        std::cout << "Test " << i << ": "
-                << (equal ? "OK" : "MISMATCH")
-                << "\n";
-    }
 
     // glm::mat3 result0 = GICP::euler_xyz_to_mat3(glm::vec3(?, ?, ?));
 
