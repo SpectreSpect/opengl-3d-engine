@@ -69,6 +69,10 @@ struct alignas(16) HashPoint {
     glm::vec4 normal;
 };
 
+struct alignas(16) PointNormal {
+    glm::vec4 normal;
+};
+
 struct alignas(16) HashTableSlot {
     glm::uvec2     hash_key;
     std::uint32_t  _pad0[2];     // forces hash_value to offset 16
@@ -78,46 +82,290 @@ struct alignas(16) HashTableSlot {
     std::uint32_t  _pad1[3];     // tail pad so sizeof == 64
 };
 
+struct alignas(16) Mat3Std430 {
+    glm::vec4 col0; // use xyz, w is padding
+    glm::vec4 col1; // use xyz, w is padding
+    glm::vec4 col2; // use xyz, w is padding
+};
+
+struct HAndG {
+    double h[6][6];
+    double g[6];
+    uint status; // lock flag
+};
+
+struct alignas(16) Location {
+    glm::vec4 position;
+    glm::vec4 rotation;
+};
 
 
-bool next_pos(glm::ivec3 origin, int layer, glm::ivec3& index_pos, glm::ivec3& out_pos) {
-    const int dim = 1 + layer * 2;
+class VoxelMap {
+public:
+    SSBO map_hash_table_ssbo;
+    SSBO map_points_ssbo;
+    SSBO map_normals_ssbo;
+    SSBO num_map_points_ssbo;
 
-    // current position
-    int x = index_pos.x;
-    int y = index_pos.y;
-    int z = index_pos.z;
+    SSBO h_and_g_ssbo;
+    SSBO source_location_ssbo;
 
-    // emit current position first
-    out_pos = origin + glm::ivec3(x, y, z) - glm::ivec3(layer);
+    SSBO Mat3Std430_ssbo;
 
-    // advance to next position
-    if ((z == 0 || z == dim - 1) || (y == 0 || y == dim - 1)) {
-        x++;
-    } else {
-        if (x == dim - 1)
-            x++;
-        else
-            x = dim - 1;
+    uint32_t num_map_points = 0;
+    ComputeProgram* add_point_cloud_program;
+    ComputeProgram* align_point_cloud_program;
+
+    VoxelMap(ShaderManager& shader_manager, 
+             ComputeProgram& add_point_cloud_program, ComputeProgram& align_point_cloud_program, 
+             float voxel_size, int hash_table_size, int max_map_points_count) {
+        map_hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * hash_table_size, GL_DYNAMIC_DRAW, 0u, shader_manager);
+        map_points_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        map_normals_ssbo = SSBO::from_fill(sizeof(PointNormal) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        num_map_points_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        h_and_g_ssbo = SSBO::from_fill(sizeof(HAndG), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        source_location_ssbo = SSBO::from_fill(sizeof(Location), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        Mat3Std430_ssbo = SSBO::from_fill(sizeof(Mat3Std430), GL_DYNAMIC_DRAW, 0u, shader_manager);
+        
+        this->add_point_cloud_program = &add_point_cloud_program;
+        this->align_point_cloud_program = &align_point_cloud_program;
     }
 
-    if (x >= dim) {
-        x = 0;
-        z++;
+    void add_point_cloud(Point& source_point_cloud, SSBO& source_normals_ssbo) {
+        // std::uint32_t num_points = point_cloud_video.frames[0].point_cloud.points.size();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        add_point_cloud_program->set_uint("num_source_points", num_source_points);
 
-        if (z >= dim) {
-            z = 0;
-            y++;
+        add_point_cloud_program->use();
+        add_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        // PointNormal normals[5];
+        // map_normals_ssbo.read_subdata(0u, &normals, sizeof(PointNormal) * 5);
+
+        // for (int i = 0; i < 5; i++) {
+        //     std::cout << i << ") " << "normal: (" << normals[i].normal.x << ", " << normals[i].normal.y << ", " << normals[i].normal.z << ")" << std::endl;
+        // }
+    }
+
+    void gicp_step_gpu(PointCloud& source_point_cloud, SSBO& source_normals_ssbo) {
+        source_point_cloud.sync_gpu();
+
+        Location source_location;
+        source_location.position = glm::vec4(source_point_cloud.position, 1.0f);
+        source_location.rotation = glm::vec4(source_point_cloud.rotation, 1.0f);
+
+        source_location_ssbo.update_subdata(0, &source_location, sizeof(Location));
+
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        source_location_ssbo.bind_base(7);
+        
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->use();
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+        
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        Location location_out = {};
+        source_location_ssbo.read_subdata(0u, &location_out, sizeof(Location));
+
+        source_point_cloud.position = location_out.position;
+        source_point_cloud.rotation = location_out.rotation;
+
+        std::cout << "position: (" << location_out.position.x << ", " << location_out.position.y << ", " << location_out.position.z << ")" << std::endl;
+        std::cout << "rotation: (" << location_out.rotation.x << ", " << location_out.rotation.y << ", " << location_out.rotation.z << ")" << std::endl;
+
+        // HAndG out_h_and_g = {};
+        // h_and_g_ssbo.read_subdata(0u, &out_h_and_g, sizeof(HAndG));
+
+        // for (int i = 0; i < 6; i++) {
+        //     for (int j = 0; j < 6; j++) {
+        //         std::cout << "h[" << i << "][" << j << "] = " << out_h_and_g.h[i][j] << std::endl;
+        //     }
+        // }
+
+        // std::cout << std::endl;
+
+        // for (int i = 0; i < 6; i++) {
+        //     std::cout << "g[" << i << "] = " << out_h_and_g.g[i] << std::endl;
+        // }
+    }
+
+    void align_point_cloud(PointCloud& source_point_cloud, SSBO& source_normals_ssbo) {
+        source_point_cloud.sync_gpu();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+
+        align_point_cloud_program->use();
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        HAndG out_h_and_g = {};
+        h_and_g_ssbo.read_subdata(0u, &out_h_and_g, sizeof(HAndG));
+
+        for (int i = 0; i < 6; i++) {
+            for (int j = 0; j < 6; j++) {
+                std::cout << "h[" << i << "][" << j << "] = " << out_h_and_g.h[i][j] << std::endl;
+            }
+        }
+
+        std::cout << std::endl;
+
+        for (int i = 0; i < 6; i++) {
+            std::cout << "g[" << i << "] = " << out_h_and_g.g[i] << std::endl;
         }
     }
 
-    index_pos = glm::ivec3(x, y, z);
+    glm::mat3 test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, glm::vec3 euler) {
+        source_point_cloud.sync_gpu();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        Mat3Std430_ssbo.bind_base(9);
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+        align_point_cloud_program->set_vec3("uEuler", euler);
 
-    return (y >= dim);
+        align_point_cloud_program->use();
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        Mat3Std430 out_Mat3Std430 = {};
+        Mat3Std430_ssbo.read_subdata(0u, &out_Mat3Std430, sizeof(Mat3Std430));
+
+        glm::mat3 result;
+        
+        for (int i = 0; i < 3; i++) {
+            result[0][i] = out_Mat3Std430.col0[i];
+        }
+        // std::cout << std::endl;
+        for (int i = 0; i < 3; i++) {
+            result[1][i] = out_Mat3Std430.col1[i];
+        }
+        // std::cout << std::endl;
+        for (int i = 0; i < 3; i++) {
+            result[2][i] = out_Mat3Std430.col2[i];
+        }
+        // std::cout << std::endl;
+
+        return result;
+    }
+
+    Point get_point_cloud() {
+        return Point(map_points_ssbo, (int)num_map_points);
+    }
+};
+
+void get_points(std::vector<PointInstance>& points, std::vector<glm::vec4>& normals, glm::vec4 color) {
+    int size = 10;
+    // float step = 0.2f; // distance between grid points
+    float step = 2.0f; // distance between grid points
+    for (int x = 0; x < size; x++) {
+        for (int z = 0; z < size; z++) {
+            PointInstance point;
+            point.color = color;
+
+            // Center the grid around (0, 0)
+            float px = (x - (size - 1) * 0.5f) * step;
+            float pz = (z - (size - 1) * 0.5f) * step;
+
+            // Surface: y = f(x, z)
+            float py =
+                0.15f * sinf(1.7f * px) +
+                0.10f * cosf(1.3f * pz) +
+                0.05f * px * pz;
+
+            point.pos = glm::vec4(px, py, pz, 1.0f);
+
+            // Partial derivatives of f(x, z)
+            float dfdx =
+                0.15f * 1.7f * cosf(1.7f * px) +
+                0.05f * pz;
+
+            float dfdz =
+            -0.10f * 1.3f * sinf(1.3f * pz) +
+                0.05f * px;
+
+            // For surface y = f(x,z), normal is (-df/dx, 1, -df/dz)
+            glm::vec3 n = glm::normalize(glm::vec3(-dfdx, 1.0f, -dfdz));
+            glm::vec4 normal = glm::vec4(n, 0.0f);
+            // glm::vec4 normal = n;
+
+            points.push_back(point);
+            normals.push_back(normal);
+        }
+    }
+}
+
+void get_normals_ssbo(std::vector<glm::vec4> &normals, SSBO& normals_ssbo) {
+    normals_ssbo = SSBO(normals.size() * sizeof(glm::vec4), GL_DYNAMIC_DRAW, normals.data());
 }
 
 
-float clear_col[4] = {0.2f, 0.2f, 0.2f, 1.0f};
+
+
+float clear_col[4] = {0.1f, 0.1f, 0.1f, 1.0f};
 
 int main() {
     Engine3D engine = Engine3D();
@@ -125,237 +373,113 @@ int main() {
     engine.set_window(&window);
     ui::init(window.window);
 
+    ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
+    ComputeProgram align_point_cloud_program = ComputeProgram(&engine.shader_manager->align_point_cloud_cs);
+
     Camera camera;
     window.set_camera(&camera);
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 50;
 
+    // PointCloudVideo point_cloud_video = PointCloudVideo();
+    // point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
 
-    // uint32_t u_hash_table_size = 100000;
+    PointCloud target_point_cloud;
+    PointCloud source_point_cloud;
 
-    // SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
+    std::vector<PointInstance> target_points;
+    std::vector<glm::vec4> target_normals;
+    SSBO target_normals_ssbo;
 
-    // ComputeProgram test_hash_table_program = ComputeProgram(&engine.shader_manager->test_hash_table_cs);
-    // ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
+    std::vector<PointInstance> source_points;
+    std::vector<glm::vec4> source_normals;
+    SSBO source_normals_ssbo;
+
+    get_points(target_points, target_normals, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+    get_points(source_points, source_normals, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+    get_normals_ssbo(target_normals, target_normals_ssbo);
+    get_normals_ssbo(source_normals, source_normals_ssbo);
+
+    target_point_cloud.update_points(target_points);
+    source_point_cloud.update_points(source_points);
+
+    target_point_cloud.sync_gpu();
+    source_point_cloud.sync_gpu();
+
+    source_point_cloud.position = glm::vec4(3.0f, 3.0f, 3.0f, 1.0f);
+    source_point_cloud.rotation = glm::vec3(0.6f, 0.5f, 0.1f);
 
     
+    VoxelMap voxel_map = VoxelMap(*engine.shader_manager, add_point_cloud_to_map_program, align_point_cloud_program, 1, 100000, 1000);
+    
+    // point_cloud_video.frames[0].point_cloud.sync_gpu();
+    // align_point_cloud
+    voxel_map.add_point_cloud(target_point_cloud.point_renderer, target_normals_ssbo);
+
+    std::vector<glm::vec3> euler_tests = {
+        glm::vec3(0, 0, 0),
+        glm::radians(glm::vec3(10.0f, 0.0f, 0.0f)),
+        glm::radians(glm::vec3(0.0f, 20.0f, 0.0f)),
+        glm::radians(glm::vec3(0.0f, 0.0f, 30.0f)),
+        glm::radians(glm::vec3(15.0f, 25.0f, 35.0f)),
+        glm::radians(glm::vec3(-20.0f, 45.0f, -10.0f)),
+        glm::radians(glm::vec3(89.0f, 1.0f, -45.0f)),
+    };
 
 
-
-    // hash_table_ssbo.bind_base(0);
-
-    // // hash_table_size
-    // test_hash_table_program.set_uint("u_hash_table_size", u_hash_table_size);
-
-    // test_hash_table_program.use();
-    // test_hash_table_program.dispatch_compute(1, 1, 1);
-    // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // glm::radians(glm::vec3(15.0f, 25.0f, 35.0f)),
 
 
-    // HashTableSlot hash_table[u_hash_table_size] = {};
-    // hash_table_ssbo.read_subdata(sizeof(std::uint32_t) * 4, hash_table, sizeof(HashTableSlot) * (u_hash_table_size - 1));
+    // glm::mat3 result_1 = GICP::euler_xyz_to_mat3(euler_tests[4]);
+    // glm::mat3 result_2 = voxel_map.test(source_point_cloud, source_normals_ssbo, euler_tests[4]);
 
-    // for (int i = 0; i < u_hash_table_size; i++) {
-    //     std::cout << "(" << hash_table[i].hash_value.x << " " << hash_table[i].hash_value.y << " " << hash_table[i].hash_value.z << ")" << std::endl;
-    // }
+    // const float eps = 1e-4f;
+    // bool equal = true;
 
-    std::vector<LineInstance> layer_line_instances;
-    std::vector<LineInstance> layer_line_instances_blue;
-    // layer_line_instances.push_back({glm::vec3(0, 0, 0), glm::vec3(5, 0, 0)});
-    Line layer_line;
-    Line layer_line_blue;
-    layer_line_blue.color = glm::vec4(0, 0, 1, 1);
-
-    // for (int layer = 0; layer < 3; layer++) {
-    //     int x = 0;
-    //     int y = 0;
-    //     int z = 0;
-
-    //     int x_prev = 0;
-    //     int y_prev = 0;
-    //     int z_prev = 0;
-
-    //     float dim_size = 1 + layer * 2;
-    //     while(x < dim_size) {
-    //         while (y < dim_size) {
-    //             while (z < dim_size) {
-    //                 if (x != 0 && y != 0 && z != 0) {
-    //                     LineInstance line_instance;
-
-    //                     line_instance.p0 = glm::vec3(x_prev, y_prev, z_prev);
-    //                     line_instance.p1 = glm::vec3(x, y, z);
-
-    //                     layer_line_instances.push_back(line_instance);
-
-    //                     x_prev = x;
-    //                     y_prev = y;
-    //                     z_prev = z;
-    //                 }
-                    
-    //                 if ((x != 0) || (x != (dim_size - 1)) && (y != 0) || (y != (dim_size - 1))) {
-    //                     if (z == dim_size - 1)
-    //                         z += 1;
-    //                     else
-    //                         z = dim_size - 1;
-    //                 }
-    //                 else
-    //                     z += 1;
-    //             }
-
-    //             if ((x != 0) || (x != (dim_size - 1)) && (z != 0) || (z != (dim_size - 1))) {
-    //                 if (y == dim_size - 1)
-    //                     y += 1;
-    //                 else
-    //                     y = dim_size - 1;
-    //             }
-    //             else
-    //                 y += 1;
-    //         }
-
-    //         if ((z != 0) || (z != (dim_size - 1)) && (y != 0) || (y != (dim_size - 1))) {
-    //             if (x == dim_size - 1)
-    //                 x += 1;
-    //             else
-    //                 x = dim_size - 1;
-    //         }
-    //         else
-    //             x += 1;
+    // for (int c = 0; c < 3; c++) {
+    //     for (int r = 0; r < 3; r++) {
+    //         std::cout << result_1[c][r] << " ";
     //     }
+    //     std::cout << std::endl;
     // }
 
-    // glm::ivec3 voxel_origin = glm::ivec3(0, 0, 0);
-    // glm::ivec3 index_pos = glm::ivec3(0, 0, 0);
-    // for (int layer = 0; layer < 3; layer++) {
-    //     glm::ivec3 cur_pos = glm::ivec3(0, 0, 0);
-    //     bool finished = false;
-    //     while (!finished) {
-    //         finished = next_pos(voxel_origin, layer, index_pos, cur_pos);
+    // std::cout << std::endl;
 
-    //         std::cout << "(" << cur_pos.x << ", " << cur_pos.y << ", " << cur_pos.z << ")" << std::endl;
-
-    //         LineInstance line_instance;
-    //         line_instance.p0 = cur_pos;
-    //         line_instance.p1 = cur_pos;
-    //         line_instance.p1.x += 0.2f;
+    // for (int c = 0; c < 3; c++) {
+    //     for (int r = 0; r < 3; r++) {
+    //         std::cout << result_2[c][r] << " ";
     //     }
+    //     std::cout << std::endl;
     // }
 
+    for (int i = 0; i < euler_tests.size(); i++) {
+        glm::mat3 result_1 = GICP::euler_xyz_to_mat3(euler_tests[i]);
+        glm::mat3 result_2 = voxel_map.test(source_point_cloud, source_normals_ssbo, euler_tests[i]);
 
-    glm::ivec3 voxel_origin(0, 0, 0);
+        const float eps = 1e-4f;
+        bool equal = true;
 
-    // for (int layer = 2; layer < 3; layer++) {
-    //     glm::ivec3 index_pos(0, 0, 0); // reset every layer
-    //     glm::ivec3 cur_pos(0, 0, 0);
-
-    //     bool finished = false;
-    //     while (!finished) {
-    //         finished = next_pos(voxel_origin, layer, index_pos, cur_pos);
-
-    //         std::cout << "(" << cur_pos.x << ", " << cur_pos.y << ", " << cur_pos.z << ")\n";
-    //         LineInstance line_instance;
-    //         line_instance.p0 = cur_pos;
-    //         line_instance.p1 = cur_pos;
-    //         line_instance.p1.x += 0.2f;
-
-    //         layer_line_instances.push_back(line_instance);
-    //     }
-    // }
-
-    for (int layer = 0; layer < 3; layer++) {
-    const int dim = 1 + layer * 2;
-
-        for (int y = 0; y < dim; y++) {
-            const bool on_y_edge = (y == 0 || y == dim - 1);
-
-            for (int z = 0; z < dim; z++) {
-                const bool on_z_edge = (z == 0 || z == dim - 1);
-
-                int x = 0;
-                while (x < dim) {
-                    glm::ivec3 pos = voxel_origin + glm::ivec3(x, y, z) - glm::ivec3(layer);
-
-                    LineInstance line_instance;
-                    line_instance.p0 = pos;
-                    line_instance.p1 = pos;
-                    line_instance.p1.x += 0.5f;
-
-                    if (layer % 2 == 0)
-                        layer_line_instances.push_back(line_instance);
-                    else
-                        layer_line_instances_blue.push_back(line_instance);
-
-                    if (on_y_edge || on_z_edge) {
-                        x++;
-                    } else {
-                        x = (x == dim - 1) ? x + 1 : dim - 1;
-                    }
+        for (int c = 0; c < 3 && equal; c++) {
+            for (int r = 0; r < 3; r++) {
+                if (std::abs(result_1[c][r] - result_2[c][r]) > eps) {
+                    equal = false;
+                    break;
                 }
             }
         }
+
+        std::cout << "Test " << i << ": "
+                << (equal ? "OK" : "MISMATCH")
+                << "\n";
     }
 
-    PointCloudVideo point_cloud_video = PointCloudVideo();
-    point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
-    
-    // ComputeProgram test_hash_table_program = ComputeProgram(&engine.shader_manager->test_hash_table_cs);
-    ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
+    // glm::mat3 result0 = GICP::euler_xyz_to_mat3(glm::vec3(?, ?, ?));
 
-    uint32_t u_hash_table_size = 100000;
-    int max_map_points_count = 5000;
-
-    SSBO hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * u_hash_table_size, GL_DYNAMIC_DRAW, 0u, *engine.shader_manager); 
-
-    point_cloud_video.frames[0].point_cloud.sync_gpu();
-    SSBO source_point_ssbo = SSBO(*point_cloud_video.frames[0].point_cloud.point_renderer.instance_vbo);
-    
-    SSBO map_point_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
-    SSBO num_point_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, *engine.shader_manager);
-
-    // std::uint32_t num_points = point_cloud_video.frames[0].point_cloud.points.size();
-    std::uint32_t num_source_points = point_cloud_video.frames[0].point_cloud.point_renderer.instance_count;
-    int x_count = math_utils::div_up_u32(num_source_points, 256);
-    
-    hash_table_ssbo.bind_base(0);
-    map_point_ssbo.bind_base(1);
-    num_point_ssbo.bind_base(2);
-    source_point_ssbo.bind_base(3);
-    // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-    add_point_cloud_to_map_program.set_uint("num_source_points", num_source_points);
-
-    add_point_cloud_to_map_program.use();
-    add_point_cloud_to_map_program.dispatch_compute(x_count, 1, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    // int read_num = 4;
-
-    // HashTableSlot hash_table[u_hash_table_size] = {};
-    // hash_table_ssbo.read_subdata(sizeof(std::uint32_t) * 4, hash_table, sizeof(HashTableSlot) * (read_num - 1));
-
-    // for (int i = 0; i < read_num; i++) {
-    //     std::cout << "(" << hash_table[i].hash_value.position.x << " " << hash_table[i].hash_value.position.y << " " << hash_table[i].hash_value.position.z << ")" << std::endl;
-    // }
-
-    // PointInstance points[max_points_count] = {};
-    // map_point_ssbo.read_subdata(0u, points, sizeof(PointInstance) * max_points_count);
-
-    // for (int i = 0; i < read_num; i++) {
-    //     std::cout << "(" << points[i].pos.x << " " << points[i].pos.y << " " << points[i].pos.z << ")" << std::endl;
-    //     // std::cout << points[i] << std::endl;
-    // }
-
-    uint32_t output_num_points;
-    num_point_ssbo.read_subdata(0u, &output_num_points, sizeof(uint32_t));
-
-
-
-    layer_line.set_lines(layer_line_instances);
-    layer_line_blue.set_lines(layer_line_instances_blue);
-
-    Point map_points(map_point_ssbo, output_num_points);
-    // map_points.instance_count = 4;
     
 
-
+    Point map_points = voxel_map.get_point_cloud();
+    
     
     float rel_thresh = 1.5f;
     float last_frame = 0.0f;
@@ -378,10 +502,10 @@ int main() {
         // window.draw(&layer_line_blue, &camera);
         window.draw(&map_points, &camera);
 
-        
-        
 
-
+        // window.draw(&target_point_cloud, &camera);
+        window.draw(&source_point_cloud, &camera);
+        
 
         ui::begin_frame();
         ui::update_mouse_mode(&window);
@@ -394,6 +518,12 @@ int main() {
         ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
         ImGui::TextColored(ImVec4(0.5,0.5,1,1), "fps: %.3f", fps);
+
+        if (ImGui::Button("GICP step")) {
+            // GICP::step(source_point_cloud, target_point_cloud, source_normals, target_normals);
+            // voxel_map.gicp_step_gpu(source_point_cloud, source_normals_ssbo);
+            voxel_map.test(source_point_cloud, source_normals_ssbo, glm::vec3(1, 1, 1));
+        }
 
         ImGui::End();
 

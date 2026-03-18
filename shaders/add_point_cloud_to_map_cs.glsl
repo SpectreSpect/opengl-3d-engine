@@ -8,6 +8,9 @@ struct PointInstance {
     vec4 color;
 };
 
+struct PointNormal {
+    vec4 normal;
+};
 
 #define HASH_KEY_TYPE uvec2
 #define HASH_VALUE_TYPE uint
@@ -23,23 +26,15 @@ struct HashTableSlot {
     uint hash_state;
 };
 
-// layout(std430, binding=0) coherent buffer HashTable {uint count_tomb; HashTableSlot hash_table[]; }; 
 layout(std430, binding=0) coherent buffer HashTable {uint count_tomb; HashTableSlot hash_table[]; }; 
-// layout(std430, binding=1) coherent buffer Points {uint num_points; PointInstance points[]; }; 
 layout(std430, binding=1) coherent buffer MapPoints {PointInstance map_points[]; }; 
-layout(std430, binding=2) coherent buffer NumPoints {uint num_map_points; }; 
-layout(std430, binding=3) coherent buffer SourcePoints {PointInstance source_points[];}; 
+layout(std430, binding=2) coherent buffer MapNormals {PointNormal map_normals[];}; 
+layout(std430, binding=3) coherent buffer NumPoints {uint num_map_points; }; 
 
-
+layout(std430, binding=4) coherent buffer SourcePoints {PointInstance source_points[];}; 
+layout(std430, binding=5) coherent buffer SourceNormals {PointNormal source_normals[];}; 
 
 HASH_VALUE_TYPE slot_init_func(out bool is_success) {
-    // HASH_VALUE_TYPE chunk_id = pop_free_chunk_id();
-    // is_success = chunk_id != INVALID_ID;
-    // PointInstance new_hash_point;
-
-    // new_hash_point.position = vec4(0, 0, 0, 0);
-    // new_hash_point.normal = vec4(0, 0, 0, 0);
-
     return 0;
 }
 
@@ -98,9 +93,6 @@ uniform uint num_source_points;
 void main() {
     uint source_point_id = gl_GlobalInvocationID.x;
 
-
-
-
     if (source_point_id > num_source_points) 
         return;
     
@@ -136,6 +128,7 @@ void main() {
     }
 
     map_points[map_point_id] = source_points[source_point_id];
+    map_normals[map_point_id] = source_normals[source_point_id];
 
     // hash_table[slot_id].hash_value = point_id;
 }

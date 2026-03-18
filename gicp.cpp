@@ -178,10 +178,201 @@ glm::vec3 GICP::mat3_to_euler_xyz(const glm::mat3& R) {
     return glm::vec3(x, y, z);
 }
 
+// double GICP::step(PointCloud& source_point_cloud,
+//                 const PointCloud& target_point_cloud,
+//                 const std::vector<glm::vec3>& source_normals,
+//                 const std::vector<glm::vec3>& target_normals)
+// {
+//     const std::vector<PointInstance>& source_points = source_point_cloud.points;
+//     const std::vector<PointInstance>& target_points = target_point_cloud.points;
+
+//     if (source_points.size() != source_normals.size()) {
+//         std::cout << "source_points.size() != source_normals.size()\n";
+//         return -1.0;
+//     }
+
+//     if (target_points.size() != target_normals.size()) {
+//         std::cout << "target_points.size() != target_normals.size()\n";
+//         return -1.0;
+//     }
+
+//     float max_corr_dist = 5.0f;
+//     float max_corr_dist_sq = max_corr_dist * max_corr_dist;
+//     float max_rot = glm::radians(5.0f);
+//     float max_trans = 5.0f;
+//     float gicp_eps = 1e-3f;
+
+//     double H[6][6] = {};
+//     double g[6] = {};
+
+//     // Precompute target points, normals, covariances in world space
+//     std::vector<glm::vec3> target_points_world;
+//     std::vector<glm::vec3> target_normals_world;
+//     std::vector<glm::mat3> target_covs_world;
+
+//     target_points_world.reserve(target_points.size());
+//     target_normals_world.reserve(target_points.size());
+//     target_covs_world.reserve(target_points.size());
+    
+//     std::vector<float> source_distances(source_points.size(), -1);
+//     std::vector<float> target_indices(source_points.size(), -1);
+//     float max_new_dist = 0;
+//     // source_distances.reserve(source_points.size());
+
+//     for (size_t i = 0; i < target_points.size(); i++) {
+//         glm::vec3 q_local = glm::vec3(target_points[i].pos);
+//         glm::vec3 n_world = transform_normal_world(target_point_cloud, target_normals[i]);
+
+//         target_points_world.push_back(transform_point_world(target_point_cloud, q_local));
+//         target_normals_world.push_back(n_world);
+//         target_covs_world.push_back(covariance_from_normal(n_world, gicp_eps));
+//     }
+
+//     double total_weighted_sq_error = 0.0;
+//     int valid_count = 0;
+
+//     for (size_t i = 0; i < source_points.size(); i++) {
+//         glm::vec3 p_local = glm::vec3(source_points[i].pos);
+
+//         // Source point and source normal in world space
+//         glm::vec3 x = transform_point_world(source_point_cloud, p_local);
+//         glm::vec3 n_src_world = transform_normal_world(source_point_cloud, source_normals[i]);
+
+//         if (glm::dot(n_src_world, n_src_world) < 1e-12f) {
+//             continue;
+//         }
+
+//         int target_id = find_closest_id_with_valid_normal(
+//             target_points_world,
+//             target_normals_world,
+//             x,
+//             max_corr_dist_sq
+//         );
+
+//         if (target_id < 0) {
+//             // source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+//             continue;
+//         }
+//         source_distances[i] = glm::distance(target_points_world[target_id], x);
+//         if (source_distances[i] > max_new_dist)
+//             max_new_dist = source_distances[i];
+
+//         target_indices[i] = target_id;
+
+//         // source_point_cloud.points[i].color = glm::vec4(0, 1, 0, 1);
+//         source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
+
+//         glm::vec3 q = target_points_world[target_id];
+//         glm::vec3 n_tgt_world = target_normals_world[target_id];
+
+//         if (glm::dot(n_tgt_world, n_tgt_world) < 1e-12f) {
+//             continue;
+//         }
+
+//         // Build source and target local covariances
+//         glm::mat3 C_A = covariance_from_normal(n_src_world, gicp_eps);
+//         glm::mat3 C_B = target_covs_world[target_id];
+
+//         // GICP weighting matrix:
+//         // M = (C_B + C_A)^-1
+//         // Since x and q are already in world space, both covariances are in world space too.
+//         glm::mat3 Sigma = C_B + C_A;
+//         glm::mat3 M = glm::inverse(Sigma);
+
+//         glm::vec3 d = q - x;
+
+//         // Linearization:
+//         // x' ≈ x + ω × x + v
+//         // d' = q - x' ≈ d + x×ω - v
+//         // so A = [skew(x), -I], residual = d
+//         glm::mat3 B = skew_matrix(x);
+//         glm::mat3 I(1.0f);
+
+//         glm::mat3 H00 = glm::transpose(B) * M * B;
+//         glm::mat3 H01 = -glm::transpose(B) * M;
+//         glm::mat3 H10 = -M * B;
+//         glm::mat3 H11 = M;
+
+//         glm::vec3 g0 = -glm::transpose(B) * M * d;
+//         glm::vec3 g1 =  M * d;
+
+//         add_mat3_block(H, 0, 0, H00);
+//         add_mat3_block(H, 0, 3, H01);
+//         add_mat3_block(H, 3, 0, H10);
+//         add_mat3_block(H, 3, 3, H11);
+
+//         add_vec3_block(g, 0, g0);
+//         add_vec3_block(g, 3, g1);
+
+//         total_weighted_sq_error += static_cast<double>(glm::dot(d, M * d));
+//         valid_count++;
+//     }
+
+//     if (valid_count < 6) {
+//         std::cout << "Too few correspondences\n";
+//         return -1.0;
+//     }
+
+//     double rmse = std::sqrt(total_weighted_sq_error / static_cast<double>(valid_count));
+
+//     double lambda = 1e-6;
+//     for (int i = 0; i < 6; i++) {
+//         H[i][i] += lambda;
+//     }
+
+//     double delta[6] = {};
+//     bool ok = solve_6x6(H, g, delta);
+//     if (!ok) {
+//         std::cout << "solve_6x6 failed\n";
+//         return -1.0;
+//     }
+
+//     glm::vec3 omega(
+//         static_cast<float>(delta[0]),
+//         static_cast<float>(delta[1]),
+//         static_cast<float>(delta[2])
+//     );
+
+//     glm::vec3 v(
+//         static_cast<float>(delta[3]),
+//         static_cast<float>(delta[4]),
+//         static_cast<float>(delta[5])
+//     );
+
+//     float omega_len = glm::length(omega);
+//     if (omega_len > max_rot) {
+//         omega *= max_rot / omega_len;
+//     }
+
+//     float v_len = glm::length(v);
+//     if (v_len > max_trans) {
+//         v *= max_trans / v_len;
+//     }
+
+//     glm::mat3 dR = omega_to_mat3(omega);
+
+//     glm::mat3 R_src = euler_xyz_to_mat3(source_point_cloud.rotation);
+//     glm::mat3 R_src_new = dR * R_src;
+//     glm::vec3 t_src_new = dR * source_point_cloud.position + v;
+
+//     source_point_cloud.position = t_src_new;
+//     source_point_cloud.rotation = mat3_to_euler_xyz(R_src_new);
+    
+//     std::cout << "valid_count = " << valid_count
+//             << ", weighted_rmse = " << rmse
+//             << ", |omega| = " << glm::length(omega)
+//             << ", |v| = " << glm::length(v)
+//             << "\n";
+
+//     return rmse;
+// }
+
+
+
 double GICP::step(PointCloud& source_point_cloud,
-                const PointCloud& target_point_cloud,
-                const std::vector<glm::vec3>& source_normals,
-                const std::vector<glm::vec3>& target_normals)
+                  const PointCloud& target_point_cloud,
+                  const std::vector<glm::vec4>& source_normals,
+                  const std::vector<glm::vec4>& target_normals)
 {
     const std::vector<PointInstance>& source_points = source_point_cloud.points;
     const std::vector<PointInstance>& target_points = target_point_cloud.points;
@@ -213,15 +404,17 @@ double GICP::step(PointCloud& source_point_cloud,
     target_points_world.reserve(target_points.size());
     target_normals_world.reserve(target_points.size());
     target_covs_world.reserve(target_points.size());
-    
-    std::vector<float> source_distances(source_points.size(), -1);
-    std::vector<float> target_indices(source_points.size(), -1);
-    float max_new_dist = 0;
-    // source_distances.reserve(source_points.size());
+
+    std::vector<float> source_distances(source_points.size(), -1.0f);
+    std::vector<float> target_indices(source_points.size(), -1.0f);
+    float max_new_dist = 0.0f;
 
     for (size_t i = 0; i < target_points.size(); i++) {
         glm::vec3 q_local = glm::vec3(target_points[i].pos);
-        glm::vec3 n_world = transform_normal_world(target_point_cloud, target_normals[i]);
+
+        // Convert vec4 normal -> vec3 normal (ignore w)
+        glm::vec3 n_local = glm::vec3(target_normals[i]);
+        glm::vec3 n_world = transform_normal_world(target_point_cloud, n_local);
 
         target_points_world.push_back(transform_point_world(target_point_cloud, q_local));
         target_normals_world.push_back(n_world);
@@ -234,9 +427,12 @@ double GICP::step(PointCloud& source_point_cloud,
     for (size_t i = 0; i < source_points.size(); i++) {
         glm::vec3 p_local = glm::vec3(source_points[i].pos);
 
+        // Convert vec4 normal -> vec3 normal (ignore w)
+        glm::vec3 n_src_local = glm::vec3(source_normals[i]);
+
         // Source point and source normal in world space
         glm::vec3 x = transform_point_world(source_point_cloud, p_local);
-        glm::vec3 n_src_world = transform_normal_world(source_point_cloud, source_normals[i]);
+        glm::vec3 n_src_world = transform_normal_world(source_point_cloud, n_src_local);
 
         if (glm::dot(n_src_world, n_src_world) < 1e-12f) {
             continue;
@@ -250,16 +446,16 @@ double GICP::step(PointCloud& source_point_cloud,
         );
 
         if (target_id < 0) {
-            // source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
             continue;
         }
+
         source_distances[i] = glm::distance(target_points_world[target_id], x);
-        if (source_distances[i] > max_new_dist)
+        if (source_distances[i] > max_new_dist) {
             max_new_dist = source_distances[i];
+        }
 
-        target_indices[i] = target_id;
+        target_indices[i] = static_cast<float>(target_id);
 
-        // source_point_cloud.points[i].color = glm::vec4(0, 1, 0, 1);
         source_point_cloud.points[i].color = glm::vec4(1, 0, 0, 1);
 
         glm::vec3 q = target_points_world[target_id];
@@ -275,7 +471,6 @@ double GICP::step(PointCloud& source_point_cloud,
 
         // GICP weighting matrix:
         // M = (C_B + C_A)^-1
-        // Since x and q are already in world space, both covariances are in world space too.
         glm::mat3 Sigma = C_B + C_A;
         glm::mat3 M = glm::inverse(Sigma);
 
@@ -286,7 +481,6 @@ double GICP::step(PointCloud& source_point_cloud,
         // d' = q - x' ≈ d + x×ω - v
         // so A = [skew(x), -I], residual = d
         glm::mat3 B = skew_matrix(x);
-        glm::mat3 I(1.0f);
 
         glm::mat3 H00 = glm::transpose(B) * M * B;
         glm::mat3 H01 = -glm::transpose(B) * M;
@@ -294,7 +488,7 @@ double GICP::step(PointCloud& source_point_cloud,
         glm::mat3 H11 = M;
 
         glm::vec3 g0 = -glm::transpose(B) * M * d;
-        glm::vec3 g1 =  M * d;
+        glm::vec3 g1 = M * d;
 
         add_mat3_block(H, 0, 0, H00);
         add_mat3_block(H, 0, 3, H01);
@@ -357,12 +551,12 @@ double GICP::step(PointCloud& source_point_cloud,
 
     source_point_cloud.position = t_src_new;
     source_point_cloud.rotation = mat3_to_euler_xyz(R_src_new);
-    
+
     std::cout << "valid_count = " << valid_count
-            << ", weighted_rmse = " << rmse
-            << ", |omega| = " << glm::length(omega)
-            << ", |v| = " << glm::length(v)
-            << "\n";
+              << ", weighted_rmse = " << rmse
+              << ", |omega| = " << glm::length(omega)
+              << ", |v| = " << glm::length(v)
+              << "\n";
 
     return rmse;
 }

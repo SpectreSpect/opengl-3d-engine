@@ -20,8 +20,8 @@ public:
     static glm::vec3 mat3_to_euler_xyz(const glm::mat3& R);
     static double step(PointCloud& source_point_cloud,
                     const PointCloud& target_point_cloud,
-                    const std::vector<glm::vec3>& source_normals,
-                    const std::vector<glm::vec3>& target_normals);
+                    const std::vector<glm::vec4>& source_normals,
+                    const std::vector<glm::vec4>& target_normals);
     static double align_gpu(PointCloud& source_point_cloud,
                             const PointCloud& target_point_cloud,
                             const std::vector<glm::vec3>& source_normals,

@@ -94,6 +94,8 @@ public:
     ComputeShader light_incides_for_clusters_cs;
     ComputeShader test_hash_table_cs;
     ComputeShader add_point_cloud_to_map_cs;
+    ComputeShader align_point_cloud_cs;
+    
 
     std::vector<Shader*> shaders;
 

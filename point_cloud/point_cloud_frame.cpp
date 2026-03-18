@@ -113,6 +113,7 @@ void PointCloudFrame::load_from_file(const std::filesystem::path& path) {
 
     // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
     point_cloud.update_points(std::move(local_points));
+    point_cloud.get_normals_ssbo(normals, normals_ssbo);
 }
 
 

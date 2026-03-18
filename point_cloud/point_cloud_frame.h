@@ -7,7 +7,8 @@ public:
     uint64_t timestamp_ns = 0;
     uint32_t flags = 0;        // 1=rgb, 2=intensity
     PointCloud point_cloud;
-    std::vector<glm::vec3> normals;
+    std::vector<glm::vec4> normals;
+    SSBO normals_ssbo;
 
     glm::vec3 car_pos;
     glm::vec3 car_rotation;
