@@ -7,6 +7,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -15,7 +19,7 @@
 #include "camera.h"
 #include "vertex_shader.h"
 #include "fragment_shader.h"
-#include "program.h"
+#include "vf_program.h"
 
 #include "mesh_manager.h"
 #include "material_manager.h"
@@ -37,7 +41,7 @@ public:
 
     VertexShader* default_vertex_shader;
     FragmentShader* default_fragment_shader;
-    Program* default_program;
+    VfProgram* default_program;
 
     // Camera* camera;
 

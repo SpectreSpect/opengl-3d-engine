@@ -1,4 +1,5 @@
 #include "fps_camera_controller.h"
+#include "imgui_layer.h"
 
 
 FPSCameraController::FPSCameraController(Camera* camera) {
@@ -70,8 +71,13 @@ void FPSCameraController::update_mouse(Window* window, float delta_time) {
 }
 
 void FPSCameraController::update(Window* window, float delta_time) {
-    // if (window->mouse_state.mode == MouseMode::DISABLED) {
-    update_keyboard(window, delta_time);
-    update_mouse(window, delta_time);
-    // }
+    ImGuiIO& io = ImGui::GetIO();
+
+    bool ui_wants_mouse = io.WantCaptureMouse;
+    bool ui_wants_keys  = io.WantCaptureKeyboard;
+
+    if (!ui_wants_mouse && !ui_wants_keys) {
+        update_keyboard(window, delta_time);
+        update_mouse(window, delta_time);
+    }
 }

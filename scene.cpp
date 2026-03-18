@@ -11,7 +11,7 @@ void Scene::draw(Window* window, Camera* camera) {
         if (dynamic_cast<Drawable*>(objects[i])) {
             Program* program = nullptr;
             if (dynamic_cast<RenderObject*>(objects[i]))
-                program = (RenderObject*)objects[i]->ma
+                program = (RenderObject*)objects[i]->ma;
             
             window->draw((Drawable*)objects[i], camera);
         }
