@@ -1293,7 +1293,8 @@ double step()
 
 uniform vec3 uCloudRotation;
 uniform vec3 uCloudScale;
-uniform vec3 uLocalN;
+uniform vec3 uCloudPosition;
+uniform vec3 uLocalP;
 
 
 // vec3 transform_normal_world(vec3 cloud_rotation,
@@ -1322,7 +1323,13 @@ void main() {
 
     // uEuler
 
-    test_output.output_vector = vec4(transform_normal_world(uCloudRotation, uCloudScale, uLocalN), 999.0);
+
+    // vec3 transform_point_world(vec3 cloud_rotation,
+    //                        vec3 cloud_scale,
+    //                        vec3 cloud_position,
+    //                        vec3 local_p)
+
+    test_output.output_vector = vec4(transform_point_world(uCloudRotation, uCloudScale, uCloudPosition, uLocalP), 999.0);
     // test_output.output_vector = vec4(15, 16, 17, 18);
 
     // int idx = 0;
