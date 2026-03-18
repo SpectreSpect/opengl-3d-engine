@@ -443,6 +443,45 @@ public:
         return result;
     }
 
+    // vec3 mat3_to_euler_xyz(mat3 R)
+
+    glm::vec3 mat3_to_euler_xyz_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, const glm::mat3& R) {
+        source_point_cloud.sync_gpu();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        transform_normal_world_ssbo.bind_base(9);
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+
+        align_point_cloud_program->set_mat3("uR", R);
+
+
+        // align_point_cloud_program->set_vec3("uEuler", euler);
+
+        align_point_cloud_program->use();
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        glm::vec4 out = {};
+        transform_normal_world_ssbo.read_subdata(0u, &out, sizeof(glm::vec4));
+
+        return out;
+    }
+
     Point get_point_cloud() {
         return Point(map_points_ssbo, (int)num_map_points);
     }
@@ -548,31 +587,26 @@ int main() {
     // align_point_cloud
     voxel_map.add_point_cloud(target_point_cloud.point_renderer, target_normals_ssbo);
 
-    std::vector<glm::vec3> raw_n_tests = {
-        glm::vec3(0.0f, 0.0f, 0.0f),                  // edge case
-        glm::vec3(1.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 1.0f),
-        glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)),
-        glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f)),
-        glm::normalize(glm::vec3(0.0f, 1.0f, 1.0f)),
-        glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)),
-        glm::normalize(glm::vec3(-1.0f, 4.0f, -2.0f)),
-        glm::vec3(2.0f, 3.0f, 4.0f),                  // non-unit normal
-        glm::vec3(1e-6f, 0.0f, 0.0f)                 // near-zero edge case
+
+    std::vector<glm::mat3> r_tests = {
+        glm::mat3(1.0f),
+
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(10.0f, 0.0f, 0.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(0.0f, 20.0f, 0.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(0.0f, 0.0f, 30.0f))),
+
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(15.0f, 25.0f, 35.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-20.0f, 45.0f, -10.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(60.0f, -30.0f, 120.0f))),
+
+        // near gimbal lock
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(89.0f, 1.0f, -45.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-89.0f, 2.0f, 30.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(90.0f, 0.0f, 0.0f))),
+        GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-90.0f, 0.0f, 0.0f)))
     };
 
-    std::vector<float> eps_tests = {
-        0.0f,
-        1e-6f,
-        1e-4f,
-        1e-3f,
-        1e-2f,
-        0.1f,
-        1.0f
-    };
-
-    const float mat_eps = 1e-4f;
+    const float eps = 1e-4f;
 
     auto is_close_mat3 = [&](const glm::mat3& a, const glm::mat3& b, float eps) {
         for (int c = 0; c < 3; c++) {
@@ -584,70 +618,63 @@ int main() {
         return true;
     };
 
-    auto is_finite_mat3 = [&](const glm::mat3& m) {
-        for (int c = 0; c < 3; c++) {
-            for (int r = 0; r < 3; r++) {
-                if (!std::isfinite(m[c][r]))
-                    return false;
-            }
-        }
-        return true;
-    };
+    for (int i = 0; i < r_tests.size(); i++) {
+        glm::vec3 result_cpu = GICP::mat3_to_euler_xyz(r_tests[i]);
+        glm::vec3 result_gpu = voxel_map.mat3_to_euler_xyz_test(
+            source_point_cloud,
+            source_normals_ssbo,
+            r_tests[i]
+        );
 
-    for (int raw_n_i = 0; raw_n_i < raw_n_tests.size(); raw_n_i++)
-        for (int eps_i = 0; eps_i < eps_tests.size(); eps_i++) {
-            glm::mat3 result_cpu = GICP::covariance_from_normal(
-                raw_n_tests[raw_n_i],
-                eps_tests[eps_i]
-            );
+        glm::mat3 recon_cpu = GICP::euler_xyz_to_mat3(result_cpu);
+        glm::mat3 recon_gpu = GICP::euler_xyz_to_mat3(result_gpu);
 
-            glm::mat3 result_gpu = voxel_map.covariance_from_normal_test(
-                source_point_cloud,
-                source_normals_ssbo,
-                raw_n_tests[raw_n_i],
-                eps_tests[eps_i]
-            );
+        bool cpu_ok = is_close_mat3(r_tests[i], recon_cpu, eps);
+        bool gpu_ok = is_close_mat3(r_tests[i], recon_gpu, eps);
+        bool cpu_gpu_same_rotation = is_close_mat3(recon_cpu, recon_gpu, eps);
 
-            bool ok = is_finite_mat3(result_cpu) &&
-                    is_finite_mat3(result_gpu) &&
-                    is_close_mat3(result_cpu, result_gpu, mat_eps);
-
-            std::cout
-                << "raw_n[" << raw_n_i << "] = ("
-                << raw_n_tests[raw_n_i].x << ", "
-                << raw_n_tests[raw_n_i].y << ", "
-                << raw_n_tests[raw_n_i].z << "), "
-                << "eps[" << eps_i << "] = " << eps_tests[eps_i]
-                << " => " << (ok ? "OK" : "MISMATCH")
+        std::cout << "Test " << i << ": "
+                << ((cpu_ok && gpu_ok && cpu_gpu_same_rotation) ? "OK" : "MISMATCH")
                 << "\n";
 
-            if (!ok) {
-                std::cout << "CPU:\n";
-                for (int r = 0; r < 3; r++) {
-                    std::cout << result_cpu[0][r] << " "
-                            << result_cpu[1][r] << " "
-                            << result_cpu[2][r] << "\n";
-                }
+        std::cout << "  CPU euler = ("
+                << result_cpu.x << ", "
+                << result_cpu.y << ", "
+                << result_cpu.z << ")\n";
 
-                std::cout << "GPU:\n";
-                for (int r = 0; r < 3; r++) {
-                    std::cout << result_gpu[0][r] << " "
-                            << result_gpu[1][r] << " "
-                            << result_gpu[2][r] << "\n";
-                }
+        std::cout << "  GPU euler = ("
+                << result_gpu.x << ", "
+                << result_gpu.y << ", "
+                << result_gpu.z << ")\n";
 
-                glm::mat3 diff = result_cpu - result_gpu;
-                std::cout << "DIFF:\n";
-                for (int r = 0; r < 3; r++) {
-                    std::cout << diff[0][r] << " "
-                            << diff[1][r] << " "
-                            << diff[2][r] << "\n";
-                }
+        if (!(cpu_ok && gpu_ok && cpu_gpu_same_rotation)) {
+            std::cout << "  cpu_ok = " << cpu_ok
+                    << ", gpu_ok = " << gpu_ok
+                    << ", cpu_gpu_same_rotation = " << cpu_gpu_same_rotation
+                    << "\n";
+
+            std::cout << "  Original R:\n";
+            for (int r = 0; r < 3; r++) {
+                std::cout << r_tests[i][0][r] << " "
+                        << r_tests[i][1][r] << " "
+                        << r_tests[i][2][r] << "\n";
+            }
+
+            std::cout << "  Reconstructed CPU R:\n";
+            for (int r = 0; r < 3; r++) {
+                std::cout << recon_cpu[0][r] << " "
+                        << recon_cpu[1][r] << " "
+                        << recon_cpu[2][r] << "\n";
+            }
+
+            std::cout << "  Reconstructed GPU R:\n";
+            for (int r = 0; r < 3; r++) {
+                std::cout << recon_gpu[0][r] << " "
+                        << recon_gpu[1][r] << " "
+                        << recon_gpu[2][r] << "\n";
             }
         }
-
-
-    // glm::mat3 result0 = GICP::euler_xyz_to_mat3(glm::vec3(?, ?, ?));
+    }
 
     
 

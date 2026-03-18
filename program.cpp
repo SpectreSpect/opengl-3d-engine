@@ -27,6 +27,16 @@ void Program::use() const {
     glUseProgram(id);
 }
 
+void Program::set_mat3(const std::string& name, const glm::mat3& mat) const {
+    this->use();
+    GLint loc = glGetUniformLocation(id, name.c_str());
+    if (loc == -1) {
+        std::cerr << "Warning: uniform '" << name << "' not found!\n";
+    } else {
+        glUniformMatrix3fv(loc, 1, GL_FALSE, &mat[0][0]);
+    }
+}
+
 void Program::set_mat4(const std::string name, const glm::mat4 mat) const{
     this->use();
     GLint loc = glGetUniformLocation(id, name.c_str());

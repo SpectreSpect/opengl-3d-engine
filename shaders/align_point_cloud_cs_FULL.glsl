@@ -163,7 +163,7 @@ struct Location {
 };
 
 struct TestOutput {
-    mat3 out_val;
+    vec3 out_val;
 };
 
 
@@ -1006,26 +1006,32 @@ vec3 mat3_to_euler_xyz(mat3 R)
 
     float x, y, z;
 
-    // For R = Rz(z) * Ry(y) * Rx(x):
-    // R[0][2] = -sin(y)   because mat[col][row]
-    float sy = clamp(-R[0][2], -1.0, 1.0);
+    // GLM-compatible convention here:
+    // R = Rx(x) * Ry(y) * Rz(z)
+
+    // row 0, col 2  -> GLSL: R[2][0]
+    float sy = clamp(R[2][0], -1.0, 1.0);
 
     if (sy >= 1.0 - EPS) {
-        // y = +pi/2 : gimbal lock
         y = HALF_PI;
         z = 0.0;
-        x = atan(R[1][0], R[1][1]);
+        x = atan(R[0][1], R[1][1]);
     }
     else if (sy <= -1.0 + EPS) {
-        // y = -pi/2 : gimbal lock
         y = -HALF_PI;
         z = 0.0;
-        x = atan(-R[1][0], R[1][1]);
+        x = atan(-R[0][1], R[1][1]);
     }
     else {
         y = asin(sy);
-        x = atan(R[1][2], R[2][2]);
-        z = atan(R[0][1], R[0][0]);
+
+        // row 1, col 2 = R[2][1]
+        // row 2, col 2 = R[2][2]
+        x = atan(-R[2][1], R[2][2]);
+
+        // row 0, col 1 = R[1][0]
+        // row 0, col 0 = R[0][0]
+        z = atan(-R[1][0], R[0][0]);
     }
 
     return vec3(x, y, z);
@@ -1291,8 +1297,7 @@ double step()
 #define STATUS_UNLOCKED 0u
 #define STATUS_LOCKED 1u
 
-uniform vec3 uRawN;
-uniform float uEps;
+uniform mat3 uR;
 
 
 // vec3 transform_normal_world(vec3 cloud_rotation,
@@ -1330,7 +1335,10 @@ void main() {
     // test_output.output_vector = vec4(transform_point_world(uCloudRotation, uCloudScale, uCloudPosition, uLocalP), 999.0);
 
     // mat3 covariance_from_normal(vec3 raw_n, float eps)
-    test_output.out_val = covariance_from_normal(uRawN, uEps);
+
+    test_output.out_val = mat3_to_euler_xyz(uR);
+
+    
     
     // test_output.output_vector = vec4(15, 16, 17, 18);
 
