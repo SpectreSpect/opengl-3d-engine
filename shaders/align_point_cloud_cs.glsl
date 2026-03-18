@@ -24,7 +24,7 @@ struct Location {
 };
 
 struct TestOutput {
-    vec4 output_vector;
+    mat3 out_val;
 };
 
 
@@ -790,10 +790,8 @@ double step()
 #define STATUS_UNLOCKED 0u
 #define STATUS_LOCKED 1u
 
-uniform vec3 uCloudRotation;
-uniform vec3 uCloudScale;
-uniform vec3 uCloudPosition;
-uniform vec3 uLocalP;
+uniform vec3 uRawN;
+uniform float uEps;
 
 
 // vec3 transform_normal_world(vec3 cloud_rotation,
@@ -828,7 +826,11 @@ void main() {
     //                        vec3 cloud_position,
     //                        vec3 local_p)
 
-    test_output.output_vector = vec4(transform_point_world(uCloudRotation, uCloudScale, uCloudPosition, uLocalP), 999.0);
+    // test_output.output_vector = vec4(transform_point_world(uCloudRotation, uCloudScale, uCloudPosition, uLocalP), 999.0);
+
+    // mat3 covariance_from_normal(vec3 raw_n, float eps)
+    test_output.out_val = covariance_from_normal(uRawN, uEps);
+    
     // test_output.output_vector = vec4(15, 16, 17, 18);
 
     // int idx = 0;

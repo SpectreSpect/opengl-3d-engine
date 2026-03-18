@@ -393,6 +393,56 @@ public:
         return out;
     }
 
+
+    glm::mat3 covariance_from_normal_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, glm::vec3 raw_n, float eps) {
+        source_point_cloud.sync_gpu();
+        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
+        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
+        int x_count = math_utils::div_up_u32(num_source_points, 256);
+        
+        map_hash_table_ssbo.bind_base(0);
+        
+        map_points_ssbo.bind_base(1);
+        map_normals_ssbo.bind_base(2);
+        num_map_points_ssbo.bind_base(3);
+        
+        source_points_ssbo.bind_base(4);
+        source_normals_ssbo.bind_base(5);
+        h_and_g_ssbo.bind_base(6);
+        Mat3Std430_ssbo.bind_base(9);
+        
+        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
+        align_point_cloud_program->set_uint("num_source_points", num_source_points);
+        align_point_cloud_program->set_vec3("uRawN", raw_n);
+        align_point_cloud_program->set_float("uEps", eps);
+
+        align_point_cloud_program->use();
+        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
+
+        Mat3Std430 out_Mat3Std430 = {};
+        Mat3Std430_ssbo.read_subdata(0u, &out_Mat3Std430, sizeof(Mat3Std430));
+
+        glm::mat3 result;
+        
+        for (int i = 0; i < 3; i++) {
+            result[0][i] = out_Mat3Std430.col0[i];
+        }
+        // std::cout << std::endl;
+        for (int i = 0; i < 3; i++) {
+            result[1][i] = out_Mat3Std430.col1[i];
+        }
+        // std::cout << std::endl;
+        for (int i = 0; i < 3; i++) {
+            result[2][i] = out_Mat3Std430.col2[i];
+        }
+        // std::cout << std::endl;
+
+        return result;
+    }
+
     Point get_point_cloud() {
         return Point(map_points_ssbo, (int)num_map_points);
     }
@@ -498,113 +548,103 @@ int main() {
     // align_point_cloud
     voxel_map.add_point_cloud(target_point_cloud.point_renderer, target_normals_ssbo);
 
-    std::vector<glm::vec3> rotation_tests = {
-        glm::radians(glm::vec3(0.0f, 0.0f, 0.0f)),
-        glm::radians(glm::vec3(10.0f, 0.0f, 0.0f)),
-        glm::radians(glm::vec3(0.0f, 20.0f, 0.0f)),
-        glm::radians(glm::vec3(0.0f, 0.0f, 30.0f)),
-        glm::radians(glm::vec3(15.0f, 25.0f, 35.0f)),
-        glm::radians(glm::vec3(-20.0f, 45.0f, -10.0f)),
-        glm::radians(glm::vec3(89.0f, 1.0f, -45.0f))
-    };
-
-    std::vector<glm::vec3> scale_tests = {
-        glm::vec3(1.0f, 1.0f, 1.0f),
-        glm::vec3(2.0f, 2.0f, 2.0f),
-        glm::vec3(2.0f, 1.0f, 1.0f),
-        glm::vec3(1.0f, 3.0f, 1.0f),
-        glm::vec3(1.0f, 1.0f, 0.5f),
-        glm::vec3(2.0f, 0.5f, 4.0f),
-        glm::vec3(-1.0f, 1.0f, 1.0f)
-    };
-
-    std::vector<glm::vec3> position_tests = {
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(1.0f, 2.0f, 3.0f),
-        glm::vec3(-5.0f, 0.5f, 2.0f),
-        glm::vec3(10.0f, -3.0f, 7.0f),
-        glm::vec3(-100.0f, 50.0f, -25.0f)
-    };
-
-    std::vector<glm::vec3> local_p_tests = {
-        glm::vec3(0.0f, 0.0f, 0.0f),
+    std::vector<glm::vec3> raw_n_tests = {
+        glm::vec3(0.0f, 0.0f, 0.0f),                  // edge case
         glm::vec3(1.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 1.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 1.0f),
-        glm::vec3(1.0f, 2.0f, 3.0f),
-        glm::vec3(-1.0f, 4.0f, -2.0f),
-        glm::vec3(10.0f, -5.0f, 0.25f)
+        glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)),
+        glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f)),
+        glm::normalize(glm::vec3(0.0f, 1.0f, 1.0f)),
+        glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)),
+        glm::normalize(glm::vec3(-1.0f, 4.0f, -2.0f)),
+        glm::vec3(2.0f, 3.0f, 4.0f),                  // non-unit normal
+        glm::vec3(1e-6f, 0.0f, 0.0f)                 // near-zero edge case
     };
 
-    const float eps = 1e-4f;
-
-    auto is_close_vec3 = [&](const glm::vec3& a, const glm::vec3& b, float eps) {
-        return std::abs(a.x - b.x) <= eps &&
-            std::abs(a.y - b.y) <= eps &&
-            std::abs(a.z - b.z) <= eps;
+    std::vector<float> eps_tests = {
+        0.0f,
+        1e-6f,
+        1e-4f,
+        1e-3f,
+        1e-2f,
+        0.1f,
+        1.0f
     };
 
-    auto is_finite_vec3 = [&](const glm::vec3& v) {
-        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    const float mat_eps = 1e-4f;
+
+    auto is_close_mat3 = [&](const glm::mat3& a, const glm::mat3& b, float eps) {
+        for (int c = 0; c < 3; c++) {
+            for (int r = 0; r < 3; r++) {
+                if (std::abs(a[c][r] - b[c][r]) > eps)
+                    return false;
+            }
+        }
+        return true;
     };
 
-    for (int rotation_i = 0; rotation_i < rotation_tests.size(); rotation_i++)
-        for (int scale_i = 0; scale_i < scale_tests.size(); scale_i++)
-            for (int position_i = 0; position_i < position_tests.size(); position_i++)
-                for (int local_p_i = 0; local_p_i < local_p_tests.size(); local_p_i++) {
-                    target_point_cloud.rotation = rotation_tests[rotation_i];
-                    target_point_cloud.scale = scale_tests[scale_i];
-                    target_point_cloud.position = position_tests[position_i];
+    auto is_finite_mat3 = [&](const glm::mat3& m) {
+        for (int c = 0; c < 3; c++) {
+            for (int r = 0; r < 3; r++) {
+                if (!std::isfinite(m[c][r]))
+                    return false;
+            }
+        }
+        return true;
+    };
 
-                    glm::vec3 result_cpu = GICP::transform_point_world(
-                        target_point_cloud,
-                        local_p_tests[local_p_i]
-                    );
+    for (int raw_n_i = 0; raw_n_i < raw_n_tests.size(); raw_n_i++)
+        for (int eps_i = 0; eps_i < eps_tests.size(); eps_i++) {
+            glm::mat3 result_cpu = GICP::covariance_from_normal(
+                raw_n_tests[raw_n_i],
+                eps_tests[eps_i]
+            );
 
-                    glm::vec3 result_gpu = voxel_map.transform_point_world_test(
-                        source_point_cloud,
-                        source_normals_ssbo,
-                        target_point_cloud,
-                        local_p_tests[local_p_i]
-                    );
+            glm::mat3 result_gpu = voxel_map.covariance_from_normal_test(
+                source_point_cloud,
+                source_normals_ssbo,
+                raw_n_tests[raw_n_i],
+                eps_tests[eps_i]
+            );
 
-                    bool ok = is_finite_vec3(result_cpu) &&
-                            is_finite_vec3(result_gpu) &&
-                            is_close_vec3(result_cpu, result_gpu, eps);
+            bool ok = is_finite_mat3(result_cpu) &&
+                    is_finite_mat3(result_gpu) &&
+                    is_close_mat3(result_cpu, result_gpu, mat_eps);
 
-                    std::cout
-                        // << "rotation[" << rotation_i << "] = ("
-                        // << rotation_tests[rotation_i].x << ", "
-                        // << rotation_tests[rotation_i].y << ", "
-                        // << rotation_tests[rotation_i].z << "), "
+            std::cout
+                << "raw_n[" << raw_n_i << "] = ("
+                << raw_n_tests[raw_n_i].x << ", "
+                << raw_n_tests[raw_n_i].y << ", "
+                << raw_n_tests[raw_n_i].z << "), "
+                << "eps[" << eps_i << "] = " << eps_tests[eps_i]
+                << " => " << (ok ? "OK" : "MISMATCH")
+                << "\n";
 
-                        // << "scale[" << scale_i << "] = ("
-                        // << scale_tests[scale_i].x << ", "
-                        // << scale_tests[scale_i].y << ", "
-                        // << scale_tests[scale_i].z << "), "
-
-                        // << "position[" << position_i << "] = ("
-                        // << position_tests[position_i].x << ", "
-                        // << position_tests[position_i].y << ", "
-                        // << position_tests[position_i].z << "), "
-
-                        // << "local_p[" << local_p_i << "] = ("
-                        // << local_p_tests[local_p_i].x << ", "
-                        // << local_p_tests[local_p_i].y << ", "
-                        // << local_p_tests[local_p_i].z << ") "
-
-                        << "=> " << (ok ? "OK" : "MISMATCH")
-                        << "\n";
-
-                    if (!ok) {
-                        glm::vec3 diff = result_cpu - result_gpu;
-
-                        std::cout
-                            << "  CPU  = (" << result_cpu.x << ", " << result_cpu.y << ", " << result_cpu.z << ")\n"
-                            << "  GPU  = (" << result_gpu.x << ", " << result_gpu.y << ", " << result_gpu.z << ")\n"
-                            << "  DIFF = (" << diff.x << ", " << diff.y << ", " << diff.z << ")\n";
-                    }
+            if (!ok) {
+                std::cout << "CPU:\n";
+                for (int r = 0; r < 3; r++) {
+                    std::cout << result_cpu[0][r] << " "
+                            << result_cpu[1][r] << " "
+                            << result_cpu[2][r] << "\n";
                 }
+
+                std::cout << "GPU:\n";
+                for (int r = 0; r < 3; r++) {
+                    std::cout << result_gpu[0][r] << " "
+                            << result_gpu[1][r] << " "
+                            << result_gpu[2][r] << "\n";
+                }
+
+                glm::mat3 diff = result_cpu - result_gpu;
+                std::cout << "DIFF:\n";
+                for (int r = 0; r < 3; r++) {
+                    std::cout << diff[0][r] << " "
+                            << diff[1][r] << " "
+                            << diff[2][r] << "\n";
+                }
+            }
+        }
 
 
     // glm::mat3 result0 = GICP::euler_xyz_to_mat3(glm::vec3(?, ?, ?));
