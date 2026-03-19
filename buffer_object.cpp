@@ -92,8 +92,12 @@ void BufferObject::read_binary_dump(const std::filesystem::path& file_path) {
 }
 
 void BufferObject::realloc(GLsizeiptr size_bytes, GLenum usage, const void* data) {
+    if (id_ == 0u)
+        glCreateBuffers(1, &id_);
+    
     glNamedBufferData(id_, size_bytes, data, usage);
     usage_ = usage;
+    size_bytes_ = size_bytes;
 }
 
 void BufferObject::ensure_capacity(GLsizeiptr min_size_bytes) {

@@ -21,7 +21,7 @@ float clear_col[4] = {0.776470588f, 0.988235294f, 1.0f, 1.0f};
 
 BufferObject create_voxel_write_rect(glm::ivec3 origin, glm::uvec3 rect_dim, glm::vec3 color) {
     uint32_t count_voxels = rect_dim.x * rect_dim.y * rect_dim.z;
-    std::vector<VoxelGridGPU::VoxelWriteGPU> voxels(count_voxels);
+    std::vector<VoxelWriteGPU> voxels(count_voxels);
 
     uint32_t id = 0;
     for (uint32_t x = 0u; x < rect_dim.x; x++)
@@ -29,14 +29,14 @@ BufferObject create_voxel_write_rect(glm::ivec3 origin, glm::uvec3 rect_dim, glm
             for (uint32_t z = 0u; z < rect_dim.z; z++) {
                 double ton = 0.5 + ((double)(rand() % 100000) / 100000) * 0.5;
                 voxels[id].world_voxel = glm::ivec4(origin + glm::ivec3(x, y, z), 0);
-                voxels[id].voxel_data = std::move(VoxelGridGPU::VoxelDataGPU(1, 1, 0, glm::ivec3(color * glm::vec3(ton))));
-                voxels[id].set_flags = VoxelGridGPU::OVERWRITE_BIT;
+                voxels[id].voxel_data = std::move(VoxelDataGPU(1, 1, 0, glm::ivec3(color * glm::vec3(ton))));
+                voxels[id].set_flags = OVERWRITE_BIT;
                 id++;
             }
     
-    BufferObject voxel_writes(sizeof(uint32_t) * 4 + sizeof(VoxelGridGPU::VoxelWriteGPU) * count_voxels, GL_STATIC_COPY);
+    BufferObject voxel_writes(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * count_voxels, GL_STATIC_COPY);
     voxel_writes.update_subdata(0, sizeof(uint32_t), &count_voxels);
-    voxel_writes.update_subdata(sizeof(uint32_t) * 4, sizeof(VoxelGridGPU::VoxelWriteGPU) * count_voxels, voxels.data());
+    voxel_writes.update_subdata(sizeof(uint32_t) * 4, sizeof(VoxelWriteGPU) * count_voxels, voxels.data());
 
     return voxel_writes;
 }
@@ -58,7 +58,10 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 100;
 
-    Torus torus(glm::vec3(0), glm::vec3(10), glm::vec3(0));
+    Mesh torus = Torus::create_torus_mesh();
+    torus.position = glm::vec3(0, 70, 0);
+    torus.scale = glm::vec3(30);
+    torus.rotation = glm::vec3(0, 0, 0);
 
     float voxel_size = 1.0f;
     uint32_t chunk_size = 16u;
@@ -69,7 +72,7 @@ int main() {
         3'000'000, // max_quads
         4, // chunk_hash_table_size_factor
         4096, // count_evict_buckets
-        10'000, // min_free_chunks
+        15'000, // min_free_chunks
         0.2f, // tomb_fraction_to_rebuild
         chunk_size * voxel_size * 1, // eviction_bucket_shell_thickness
         10, // vb_page_size_order_of_two
@@ -79,15 +82,14 @@ int main() {
         shader_manager
     );
 
-    BufferObject write_voxels = create_voxel_write_rect(glm::ivec3(0, 30, 0), glm::ivec3(10, 15, 20), glm::ivec3(66, 135, 245));
-    voxel_grid_gpu.get()->set_voxels(write_voxels);
+    // BufferObject write_voxels = create_voxel_write_rect(glm::ivec3(0, 30, 0), glm::ivec3(10, 15, 20), glm::ivec3(66, 135, 245));
+    // voxel_grid_gpu.get()->set_voxels(write_voxels);
 
 
     VoxelGridGPUDebugger voxel_grid_debugger(voxel_grid_gpu, window);
     VoxelRasterizatorGPU voxel_rasterizator(voxel_grid_gpu.get(), shader_manager);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
-
 
     std::filesystem::path state_dumps_dir = executable_dir() / "voxel_grid" / "state_dumps";
     std::filesystem::path dumps_dir = executable_dir() / "voxel_grid" / "dumps";
@@ -101,12 +103,16 @@ int main() {
     int dirty_count_to_set = 0;
     bool use_verify_stack = false;
 
+    float rotation_speed = 50.0f;
+
     float timer = 0;
     float lastFrame = 0;
+    float rast_timer = 0;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
+        rast_timer += delta_time;
         lastFrame = currentFrame;   
 
         ui::begin_frame();
@@ -116,9 +122,21 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
+        // if (rast_timer >= 2.0f) {
+        //     voxel_rasterizator.rasterize(torus, voxel_size, chunk_size);
+        //     rast_timer = 0.0f;
+        // }
+
         voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
+
+        torus.rotation.x += rotation_speed * delta_time;
+        torus.rotation.y += rotation_speed * delta_time;
+
         window->draw(&torus, &camera);
+
+
+
 
         voxel_grid_debugger.dispay_debug_window();
         voxel_grid_debugger.display_build_cmd_window();

@@ -25,6 +25,7 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     roi_reduce_pairs_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_reduce_pairs.glsl", include_directories);
     build_active_chunks_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_active_chunks.glsl");
     roi_finalize_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_finalize.glsl", include_directories);
+    build_voxel_writes_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_voxel_writes.glsl", include_directories);
 
     clear_chunks_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunks.glsl", include_directories);
     world_init_cs = ComputeShader(p / "shaders" / "voxel_grid" / "world_init.glsl", include_directories);

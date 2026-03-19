@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <iostream>
 
-#include "gridable.h"
+#include "gridable_gpu.h"
 #include "mesh.h"
 #include "mesh_data.h"
 #include "vertex_layout.h"
@@ -20,11 +20,13 @@
 #include "compute_program.h"
 #include "math_utils.h"
 #include "shader_manager.h"
+#include "voxel_engine_gpu_structures.h"
 
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
 public:
     IGridable* gridable = nullptr;
+    IGridableGPU* gridable_gpu = nullptr;
 
     VoxelRasterizatorGPU(IGridable* gridable, ShaderManager& shader_manager);
     ~VoxelRasterizatorGPU();
@@ -41,15 +43,15 @@ public:
     // Основная функция: построить CSR на GPU для mesh_data в ROI.
     // voxel_size: размер вокселя в world units
     // chunk_size: размер чанка в ВОКСЕЛЯХ по стороне (например 16)
-    void rasterize(const Mesh& mesh,
-                   float voxel_size,
-                   int chunk_size);
+    void rasterize(const Mesh& mesh, float voxel_size, int chunk_size, const ComputeShader* custom_apply_prog = nullptr);
 
     // Полезно для дебага/аллоков
     uint32_t last_total_pairs() const { return last_total_pairs_; }
     uint32_t chunk_count() const { return chunk_count_; }
 
 private:
+    ShaderManager* shader_manager = nullptr;
+
     // ROI
     glm::ivec3 roi_origin_{0,0,0};
     glm::uvec3 roi_dim_{1,1,1};
@@ -62,27 +64,30 @@ private:
     ComputeProgram prog_copy_offsets_to_cursor_;
     ComputeProgram prog_fill_;
     ComputeProgram prog_voxelize_;
-    ComputeProgram prog_clear_;
+    // ComputeProgram prog_clear_;
     ComputeProgram prog_roi_reduce_indices_;
     ComputeProgram prog_roi_reduce_pairs_;
     ComputeProgram prog_roi_finalize_;
     ComputeProgram prog_build_active_chunks_;
+    ComputeProgram prog_build_voxel_writes_;
+
 
     // GPU buffers
-    BufferObject counters_BufferObject_;        // uint counters[chunkCount]
-    BufferObject offsets_BufferObject_;         // uint offsets[chunkCount+1]
-    BufferObject cursor_BufferObject_;          // uint cursor[chunkCount]
-    BufferObject tri_indices_BufferObject_;     // uint triId[totalPairs]
-    BufferObject total_pairs_BufferObject_;     // uint totalPairs (1 элемент)
-    BufferObject block_sums_BufferObject_;      // uint blockSums[numBlocks]
-    BufferObject block_prefix_BufferObject_;    // uint blockPrefix[numBlocks]
-    BufferObject voxels_BufferObject_;          // uint packed RGBA8 per voxel in ROI
-    BufferObject roi_out_BufferObject_;
-    BufferObject active_chunks_BufferObject_;
-    BufferObject active_count_BufferObject_;
+    BufferObject counters_ssbo_;        // uint counters[chunkCount]
+    BufferObject offsets_ssbo_;         // uint offsets[chunkCount+1]
+    BufferObject cursor_ssbo_;          // uint cursor[chunkCount]
+    BufferObject tri_indices_ssbo_;     // uint triId[totalPairs]
+    BufferObject total_pairs_ssbo_;     // uint totalPairs (1 элемент)
+    BufferObject block_sums_ssbo_;      // uint blockSums[numBlocks]
+    BufferObject block_prefix_ssbo_;    // uint blockPrefix[numBlocks]
+    BufferObject voxels_ssbo_;          // uint packed RGBA8 per voxel in ROI
+    BufferObject roi_out_ssbo_;
+    BufferObject active_chunks_ssbo_;
+    BufferObject active_count_ssbo_;
     std::vector<BufferObject> roi_reduce_levels_;
+    BufferObject voxel_writes;
 
-    BufferObject debug_BufferObject_; // int dbg[32]
+    BufferObject debug_ssbo_; // int dbg[32]
 
     // capacities (bytes)
     size_t counters_cap_bytes_ = 0;
@@ -109,7 +114,7 @@ private:
     void clear_counters();
     void count_triangles_in_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
     void fill_triangle_indices(const Mesh& mesh, float voxel_size, int chunk_size, size_t tri_count); //pass 3
-    void clear_active_voxels(int chunk_size, uint32_t active_count);
+    // void clear_active_voxels(int chunk_size, uint32_t active_count);
     void voxelize_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t active_count, uint32_t tri_count);
 
     void pass2_build_offsets_and_active_gpu(uint32_t chunk_count);
@@ -124,6 +129,14 @@ private:
 
     // GPU exclusive scan: in=counters, out=offsets (первые n элементов), блок-суммы в scratch
     void gpu_exclusive_scan_u32(BufferObject& in_u32, BufferObject& out_u32, uint32_t n);
+    void build_voxel_writes(
+        uint32_t active_count,
+        glm::ivec3 chunk_dim,
+        uint32_t voxel_visability,
+        uint32_t voxel_type,
+        glm::uvec3 voxel_color,
+        uint32_t set_flags
+    );
 
     glm::ivec3 idx_to_chunk(uint32_t idx);
 };

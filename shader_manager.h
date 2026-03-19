@@ -32,6 +32,7 @@ public:
     ComputeShader roi_reduce_pairs_cs;
     ComputeShader build_active_chunks_cs;
     ComputeShader roi_finalize_cs;
+    ComputeShader build_voxel_writes_cs;
 
     //voxel_grid
     ComputeShader clear_chunks_cs;

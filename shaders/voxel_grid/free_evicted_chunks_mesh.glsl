@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
@@ -25,10 +25,10 @@ uniform uint ib_max_order;
 #include "../utils.glsl"
 
 #define PREFIX vb
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 
 #define PREFIX ib
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 // -------------------
 
 void main() {

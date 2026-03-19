@@ -147,3 +147,11 @@ uint pack_color(vec4 rgba) {
 uint pack_color(vec3 rgb) {
     return pack_color(vec4(rgb, 1u));
 }
+
+uint pack_color(uvec4 rgba) {
+    return ((rgba.r & BYTE_MASK) << 24u) | ((rgba.g & BYTE_MASK) << 16u) | ((rgba.b & BYTE_MASK) << 8u) | (rgba.a & BYTE_MASK);
+}
+
+uint pack_color(uvec3 rgb) {
+    return pack_color(uvec4(rgb, 0xFFu));
+}

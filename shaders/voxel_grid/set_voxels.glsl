@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -24,9 +24,9 @@ uniform uint u_pack_bits;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "common/hash_table.glsl"
+#include "../common/hash_table.glsl"
 
-#include "common/chunk_pool.glsl"
+#include "../common/chunk_pool.glsl"
 // -------------------
 
 void main() {

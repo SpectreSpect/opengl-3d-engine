@@ -20,6 +20,6 @@ public:
         uint32_t detail = 32u,
         glm::vec3 color = {1.0f, 1.0f, 1.0f}
     );
-    Mesh create_torus_mesh(float radius = 1.0f, float tube_radius = 0.3f, uint32_t detail = 32u, glm::vec3 color = {1.0f, 1.0f, 1.0f});
+    static Mesh create_torus_mesh(float radius = 1.0f, float tube_radius = 0.3f, uint32_t detail = 32u, glm::vec3 color = {1.0f, 1.0f, 1.0f});
     virtual void draw(RenderState state) override;
 };

@@ -63,6 +63,7 @@ VoxelGridGPU::VoxelGridGPU(
     verify_debug_stack_.update_subdata_fill(0, 0u, sizeof(uint32_t) * 2, shader_manager);
 
     evicted_chunks_list_ = BufferObject::from_fill(sizeof(uint32_t) * (count_active_chunks + 1), GL_DYNAMIC_DRAW, 0u, shader_manager);
+    voxel_write_list_ = BufferObject::from_fill(sizeof(uint32_t) * 4, GL_DYNAMIC_DRAW, 0u, shader_manager);
 
     vb_page_size_ = 1 << vb_page_size_order_of_two;
     count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 4u), vb_page_size_));

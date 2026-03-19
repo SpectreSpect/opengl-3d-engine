@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -28,7 +28,7 @@ uniform uint u_hash_table_size;
 
 #define NOT_INCLUDE_ALL
 #define INCLUDE_MARK_DIRTY
-#include "common/chunk_pool.glsl"
+#include "../common/chunk_pool.glsl"
 // -------------------
 
 // ---- noise (value noise + fbm) ----
@@ -94,9 +94,7 @@ void main() {
 
     uint global_voxel_id = base + voxelId;
     uint voxel_visability = (voxels[global_voxel_id].type_vis_flags >> VIS_SHIFT) & VIS_MASK;
-    if (voxel_visability == 0u) {
-        voxels[global_voxel_id] = vd;
-    }
+    voxels[global_voxel_id] = vd;
 
     // один раз на чанк
     if (voxelId == 0u) {
