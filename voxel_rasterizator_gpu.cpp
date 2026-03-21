@@ -464,7 +464,16 @@ void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_cou
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, float voxel_size, int chunk_size, const ComputeShader* custom_apply_shader) {
+void VoxelRasterizatorGPU::rasterize(
+    const Mesh& mesh,
+    float voxel_size,
+    int chunk_size,
+    uint32_t voxel_visability,
+    uint32_t voxel_type,
+    glm::uvec3 voxel_color,
+    uint32_t set_flags,
+    const ComputeShader* custom_apply_shader)
+{
     // 0) ROI (пока на CPU)
     calculate_roi(mesh, voxel_size, chunk_size, 1);
 
@@ -530,12 +539,12 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, float voxel_size, int chu
 
         voxel_writes.ensure_capacity(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * activeCount * chunk_size * chunk_size * chunk_size);
         voxel_writes.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
-        build_voxel_writes(activeCount, glm::uvec3(chunk_size, chunk_size, chunk_size), 1u, 1u, glm::uvec3(66, 135, 245), 0u);
+        build_voxel_writes(activeCount, glm::uvec3(chunk_size, chunk_size, chunk_size), voxel_visability, voxel_type, voxel_color, set_flags);
 
         uint32_t count_voxel_writes = voxel_writes.read_scalar<uint32_t>(0);
         // std::cout << "COUNT_VOXEL_WRITES: " << count_voxel_writes << std::endl;
         // std::cout << "COUNT_ACTIVE_CHUNKS: " << activeCount << std::endl;
-        std::cout << std::endl;
+        // std::cout << std::endl;
 
         // std::vector<VoxelWriteGPU> voxel_w(count_voxel_writes);
         // voxel_writes.read_subdata();

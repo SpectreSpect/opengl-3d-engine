@@ -84,7 +84,7 @@ struct ChunkMeshAlloc {
     uint32_t i_startPage; 
     uint32_t i_order; 
     uint32_t needI;
-    uint32_t need_rebuild;
+    uint32_t is_valid;
 };
 
 struct AllocNode {

@@ -148,6 +148,7 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             meta[id].used = 1u;
             meta[id].key_lo = key.x;
             meta[id].key_hi = key.y;
+            meta[id].dirty_flags = NEED_GENERATION_FLAG_BIT;
 
             // публикуем key
             hash_keys[idx_to_create] = key;

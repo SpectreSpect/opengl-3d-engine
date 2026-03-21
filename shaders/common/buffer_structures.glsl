@@ -2,6 +2,7 @@
 
 #define DIRTY_FLAG_BIT 1u
 #define NEED_GENERATION_FLAG_BIT 2u
+#define HAS_WRITTEN_VOXELS_BIT 4u
 
 struct ChunkMeta { 
     uint used; 
@@ -17,7 +18,7 @@ struct ChunkMeshAlloc {
     uint i_startPage;
     uint i_order;
     uint needI;
-    uint need_rebuild;
+    bool is_valid;
 };
 
 struct Node {

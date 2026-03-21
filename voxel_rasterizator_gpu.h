@@ -43,7 +43,16 @@ public:
     // Основная функция: построить CSR на GPU для mesh_data в ROI.
     // voxel_size: размер вокселя в world units
     // chunk_size: размер чанка в ВОКСЕЛЯХ по стороне (например 16)
-    void rasterize(const Mesh& mesh, float voxel_size, int chunk_size, const ComputeShader* custom_apply_prog = nullptr);
+    void rasterize(
+        const Mesh& mesh,
+        float voxel_size,
+        int chunk_size,
+        uint32_t voxel_visability,
+        uint32_t voxel_type,
+        glm::uvec3 voxel_color,
+        uint32_t set_flags,
+        const ComputeShader* custom_apply_prog = nullptr
+    );
 
     // Полезно для дебага/аллоков
     uint32_t last_total_pairs() const { return last_total_pairs_; }

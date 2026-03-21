@@ -59,8 +59,9 @@ int main() {
     camera_controller.speed = 100;
 
     Mesh torus = Torus::create_torus_mesh();
-    torus.position = glm::vec3(0, 70, 0);
-    torus.scale = glm::vec3(30);
+    glm::vec3 torus_origin_pos = glm::vec3(0, 70, 0);
+    torus.position = torus_origin_pos;
+    torus.scale = glm::vec3(20);
     torus.rotation = glm::vec3(0, 0, 0);
 
     float voxel_size = 1.0f;
@@ -78,16 +79,46 @@ int main() {
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
         1.0, // buddy_allocator_nodes_factor
-        chunk_size * voxel_size * 30,
+        chunk_size * voxel_size * 30, // render_distance
+        chunk_size * chunk_size * 2'000, // max_write_count
         shader_manager
     );
-
-    // BufferObject write_voxels = create_voxel_write_rect(glm::ivec3(0, 30, 0), glm::ivec3(10, 15, 20), glm::ivec3(66, 135, 245));
-    // voxel_grid_gpu.get()->set_voxels(write_voxels);
 
 
     VoxelGridGPUDebugger voxel_grid_debugger(voxel_grid_gpu, window);
     VoxelRasterizatorGPU voxel_rasterizator(voxel_grid_gpu.get(), shader_manager);
+
+    // BufferObject write_voxels = create_voxel_write_rect(glm::ivec3(0, 47, 0), glm::ivec3(1, 1, 1), glm::ivec3(66, 135, 245));
+    // voxel_grid_gpu->set_voxels(write_voxels);
+
+    // ////////////////////////////////////////////////
+    // // voxel_grid_gpu->ensure_free_chunks_gpu(window->camera->position, math_utils::BITS, math_utils::OFFSET);
+    // // voxel_grid_gpu->reset_load_list_counter();
+
+    // // voxel_grid_gpu->mark_chunk_to_generate(window->camera->position, 10);
+
+    // // voxel_grid_gpu->merge_voxel_write_lists(voxel_grid_gpu->local_voxel_write_list_, voxel_grid_gpu->voxel_write_list_);
+    // // voxel_grid_gpu->reset_voxel_write_list_counter(voxel_grid_gpu->local_voxel_write_list_);
+    // // voxel_grid_gpu->prepare_dispatch_args(voxel_grid_gpu->dispatch_args, BufferDispatchArg(&voxel_grid_gpu->voxel_write_list_, 0));
+    // // voxel_grid_gpu->mark_write_chunks_to_generate(voxel_grid_gpu->dispatch_args);
+
+
+    // // voxel_grid_gpu->prepare_dispatch_args(voxel_grid_gpu->dispatch_args, ValueDispatchArg(voxel_grid_gpu->vox_per_chunk), BufferDispatchArg(&voxel_grid_gpu->load_list_, 0u));
+    // // voxel_grid_gpu->generate_terrain(voxel_grid_gpu->dispatch_args, 45345345);
+
+    // // voxel_grid_gpu->prepare_dispatch_args(voxel_grid_gpu->dispatch_args, BufferDispatchArg(&voxel_grid_gpu->voxel_write_list_, 0u));
+    // // voxel_grid_gpu->write_voxels_to_grid();
+
+    // // voxel_grid_gpu->reset_voxel_write_list_counter(voxel_grid_gpu->voxel_write_list_);
+    // ////////////////////////////////////////////////
+
+    // voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
+    // voxel_grid_gpu->build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
+
+
+
+    // write_voxels = create_voxel_write_rect(glm::ivec3(0, 48, 0), glm::ivec3(1, 1, 1), glm::ivec3(66, 135, 245));
+    // voxel_grid_gpu->set_voxels(write_voxels);
 
     glm::vec3 prev_cam_pos = camera_controller.camera->position;
 
@@ -103,16 +134,23 @@ int main() {
     int dirty_count_to_set = 0;
     bool use_verify_stack = false;
 
-    float rotation_speed = 50.0f;
+    float rotation_speed = glm::pi<float>() / 2.0f;
 
+    int y_offset = 0;
     float timer = 0;
     float lastFrame = 0;
     float rast_timer = 0;
+    float wait_timer = 0;
+
+    glm::vec3 torus_offset = glm::vec3(0); 
+
+    float rasterise_time = 0.0;
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
         rast_timer += delta_time;
+        wait_timer += delta_time;
         lastFrame = currentFrame;   
 
         ui::begin_frame();
@@ -122,20 +160,41 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        // if (rast_timer >= 2.0f) {
-        //     voxel_rasterizator.rasterize(torus, voxel_size, chunk_size);
-        //     rast_timer = 0.0f;
-        // }
-
+        // if (rast_timer >= rasterise_time)
+            
+        
+        // VoxelGridGPU::debug = true;
         voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, 10, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
+        // break;
 
-        torus.rotation.x += rotation_speed * delta_time;
-        torus.rotation.y += rotation_speed * delta_time;
+        // window->draw(&torus, &camera);
 
-        window->draw(&torus, &camera);
+        ImGui::Begin("Torus");
+        ImGui::SliderFloat("Position X", &torus_offset.x, -1000, 1000);
+        ImGui::SliderFloat("Position Y", &torus_offset.y, -1000, 1000);
+        ImGui::SliderFloat("Position Z", &torus_offset.z, -1000, 1000);
+        ImGui::End();
 
+        if (rast_timer >= rasterise_time)
+            voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 0, 0, glm::ivec3(66, 135, 245), 1);
 
+        if (rast_timer >= rasterise_time) {
+            torus.rotation.x += rotation_speed * rast_timer;
+            torus.rotation.y += rotation_speed * rast_timer;
+            torus.position = torus_origin_pos + torus_offset;
+
+            rast_timer = 0;
+
+            voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 1, 1, glm::ivec3(66, 135, 245), 0);
+        }
+
+        // if (wait_timer > 5.0f) {
+        //     torus.rotation.x = ((rand() % 10000) / 10000.0) * glm::two_pi<double>();
+        //     torus.rotation.y = ((rand() % 10000) / 10000.0) * glm::two_pi<double>();
+        //     wait_timer = 0.0f;
+        // }
+        
 
 
         voxel_grid_debugger.dispay_debug_window();

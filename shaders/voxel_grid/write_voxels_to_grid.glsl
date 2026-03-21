@@ -45,7 +45,7 @@ void main() {
     
     uint voxel_id = voxel_index(local_voxel_pos);
     uint global_voxel_id = chunk_id * u_voxels_per_chunk + voxel_id;
-    
+
     if ((voxel_write.set_flags & OVERWRITE_BIT) > 0u) {
         voxels[global_voxel_id] = voxel_write.voxel_data;
 

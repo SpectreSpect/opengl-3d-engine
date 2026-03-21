@@ -50,7 +50,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
 
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = false;
         return;
     }
 
@@ -66,7 +66,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = true;
         return;
     }
 
@@ -84,7 +84,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = true;
         return;
     }
 
@@ -106,7 +106,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = false;
         return;
     }
 
@@ -114,11 +114,11 @@ void main() {
         chunk_alloc_local[dirtyIdx].v_startPage = bStart;
         chunk_alloc_local[dirtyIdx].v_order = bOrder;
         chunk_alloc_local[dirtyIdx].needV = needB;
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
     } else {
         chunk_alloc_local[dirtyIdx].i_startPage = bStart;
         chunk_alloc_local[dirtyIdx].i_order = bOrder;
         chunk_alloc_local[dirtyIdx].needI = needB;
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
     }
+
+    chunk_alloc_local[dirtyIdx].is_valid = true;
 }

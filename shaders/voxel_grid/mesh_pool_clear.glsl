@@ -50,6 +50,6 @@ void main() {
         chunk_alloc[i].i_startPage = INVALID_ID; 
         chunk_alloc[i].i_order = 0u; 
         chunk_alloc[i].needI = 0u; 
-        chunk_alloc[i].need_rebuild = 0u;
+        chunk_alloc[i].is_valid = true;
     }
 }

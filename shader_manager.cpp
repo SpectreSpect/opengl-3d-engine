@@ -53,7 +53,10 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     clear_chunk_hash_table_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunk_hash_table.glsl", include_directories);
     reset_evicted_list_and_buckets_cs = ComputeShader(p / "shaders" / "voxel_grid" / "reset_evicted_list_and_buckets.glsl", include_directories);
     hash_table_conditional_dispatch_adapter_cs = ComputeShader(p / "shaders" / "voxel_grid" / "hash_table_conditional_dispatch_adapter.glsl", include_directories);
-    set_voxels_cs = ComputeShader(p / "shaders" / "voxel_grid" / "set_voxels.glsl", include_directories);
+    mark_write_chunks_to_generate_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mark_write_chunks_to_generate.glsl", include_directories);
+    write_voxels_to_grid_cs = ComputeShader(p / "shaders" / "voxel_grid" / "write_voxels_to_grid.glsl", include_directories);
+    insert_elements_to_voxel_write_list_cs = ComputeShader(p / "shaders" / "voxel_grid" / "insert_elements_to_voxel_write_list.glsl", include_directories);
+    add_voxel_write_list_counters_together_cs = ComputeShader(p / "shaders" / "voxel_grid" / "add_voxel_write_list_counters_together.glsl", include_directories);
     voxel_mesh_vs = VertexShader(p / "shaders" / "voxel_grid" / "voxel_mesh.vert", include_directories);
     voxel_mesh_fs = FragmentShader(p / "shaders" / "voxel_grid" / "voxel_mesh.frag", include_directories);
 }

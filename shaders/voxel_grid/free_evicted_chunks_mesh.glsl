@@ -50,5 +50,5 @@ void main() {
     chunk_alloc_global[chunk_id].i_startPage = INVALID_ID;
     chunk_alloc_global[chunk_id].i_order = 0u;
     chunk_alloc_global[chunk_id].needI = 0u;
-    chunk_alloc_global[chunk_id].need_rebuild = 0u;
+    chunk_alloc_global[chunk_id].is_valid = true;
 }

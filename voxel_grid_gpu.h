@@ -30,8 +30,12 @@
 
 #define DONT_CHANGE 0xFFFFFFFF
 
+
+
 class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
+    inline static bool debug = false;
+
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
     glm::vec3 voxel_size;
@@ -119,7 +123,10 @@ public:
     ComputeProgram prog_clear_chunk_hash_table_;
     ComputeProgram prog_reset_evicted_list_and_buckets_;
     ComputeProgram prog_hash_table_conditional_dispatch_adapter_;
-    ComputeProgram prog_set_voxels_;
+    ComputeProgram prog_write_voxels_to_grid_;
+    ComputeProgram prog_mark_write_chunks_to_generate_;
+    ComputeProgram prog_insert_elements_to_voxel_write_list_;
+    ComputeProgram prog_add_voxel_write_list_counters_together_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     BufferObject dispatch_args;
@@ -130,6 +137,7 @@ public:
     BufferObject chunk_hash_vals_;
     BufferObject free_list_;
     BufferObject mesh_buffers_status_;
+    BufferObject local_voxel_write_list_;
     BufferObject voxel_write_list_;
     BufferObject enqueued_;
     BufferObject dirty_list_;
@@ -189,6 +197,7 @@ public:
         uint32_t ib_page_size_order_of_two,
         float buddy_allocator_nodes_factor,
         float render_distance,
+        uint32_t max_write_count,
         ShaderManager& shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
@@ -199,11 +208,17 @@ public:
                                                     const glm::vec3& cam_pos);
     void reset_load_list_counter();
     void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
+    void mark_write_chunks_to_generate(const BufferObject& dispatch_args);
     void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
+    void write_voxels_to_grid();
+    void reset_voxel_write_list_counter(BufferObject& voxel_write_list);
     void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
     
     virtual void draw(RenderState state) override;
-    virtual void set_voxels(const BufferObject& voxels_write_data) override;
+    void insert_elements_to_voxel_write_list(const BufferObject& dispatch_args, const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    void add_voxel_write_list_counters_together(const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    void merge_voxel_write_lists(const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    virtual void set_voxels(const BufferObject& voxel_write_list_src) override;
     virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) override;
     virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) override;
     virtual Voxel get_voxel(glm::ivec3 position) const override;
@@ -231,7 +246,6 @@ public:
     void free_evicted_chunks_mesh(const BufferObject& dispatch_args); 
     void reset_evicted_list_and_buckets();
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); 
-    void ensure_voxel_write_list(size_t count); 
 
     void mesh_reset(const BufferObject& dispatch_args); 
     void mesh_count(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 

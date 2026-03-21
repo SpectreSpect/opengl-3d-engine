@@ -22,7 +22,7 @@ void main() {
 
     uint chunkId = dirty_list[dirtyIdx];
     
-    if (chunk_alloc[chunkId].v_startPage == INVALID_ID || chunk_alloc[chunkId].i_startPage == INVALID_ID) {
+    if (!chunk_alloc[chunkId].is_valid) {
         if (enqueued[chunkId] != 2u) {
             uint idx = atomicAdd(failed_dirty_count, 1u);
             failed_dirty_list[idx] = chunkId;
