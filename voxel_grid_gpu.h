@@ -25,27 +25,16 @@
 #include "buffer_dispatch_arg.h"
 #include "value_dispatch_arg.h"
 #include "gpu_timestamp.h"
+#include "gridable_gpu.h"
+#include "voxel_engine_gpu_structures.h"
 
 #define DONT_CHANGE 0xFFFFFFFF
 
-class VoxelGridGPU : public Transformable, public Drawable {
+
+
+class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
-    static constexpr uint32_t INVALID_ID = 0xFFFFFFFFu;
-
-    static constexpr uint32_t ST_MASK_BITS = 4u;
-    static constexpr uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
-    
-    static constexpr uint32_t ST_FREE = 0u;
-    static constexpr uint32_t ST_ALLOC = 1u;
-    static constexpr uint32_t ST_MERGED = 2u;
-    
-    static constexpr uint32_t HEAD_TAG_BITS = 4u;
-    static constexpr uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
-    static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
-
-    static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
-    static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
-    static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
+    inline static bool debug = false;
 
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
@@ -59,86 +48,6 @@ public:
     float render_distance;
 
     const uint32_t min_free_pages = 1024;
-
-    struct BucketHead {
-        uint32_t id;
-        uint32_t count;
-    };
-
-    struct ChunkMetaGPU {
-        uint32_t used;
-        uint32_t key_lo;
-        uint32_t key_hi;
-        uint32_t dirty_flags;
-    };
-    static_assert(sizeof(ChunkMetaGPU) == 16);
-
-    struct alignas(8) VoxelDataGPU {
-        uint32_t type_vis_flags;
-        uint32_t color;
-
-        VoxelDataGPU() = default;
-
-        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
-            init(type, visability, flags, color);
-        }
-
-        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec4 color) {
-            uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | (color.w & 0xFFu);
-            init(type, visability, flags, packed_color);
-        }
-
-        inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec3 color) {
-            uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | 0xFFu;
-            init(type, visability, flags, packed_color);
-        }
-
-        inline void init(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
-            this->type_vis_flags = ((type & 0xFFu) << 16) | ((visability & 0xFFu) << 8) | (flags & 0xFFu); // Тип 0
-            this->color = color;
-        }
-    };
-    static_assert(sizeof(VoxelDataGPU) == 8);
-    static_assert(alignof(VoxelDataGPU) == 8);
-
-    struct alignas(16) VoxelWriteGPU {
-        glm::ivec4 world_voxel;  // xyz, w unused
-        VoxelDataGPU voxel_data;
-        uint32_t pad0;
-        uint32_t pad1;
-    };
-    static_assert(sizeof(VoxelWriteGPU) == 32);
-    static_assert(alignof(VoxelWriteGPU) == 16);
-
-    struct DrawElementsIndirectCommand {
-        uint32_t count;
-        uint32_t instanceCount;
-        uint32_t firstIndex;
-        int32_t  baseVertex;
-        uint32_t baseInstance;
-    };
-    static_assert(sizeof(DrawElementsIndirectCommand) == 20);
-
-    struct alignas(16) VertexGPU {
-        glm::vec4 pos;    // xyz position, w=1
-        uint32_t color;  // RGBA8
-        uint32_t face;   // 0..5
-        uint32_t pad0;
-        uint32_t pad1;
-    };
-    static_assert(sizeof(VertexGPU) == 32);
-    static_assert(alignof(VertexGPU) == 16);
-
-    struct ChunkMeshAlloc {
-        uint32_t v_startPage; 
-        uint32_t v_order; 
-        uint32_t needV; 
-        uint32_t i_startPage; 
-        uint32_t i_order; 
-        uint32_t needI;
-        uint32_t need_rebuild;
-    };
-
 
     struct PushLoopData {
         uint32_t old_h;
@@ -183,41 +92,6 @@ public:
         uint32_t bool_push_result;
     };
 
-    struct AllocNode {
-        uint32_t page;
-        uint32_t next;
-    };
-
-
-    VoxelGridGPU(
-        glm::ivec3 chunk_size, 
-        glm::vec3 voxel_size, 
-        uint32_t count_active_chunks, 
-        uint32_t max_quads,
-        float chunk_hash_table_size_factor, 
-        uint32_t count_evict_buckets,
-        uint32_t min_free_chunks,
-        float tomb_fraction_to_rebuild,
-        float eviction_bucket_shell_thickness,
-        uint32_t vb_page_size_order_of_two,
-        uint32_t ib_page_size_order_of_two,
-        float buddy_allocator_nodes_factor,
-        float render_distance,
-        ShaderManager& shader_manager);
-
-    void apply_writes_to_world_gpu(uint32_t write_count);
-    void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
-
-    void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
-    void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
-                                                    const glm::vec3& cam_pos);
-    void reset_load_list_counter();
-    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
-    void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
-    void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
-    
-    virtual void draw(RenderState state) override;
-
 
     ShaderManager* shader_manager = nullptr;
 
@@ -249,6 +123,10 @@ public:
     ComputeProgram prog_clear_chunk_hash_table_;
     ComputeProgram prog_reset_evicted_list_and_buckets_;
     ComputeProgram prog_hash_table_conditional_dispatch_adapter_;
+    ComputeProgram prog_write_voxels_to_grid_;
+    ComputeProgram prog_mark_write_chunks_to_generate_;
+    ComputeProgram prog_insert_elements_to_voxel_write_list_;
+    ComputeProgram prog_add_voxel_write_list_counters_together_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
     BufferObject dispatch_args;
@@ -259,6 +137,7 @@ public:
     BufferObject chunk_hash_vals_;
     BufferObject free_list_;
     BufferObject mesh_buffers_status_;
+    BufferObject local_voxel_write_list_;
     BufferObject voxel_write_list_;
     BufferObject enqueued_;
     BufferObject dirty_list_;
@@ -304,6 +183,46 @@ public:
 
     VAO vao;
 
+    VoxelGridGPU(
+        glm::ivec3 chunk_size, 
+        glm::vec3 voxel_size, 
+        uint32_t count_active_chunks, 
+        uint32_t max_quads,
+        float chunk_hash_table_size_factor, 
+        uint32_t count_evict_buckets,
+        uint32_t min_free_chunks,
+        float tomb_fraction_to_rebuild,
+        float eviction_bucket_shell_thickness,
+        uint32_t vb_page_size_order_of_two,
+        uint32_t ib_page_size_order_of_two,
+        float buddy_allocator_nodes_factor,
+        float render_distance,
+        uint32_t max_write_count,
+        ShaderManager& shader_manager);
+
+    void apply_writes_to_world_gpu(uint32_t write_count);
+    void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
+
+    void apply_writes_to_world_gpu_with_evict(uint32_t write_count, const glm::vec3& cam_pos);
+    void apply_writes_to_world_from_cpu_with_evict(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels, 
+                                                    const glm::vec3& cam_pos);
+    void reset_load_list_counter();
+    void mark_chunk_to_generate(const glm::vec3& cam_world_pos, int radius_chunks);
+    void mark_write_chunks_to_generate(const BufferObject& dispatch_args);
+    void generate_terrain(const BufferObject& dispatch_args, uint32_t seed);
+    void write_voxels_to_grid();
+    void reset_voxel_write_list_counter(BufferObject& voxel_write_list);
+    void stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed);
+    
+    virtual void draw(RenderState state) override;
+    void insert_elements_to_voxel_write_list(const BufferObject& dispatch_args, const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    void add_voxel_write_list_counters_together(const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    void merge_voxel_write_lists(const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc);
+    virtual void set_voxels(const BufferObject& voxel_write_list_src) override;
+    virtual void set_voxels(const std::vector<Voxel>& voxels, const std::vector<glm::ivec3>& positions) override;
+    virtual void set_voxel(const Voxel& voxel, glm::ivec3 position) override;
+    virtual Voxel get_voxel(glm::ivec3 position) const override;
+
     void init_programs(ShaderManager& shader_manager);
     void world_init_gpu();
     void init_mesh_pool();
@@ -327,7 +246,6 @@ public:
     void free_evicted_chunks_mesh(const BufferObject& dispatch_args); 
     void reset_evicted_list_and_buckets();
     void ensure_free_chunks_gpu(const glm::vec3& cam_pos, uint32_t pack_bits, uint32_t pack_offset); 
-    void ensure_voxel_write_list(size_t count); 
 
     void mesh_reset(const BufferObject& dispatch_args); 
     void mesh_count(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 

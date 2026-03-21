@@ -79,23 +79,23 @@ void VoxelGridGPUDebugger::print_counters() {
 }
 
 void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
-    std::vector<VoxelGridGPU::ChunkMeshAlloc> alloc_meta(voxel_grid->count_active_chunks);
+    std::vector<ChunkMeshAlloc> alloc_meta(voxel_grid->count_active_chunks);
     std::vector<uint32_t> vb_states(voxel_grid->count_vb_pages_);
     std::vector<uint32_t> ib_states(voxel_grid->count_ib_pages_);
     std::vector<uint32_t> vb_heads(voxel_grid->vb_order_ + 1);
     std::vector<uint32_t> ib_heads(voxel_grid->ib_order_ + 1);
-    std::vector<VoxelGridGPU::AllocNode> vb_nodes(voxel_grid->count_vb_nodes_);
-    std::vector<VoxelGridGPU::AllocNode> ib_nodes(voxel_grid->count_ib_nodes_);
+    std::vector<AllocNode> vb_nodes(voxel_grid->count_vb_nodes_);
+    std::vector<AllocNode> ib_nodes(voxel_grid->count_ib_nodes_);
     std::vector<uint32_t> dirty_list;
     uint32_t dirty_count;
 
-    voxel_grid->chunk_mesh_alloc_.read_subdata(0, sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid->count_active_chunks, alloc_meta.data());
+    voxel_grid->chunk_mesh_alloc_.read_subdata(0, sizeof(ChunkMeshAlloc) * voxel_grid->count_active_chunks, alloc_meta.data());
     voxel_grid->vb_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid->count_vb_pages_, vb_states.data());
     voxel_grid->ib_state_.read_subdata(0, sizeof(uint32_t) * voxel_grid->count_ib_pages_, ib_states.data());
     voxel_grid->vb_heads_.read_subdata(0, sizeof(uint32_t) * (voxel_grid->vb_order_ + 1), vb_heads.data());
     voxel_grid->ib_heads_.read_subdata(0, sizeof(uint32_t) * (voxel_grid->ib_order_ + 1), ib_heads.data());
-    voxel_grid->vb_nodes_.read_subdata(0, sizeof(VoxelGridGPU::AllocNode) * voxel_grid->count_vb_nodes_, vb_nodes.data());
-    voxel_grid->ib_nodes_.read_subdata(0, sizeof(VoxelGridGPU::AllocNode) * voxel_grid->count_ib_nodes_, ib_nodes.data());
+    voxel_grid->vb_nodes_.read_subdata(0, sizeof(AllocNode) * voxel_grid->count_vb_nodes_, vb_nodes.data());
+    voxel_grid->ib_nodes_.read_subdata(0, sizeof(AllocNode) * voxel_grid->count_ib_nodes_, ib_nodes.data());
     voxel_grid->dirty_list_.read_subdata(0, sizeof(uint32_t), &dirty_count);
     dirty_list.resize(dirty_count);
     voxel_grid->dirty_list_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * dirty_count, dirty_list.data());
@@ -105,14 +105,14 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
     uint32_t count_alloc_vb_pages_from_meta = 0, count_alloc_ib_pages_from_meta = 0;
     uint32_t count_vb_alloc_chunks_from_meta = 0, count_ib_alloc_chunks_from_meta = 0;
     for (uint32_t i = 0; i < voxel_grid->count_active_chunks; i++) {
-        VoxelGridGPU::ChunkMeshAlloc& meta = alloc_meta[i];
-        if (meta.v_startPage != voxel_grid->INVALID_ID) {
+        ChunkMeshAlloc& meta = alloc_meta[i];
+        if (meta.v_startPage != INVALID_ID) {
             count_alloc_vb_pages_from_meta += 1 << meta.v_order;
             count_vb_alloc_chunks_from_meta++;
             allocated_mesh.insert(i);
         }
 
-        if (meta.i_startPage != voxel_grid->INVALID_ID) {
+        if (meta.i_startPage != INVALID_ID) {
             count_alloc_ib_pages_from_meta += 1 << meta.i_order;
             count_ib_alloc_chunks_from_meta++;
             allocated_mesh.insert(i);
@@ -150,12 +150,12 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
     uint32_t count_vb_ready = 0, vb_ready_pages = 0;
     uint32_t count_vb_conceded = 0, vb_conceded_pages = 0;
     for (uint32_t i = 0; i < voxel_grid->count_vb_pages_; i++) {
-        uint32_t kind = vb_states[i] & voxel_grid->ST_MASK;
-        uint32_t order = vb_states[i] >> voxel_grid->ST_MASK_BITS;
+        uint32_t kind = vb_states[i] & ST_MASK;
+        uint32_t order = vb_states[i] >> ST_MASK_BITS;
         uint32_t count_pages = 1u << order;
-        if (kind == voxel_grid->ST_FREE) {count_vb_free++; vb_free_pages += count_pages; }
-        if (kind == voxel_grid->ST_ALLOC) {count_vb_alloc++; vb_alloc_pages += count_pages; }
-        if (kind == voxel_grid->ST_MERGED) {count_vb_merged++; vb_merged_pages += count_pages; }
+        if (kind == ST_FREE) {count_vb_free++; vb_free_pages += count_pages; }
+        if (kind == ST_ALLOC) {count_vb_alloc++; vb_alloc_pages += count_pages; }
+        if (kind == ST_MERGED) {count_vb_merged++; vb_merged_pages += count_pages; }
     }
 
     //=================РАСЧЁТ ДАННЫХ IB ПО STATES=================
@@ -166,12 +166,12 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
     uint32_t count_ib_ready = 0, ib_ready_pages = 0;
     uint32_t count_ib_conceded = 0, ib_conceded_pages = 0;
     for (uint32_t i = 0; i < voxel_grid->count_ib_pages_; i++) {
-        uint32_t kind = ib_states[i] & voxel_grid->ST_MASK;
-        uint32_t order = ib_states[i] >> voxel_grid->ST_MASK_BITS;
+        uint32_t kind = ib_states[i] & ST_MASK;
+        uint32_t order = ib_states[i] >> ST_MASK_BITS;
         uint32_t count_pages = 1u << order;
-        if (kind == voxel_grid->ST_FREE) {count_ib_free++; ib_free_pages += count_pages; }
-        if (kind == voxel_grid->ST_ALLOC) {count_ib_alloc++; ib_alloc_pages += count_pages; }
-        if (kind == voxel_grid->ST_MERGED) {count_ib_merged++; ib_merged_pages += count_pages; }
+        if (kind == ST_FREE) {count_ib_free++; ib_free_pages += count_pages; }
+        if (kind == ST_ALLOC) {count_ib_alloc++; ib_alloc_pages += count_pages; }
+        if (kind == ST_MERGED) {count_ib_merged++; ib_merged_pages += count_pages; }
     }
 
     //=================РАСЧЁТ ДАННЫХ VB ПО HEADS=================
@@ -179,14 +179,14 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
     std::vector<uint32_t> count_free_pages_by_vb_order(voxel_grid->vb_order_ + 1, 0);
     uint32_t count_free_states_by_vb_heads = 0, count_free_pages_by_vb_heads = 0;
     for (uint32_t order = 0; order <= voxel_grid->vb_order_; order++) {
-        uint32_t head_idx = vb_heads[order] >> voxel_grid->HEAD_TAG_BITS;
-        uint32_t cur_node = head_idx != voxel_grid->INVALID_HEAD_IDX ? head_idx : voxel_grid->INVALID_ID;
+        uint32_t head_idx = vb_heads[order] >> HEAD_TAG_BITS;
+        uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
         uint32_t order_size = 1u << order;
-        while (cur_node != voxel_grid->INVALID_ID) {
+        while (cur_node != INVALID_ID) {
             uint32_t page_id = vb_nodes[cur_node].page;
-            uint32_t kind = vb_states[page_id] & voxel_grid->ST_MASK;
-            uint32_t real_order = vb_states[page_id] >> voxel_grid->ST_MASK_BITS;
-            if (kind == voxel_grid->ST_FREE && real_order == order) {
+            uint32_t kind = vb_states[page_id] & ST_MASK;
+            uint32_t real_order = vb_states[page_id] >> ST_MASK_BITS;
+            if (kind == ST_FREE && real_order == order) {
                 count_free_states_by_vb_order[order]++;
                 count_free_pages_by_vb_order[order] += order_size;
 
@@ -202,14 +202,14 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
     std::vector<uint32_t> count_free_pages_by_ib_order(voxel_grid->ib_order_ + 1, 0);
     uint32_t count_free_states_by_ib_heads = 0, count_free_pages_by_ib_heads = 0;
     for (uint32_t order = 0; order <= voxel_grid->ib_order_; order++) {
-        uint32_t head_idx = ib_heads[order] >> voxel_grid->HEAD_TAG_BITS;
-        uint32_t cur_node = head_idx != voxel_grid->INVALID_HEAD_IDX ? head_idx : voxel_grid->INVALID_ID;
+        uint32_t head_idx = ib_heads[order] >> HEAD_TAG_BITS;
+        uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
         uint32_t order_size = 1u << order;
-        while (cur_node != voxel_grid->INVALID_ID) {
+        while (cur_node != INVALID_ID) {
             uint32_t page_id = ib_nodes[cur_node].page;
-            uint32_t kind = ib_states[page_id] & voxel_grid->ST_MASK;
-            uint32_t real_order = ib_states[page_id] >> voxel_grid->ST_MASK_BITS;
-            if (kind == voxel_grid->ST_FREE && real_order == order) {
+            uint32_t kind = ib_states[page_id] & ST_MASK;
+            uint32_t real_order = ib_states[page_id] >> ST_MASK_BITS;
+            if (kind == ST_FREE && real_order == order) {
                 count_free_states_by_ib_order[order]++;
                 count_free_pages_by_ib_order[order] += order_size;
 
@@ -310,9 +310,9 @@ void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
     for (uint32_t slot_id = 0u; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
         uint32_t v = hash_table_vals[slot_id];
 
-        if (v == voxel_grid->SLOT_EMPTY) count_empty_slots++;
-        else if (v == voxel_grid->SLOT_LOCKED) count_lock_slots++;
-        else if (v == voxel_grid->SLOT_TOMB) count_tomb_slots++;
+        if (v == SLOT_EMPTY) count_empty_slots++;
+        else if (v == SLOT_LOCKED) count_lock_slots++;
+        else if (v == SLOT_TOMB) count_tomb_slots++;
         else count_alloc_slots++;
     }
 
@@ -335,15 +335,100 @@ void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
     std::cout << std::endl;
 }
 
+// void VoxelGridGPUDebugger::print_eviction_log(const glm::vec3& camera_pos) {
+//     std::vector<BucketHead> bucket_heads(voxel_grid->count_evict_buckets);
+//     std::vector<uint32_t> bucket_next(voxel_grid->count_active_chunks);
+//     std::vector<ChunkMetaGPU> chunk_meta(voxel_grid->count_active_chunks);
+
+//     voxel_grid->bucket_heads_.read_subdata(0, sizeof(BucketHead) * voxel_grid->count_evict_buckets, bucket_heads.data());
+//     voxel_grid->bucket_next_.read_subdata(0, sizeof(uint32_t) * voxel_grid->count_active_chunks, bucket_next.data());
+//     voxel_grid->chunk_meta_.read_subdata(0, sizeof(ChunkMetaGPU) * voxel_grid->count_active_chunks, chunk_meta.data());
+
+
+//     struct ChunkInBucketData {
+//         uint32_t chunk_id;
+//         glm::ivec3 coords;
+//         double distance_to_chunk;
+//         uint32_t bucket_id_by_distance;
+//     };
+    
+//     // ==================Подсчёт по HEADS==================
+//     std::vector<uint32_t> count_chunks_per_bucket(voxel_grid->count_evict_buckets, 0u);
+//     std::vector<uint32_t> count_chunk_mismatches_per_bucket(voxel_grid->count_evict_buckets, 0u);
+//     uint32_t total_chunks_number_in_buckets = 0u, total_chunk_mismatches_in_buckets = 0u;
+//     std::vector<std::vector<ChunkInBucketData>> chunks_per_bucket(voxel_grid->count_evict_buckets);
+//     for (uint32_t bucket_id = 0; bucket_id < voxel_grid->count_evict_buckets; bucket_id++) {
+//         uint32_t cur_id = bucket_heads[bucket_id];
+        
+//         while (cur_id != INVALID_ID) {
+//             count_chunks_per_bucket[bucket_id]++;
+//             total_chunks_number_in_buckets++;
+
+//             ChunkInBucketData chunk_in_bucket;
+//             chunk_in_bucket.chunk_id = cur_id;
+
+//             uint64_t coords_key = ((uint64_t)(chunk_meta[cur_id].key_hi) << 32u) | (uint64_t)(chunk_meta[cur_id].key_lo);
+//             chunk_in_bucket.coords = math_utils::unpack_key(coords_key);
+
+//             glm::vec3 render_chunk_pos = glm::vec3(chunk_in_bucket.coords * voxel_grid->chunk_size) * voxel_grid->voxel_size;
+//             glm::vec3 render_chunk_center = render_chunk_pos + glm::vec3(0.5) * glm::vec3(voxel_grid->chunk_size) * voxel_grid->voxel_size;
+//             chunk_in_bucket.distance_to_chunk = glm::length(render_chunk_center - camera_pos);
+//             chunk_in_bucket.bucket_id_by_distance = (uint32_t)(chunk_in_bucket.distance_to_chunk / voxel_grid->eviction_bucket_shell_thickness);
+
+//             chunks_per_bucket[bucket_id].push_back(chunk_in_bucket);
+
+//             if (bucket_id != chunk_in_bucket.bucket_id_by_distance) {
+//                 count_chunk_mismatches_per_bucket[bucket_id]++;
+//                 total_chunk_mismatches_in_buckets++;
+//             }
+
+//             cur_id = bucket_next[cur_id];
+//         }
+//     }
+
+//     std::vector<double> min_distance_in_shell(voxel_grid->count_evict_buckets, std::numeric_limits<double>::max());
+//     std::vector<double> max_distance_in_shell(voxel_grid->count_evict_buckets, 0.0);
+//     for (uint32_t bucket_id = 0; bucket_id < voxel_grid->count_evict_buckets; bucket_id++) {
+//         for (const ChunkInBucketData& chunk_data : chunks_per_bucket[bucket_id]) {
+//             if (chunk_data.distance_to_chunk < min_distance_in_shell[bucket_id])
+//                 min_distance_in_shell[bucket_id] = chunk_data.distance_to_chunk;
+            
+//             if (chunk_data.distance_to_chunk > max_distance_in_shell[bucket_id])
+//                 max_distance_in_shell[bucket_id] = chunk_data.distance_to_chunk;
+//         }
+//     }
+    
+
+//     // ==================Вывод==================
+
+//     std::cout << "========= DATA BY HEADS =========" << std::endl;
+//     std::cout << "Total number of chunks in buckets: " << total_chunks_number_in_buckets << std::endl;
+//     std::cout << "Total number of chunk mismatches in buckets: " << total_chunk_mismatches_in_buckets << std::endl;
+//     std::cout << std::endl;
+//     std::cout << "Data per heads:" << std::endl;
+    
+//     for (uint32_t bucket_id = 0u; bucket_id < voxel_grid->count_evict_buckets; bucket_id++) {
+//         std::cout << std::left << std::setw(11 + 3) << ("BUCKET_ID " + std::to_string(bucket_id) + ":")
+//                   << std::right << std::setw(14 + 5) << "count chunks ="
+//                   << std::right << std::setw(5) << count_chunks_per_bucket[bucket_id]
+//                   << std::right << std::setw(18 + 5) << "count mismatches ="
+//                   << std::right << std::setw(5) << count_chunk_mismatches_per_bucket[bucket_id]
+//                   << std::right << std::setw(15 + 5) << "min distance ="
+//                   << std::right << std::setw(7) << min_distance_in_shell[bucket_id]
+//                   << std::right << std::setw(14 + 5) << "max distance ="
+//                   << std::right << std::setw(7) << max_distance_in_shell[bucket_id] << std::endl;
+//     }
+//     std::cout << std::endl;
+// }
+
 void VoxelGridGPUDebugger::print_eviction_log(const glm::vec3& camera_pos) {
-    std::vector<uint32_t> bucket_heads(voxel_grid->count_evict_buckets);
+    std::vector<BucketHead> bucket_heads(voxel_grid->count_evict_buckets);
     std::vector<uint32_t> bucket_next(voxel_grid->count_active_chunks);
-    std::vector<VoxelGridGPU::ChunkMetaGPU> chunk_meta(voxel_grid->count_active_chunks);
+    std::vector<ChunkMetaGPU> chunk_meta(voxel_grid->count_active_chunks);
 
-    voxel_grid->bucket_heads_.read_subdata(0, sizeof(uint32_t) * voxel_grid->count_evict_buckets, bucket_heads.data());
+    voxel_grid->bucket_heads_.read_subdata(0, sizeof(BucketHead) * voxel_grid->count_evict_buckets, bucket_heads.data());
     voxel_grid->bucket_next_.read_subdata(0, sizeof(uint32_t) * voxel_grid->count_active_chunks, bucket_next.data());
-    voxel_grid->chunk_meta_.read_subdata(0, sizeof(VoxelGridGPU::ChunkMetaGPU) * voxel_grid->count_active_chunks, chunk_meta.data());
-
+    voxel_grid->chunk_meta_.read_subdata(0, sizeof(ChunkMetaGPU) * voxel_grid->count_active_chunks, chunk_meta.data());
 
     struct ChunkInBucketData {
         uint32_t chunk_id;
@@ -358,9 +443,9 @@ void VoxelGridGPUDebugger::print_eviction_log(const glm::vec3& camera_pos) {
     uint32_t total_chunks_number_in_buckets = 0u, total_chunk_mismatches_in_buckets = 0u;
     std::vector<std::vector<ChunkInBucketData>> chunks_per_bucket(voxel_grid->count_evict_buckets);
     for (uint32_t bucket_id = 0; bucket_id < voxel_grid->count_evict_buckets; bucket_id++) {
-        uint32_t cur_id = bucket_heads[bucket_id];
+        uint32_t cur_id = bucket_heads[bucket_id].id;
         
-        while (cur_id != VoxelGridGPU::INVALID_ID) {
+        while (cur_id != INVALID_ID) {
             count_chunks_per_bucket[bucket_id]++;
             total_chunks_number_in_buckets++;
 
@@ -384,6 +469,8 @@ void VoxelGridGPUDebugger::print_eviction_log(const glm::vec3& camera_pos) {
 
             cur_id = bucket_next[cur_id];
         }
+        
+        std::cout << std::endl;
     }
 
     std::vector<double> min_distance_in_shell(voxel_grid->count_evict_buckets, std::numeric_limits<double>::max());
@@ -411,6 +498,8 @@ void VoxelGridGPUDebugger::print_eviction_log(const glm::vec3& camera_pos) {
         std::cout << std::left << std::setw(11 + 3) << ("BUCKET_ID " + std::to_string(bucket_id) + ":")
                   << std::right << std::setw(14 + 5) << "count chunks ="
                   << std::right << std::setw(5) << count_chunks_per_bucket[bucket_id]
+                  << std::right << std::setw(25 + 5) << "count chunks (from gpu) ="
+                  << std::right << std::setw(5) << bucket_heads[bucket_id].count
                   << std::right << std::setw(18 + 5) << "count mismatches ="
                   << std::right << std::setw(5) << count_chunk_mismatches_per_bucket[bucket_id]
                   << std::right << std::setw(15 + 5) << "min distance ="
@@ -465,11 +554,11 @@ void VoxelGridGPUDebugger::print_dirty_list_quad_count() {
 }
 
 void VoxelGridGPUDebugger::print_mesh_alloc_by_dirty_list(const std::string& prefix, uint32_t mesh_alloc_page_offset_bytes, uint32_t mesh_alloc_order_offset_bytes) {
-    std::vector<VoxelGridGPU::ChunkMeshAlloc> alloc_meta(voxel_grid->count_active_chunks);
+    std::vector<ChunkMeshAlloc> alloc_meta(voxel_grid->count_active_chunks);
     std::vector<uint32_t> dirty_list;
     uint32_t dirty_count;
 
-    voxel_grid->chunk_mesh_alloc_.read_subdata(0, sizeof(VoxelGridGPU::ChunkMeshAlloc) * voxel_grid->count_active_chunks, alloc_meta.data());
+    voxel_grid->chunk_mesh_alloc_.read_subdata(0, sizeof(ChunkMeshAlloc) * voxel_grid->count_active_chunks, alloc_meta.data());
     voxel_grid->mesh_buffers_status_.read_subdata(sizeof(uint32_t), sizeof(uint32_t), &dirty_count);
     dirty_list.resize(dirty_count);
     voxel_grid->dirty_list_.read_subdata(0, sizeof(uint32_t) * dirty_count, dirty_list.data());
@@ -481,7 +570,7 @@ void VoxelGridGPUDebugger::print_mesh_alloc_by_dirty_list(const std::string& pre
             uint32_t chunk_id = dirty_list[dirty_idx];
             uint32_t start_page = *reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&alloc_meta[chunk_id]) + mesh_alloc_page_offset_bytes);
             uint32_t alloc_order = *reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&alloc_meta[chunk_id]) + mesh_alloc_order_offset_bytes);
-            if (start_page == VoxelGridGPU::INVALID_ID) continue;
+            if (start_page == INVALID_ID) continue;
             count_alloc_pages += 1u << alloc_order;
             count_alloc_states++;
         }
@@ -493,7 +582,7 @@ void VoxelGridGPUDebugger::print_mesh_alloc_by_dirty_list(const std::string& pre
             uint32_t chunk_id = dirty_list[dirty_idx];
             uint32_t start_page = *reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&alloc_meta[chunk_id]) + mesh_alloc_page_offset_bytes);
             uint32_t alloc_order = *reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(&alloc_meta[chunk_id]) + mesh_alloc_order_offset_bytes);
-            if (start_page == VoxelGridGPU::INVALID_ID) continue;
+            if (start_page == INVALID_ID) continue;
             
             std::cout << std::left << std::setw(9 + 8) << ("DIRTY_ID " + std::to_string(dirty_idx))
                     << std::left << std::setw(5) << "  |"
@@ -519,8 +608,8 @@ void VoxelGridGPUDebugger::print_free_lists(
     uint32_t count_pages,
     uint32_t max_order) 
 {
-    std::vector<VoxelGridGPU::AllocNode> nodes(count_nodes);
-    nodes_buffer.read_subdata(0, sizeof(VoxelGridGPU::AllocNode) * count_nodes, nodes.data());
+    std::vector<AllocNode> nodes(count_nodes);
+    nodes_buffer.read_subdata(0, sizeof(AllocNode) * count_nodes, nodes.data());
 
     std::vector<uint32_t> heads(max_order + 1);
     heads_buffer.read_subdata(0, sizeof(uint32_t) * (max_order + 1), heads.data());
@@ -531,12 +620,12 @@ void VoxelGridGPUDebugger::print_free_lists(
     for (uint32_t i = 0; i < max_order + 1; i++) {
         uint32_t order = i;
         std::cout << "======================ORDER " << order << "======================" << std::endl;
-        uint32_t head_idx = heads[order] >> VoxelGridGPU::HEAD_TAG_BITS;
-        uint32_t cur_node = head_idx != VoxelGridGPU::INVALID_HEAD_IDX ? head_idx : VoxelGridGPU::INVALID_ID;
-        while (cur_node != VoxelGridGPU::INVALID_ID) {
+        uint32_t head_idx = heads[order] >> HEAD_TAG_BITS;
+        uint32_t cur_node = head_idx != INVALID_HEAD_IDX ? head_idx : INVALID_ID;
+        while (cur_node != INVALID_ID) {
             uint32_t page_id = nodes[cur_node].page;
-            uint32_t kind = states[page_id] & VoxelGridGPU::ST_MASK;
-            uint32_t real_order = states[page_id] >> VoxelGridGPU::ST_MASK_BITS;
+            uint32_t kind = states[page_id] & ST_MASK;
+            uint32_t real_order = states[page_id] >> ST_MASK_BITS;
             if (real_order == order) {
                 std::cout << page_id << " ";
                 if (kind == 0u) std::cout << "ST_FREE" << std::endl;
@@ -612,8 +701,8 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         if (ImGui::Button("Print VB")) {
             print_mesh_alloc_by_dirty_list(
                 "VB", 
-                offsetof(VoxelGridGPU::ChunkMeshAlloc, v_startPage), 
-                offsetof(VoxelGridGPU::ChunkMeshAlloc, v_order)
+                offsetof(ChunkMeshAlloc, v_startPage), 
+                offsetof(ChunkMeshAlloc, v_order)
             );
         }
 
@@ -622,8 +711,8 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         if (ImGui::Button("Print IB")) {
             print_mesh_alloc_by_dirty_list(
                 "IB", 
-                offsetof(VoxelGridGPU::ChunkMeshAlloc, i_startPage), 
-                offsetof(VoxelGridGPU::ChunkMeshAlloc, i_order)
+                offsetof(ChunkMeshAlloc, i_startPage), 
+                offsetof(ChunkMeshAlloc, i_order)
             );
         }
 
@@ -786,9 +875,18 @@ void VoxelGridGPUDebugger::display_chunk_eviction_window() {
         voxel_grid->prepare_evict_lowpriority_chunks(voxel_grid->dispatch_args);
         voxel_grid->free_evicted_chunks_mesh(voxel_grid->dispatch_args);
     }
+
+    if (ImGui::Button("reset_evicted_list_and_buckets()"))  {
+        voxel_grid->reset_evicted_list_and_buckets();
+    }
+
     if (ImGui::Button("return_free_alloc_nodes()")) {
         voxel_grid->prepare_return_free_alloc_nodes(voxel_grid->dispatch_args);
         voxel_grid->return_free_alloc_nodes(voxel_grid->dispatch_args);
+    }
+
+    if (ImGui::Button("rebuild_chunk_hash_table()")) {
+        voxel_grid->rebuild_chunk_hash_table(math_utils::BITS, math_utils::OFFSET);
     }
 
     ImGui::End();

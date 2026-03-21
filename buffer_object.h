@@ -29,7 +29,8 @@ public:
 
     template<class T>
     static inline BufferObject from_fill(
-        std::size_t size_bytes, 
+        size_t offset_bytes,
+        size_t size_bytes, 
         GLenum usage, 
         T fill_value, 
         ComputeProgram& clear_buffer_prog, 
@@ -42,21 +43,46 @@ public:
         }
 
         BufferObject BufferObject(size_bytes, usage);
-        BufferObject.update_subdata_fill(0, fill_value, size_bytes, clear_buffer_prog, prefab_buffer, invocation_stride);
+        BufferObject.update_subdata_fill(offset_bytes, fill_value, size_bytes, clear_buffer_prog, prefab_buffer, invocation_stride);
 
         return BufferObject;
     }
 
     template<class T>
     static inline BufferObject from_fill(
-        std::size_t size_bytes, 
+        size_t offset_bytes,
+        size_t size_bytes, 
         GLenum usage, 
         T fill_value, 
         ShaderManager& shader_manager, 
         BufferObject& prefab_buffer = BufferObject::prefab_buffer,
         uint32_t invocation_stride = 4u)
     {
-        return BufferObject::from_fill(size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
+        return BufferObject::from_fill(offset_bytes, size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
+    }
+
+    template<class T>
+    static inline BufferObject from_fill(
+        size_t size_bytes, 
+        GLenum usage, 
+        T fill_value, 
+        ShaderManager& shader_manager, 
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
+        uint32_t invocation_stride = 4u)
+    {
+        return BufferObject::from_fill(0, size_bytes, usage, fill_value, shader_manager.clear_buffer_prog, prefab_buffer, invocation_stride);
+    }
+
+    template<class T>
+    static inline BufferObject from_fill(
+        size_t size_bytes, 
+        GLenum usage, 
+        T fill_value, 
+        ComputeProgram& clear_buffer_prog, 
+        BufferObject& prefab_buffer = BufferObject::prefab_buffer,
+        uint32_t invocation_stride = 4u)
+    {
+        return BufferObject::from_fill(0, size_bytes, usage, fill_value, clear_buffer_prog, prefab_buffer, invocation_stride);
     }
 
     std::filesystem::path make_binary_dump(const std::filesystem::path& file_path) const;
@@ -227,7 +253,7 @@ public:
     }
 
     GLuint id() const;
-    std::size_t size_bytes();
+    std::size_t size_bytes() const;
 
 private:
     GLuint id_ = 0;

@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -17,31 +17,17 @@ layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_lis
 uniform uint  u_hash_table_size;
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
-uniform uint  u_set_dirty_flag_bits;
 
 uniform uint u_pack_bits;
 uniform int  u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "common/hash_table.glsl"
+#include "../common/chunk_pool.glsl"
+#include "../common/hash_table.glsl"
 // -------------------
 
 // ---------- helpers ----------
-uint voxel_index_in_chunk(ivec3 local) {
-    return uint((local.z * u_chunk_dim.y + local.y) * u_chunk_dim.x + local.x);
-}
-
-void mark_dirty(uint chunkId) {
-    atomicOr(meta[chunkId].dirty_flags, u_set_dirty_flag_bits);
-
-    uint was = atomicExchange(enqueued[chunkId], 1u);
-    if (was == 0u) {
-        uint di = atomicAdd(dirty_count, 1u);
-        dirty_list[di] = chunkId;
-    }
-}
-
 void main() {
     uint wi = gl_GlobalInvocationID.x;
     uint writeCount = write_count;
@@ -74,10 +60,10 @@ void main() {
     if (!get_or_create_chunk(key, chunkId, created)) return;
     if (chunkId == INVALID_ID) return;
 
-    uint vi = voxel_index_in_chunk(local);
+    uint vi = voxel_index(local);
 
     // просто пишем VoxelData как есть (8 байт)
     voxels[chunkId * u_voxels_per_chunk + vi] = w.voxel_data;
 
-    mark_dirty(chunkId);
+    mark_dirty_around(chunkId, chunkCoord);
 }

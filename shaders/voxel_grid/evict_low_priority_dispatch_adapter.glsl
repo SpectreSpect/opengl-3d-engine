@@ -2,7 +2,7 @@
 layout(local_size_x = 1) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };

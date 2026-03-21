@@ -2,7 +2,7 @@
 layout(local_size_x = 1) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer VBHeads { uint vb_heads[]; };
@@ -19,7 +19,7 @@ uniform uint u_ib_max_order;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 // -------------------
 
 void main() {

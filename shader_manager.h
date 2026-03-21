@@ -28,11 +28,11 @@ public:
     ComputeShader copy_offsets_to_cursor_cs;
     ComputeShader fill_triangle_indices_cs;
     ComputeShader voxelize_cs;
-    ComputeShader clear_voxels_cs;
     ComputeShader roi_reduce_indices_cs;
     ComputeShader roi_reduce_pairs_cs;
     ComputeShader build_active_chunks_cs;
     ComputeShader roi_finalize_cs;
+    ComputeShader build_voxel_writes_cs;
 
     //voxel_grid
     ComputeShader clear_chunks_cs;
@@ -62,6 +62,10 @@ public:
     ComputeShader clear_chunk_hash_table_cs;
     ComputeShader reset_evicted_list_and_buckets_cs;
     ComputeShader hash_table_conditional_dispatch_adapter_cs;
+    ComputeShader write_voxels_to_grid_cs;
+    ComputeShader mark_write_chunks_to_generate_cs;
+    ComputeShader insert_elements_to_voxel_write_list_cs;
+    ComputeShader add_voxel_write_list_counters_together_cs;
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 

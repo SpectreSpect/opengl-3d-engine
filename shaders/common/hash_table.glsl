@@ -1,4 +1,4 @@
-#include "../../utils.glsl"
+#include "../utils.glsl"
 
 /*
 Для настройки #include можно определить следующие дефайны (не обязательно):
@@ -112,7 +112,11 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             uint idx_to_create = last_tomb_id == INVALID_ID ? idx : last_tomb_id;
             uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
 
-            if (idx_to_create == INVALID_ID) return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
+            if (idx_to_create == INVALID_ID) {
+                outId = INVALID_ID;
+                created = false;
+                return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
+            }
 
             uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
             if (prev != slot_state) {
@@ -131,6 +135,8 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             uint id = pop_free_chunk_id();
             if (id == INVALID_ID) {
                 atomicExchange(hash_vals[idx_to_create], slot_state);
+                outId = INVALID_ID;
+                created = false;
                 return false;
             }
 
@@ -139,11 +145,10 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             }
 
             // meta подготовим ДО публикации id
-            meta[id].used       = 1u;
-            meta[id].key_lo     = key.x;
-            meta[id].key_hi     = key.y;
-            meta[id].dirty_flags= 0u;
-            enqueued[id]        = 0u;
+            meta[id].used = 1u;
+            meta[id].key_lo = key.x;
+            meta[id].key_hi = key.y;
+            meta[id].dirty_flags = NEED_GENERATION_FLAG_BIT;
 
             // публикуем key
             hash_keys[idx_to_create] = key;
@@ -180,6 +185,8 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
         probe++;
     }
 
+    outId = INVALID_ID;
+    created = false;
     return false;
 }
 #endif

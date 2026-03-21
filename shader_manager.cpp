@@ -25,6 +25,7 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     roi_reduce_pairs_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_reduce_pairs.glsl", include_directories);
     build_active_chunks_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_active_chunks.glsl");
     roi_finalize_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_finalize.glsl", include_directories);
+    build_voxel_writes_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_voxel_writes.glsl", include_directories);
 
     clear_chunks_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunks.glsl", include_directories);
     world_init_cs = ComputeShader(p / "shaders" / "voxel_grid" / "world_init.glsl", include_directories);
@@ -52,6 +53,10 @@ void ShaderManager::init_shaders(const std::filesystem::path& root_path) {
     clear_chunk_hash_table_cs = ComputeShader(p / "shaders" / "voxel_grid" / "clear_chunk_hash_table.glsl", include_directories);
     reset_evicted_list_and_buckets_cs = ComputeShader(p / "shaders" / "voxel_grid" / "reset_evicted_list_and_buckets.glsl", include_directories);
     hash_table_conditional_dispatch_adapter_cs = ComputeShader(p / "shaders" / "voxel_grid" / "hash_table_conditional_dispatch_adapter.glsl", include_directories);
+    mark_write_chunks_to_generate_cs = ComputeShader(p / "shaders" / "voxel_grid" / "mark_write_chunks_to_generate.glsl", include_directories);
+    write_voxels_to_grid_cs = ComputeShader(p / "shaders" / "voxel_grid" / "write_voxels_to_grid.glsl", include_directories);
+    insert_elements_to_voxel_write_list_cs = ComputeShader(p / "shaders" / "voxel_grid" / "insert_elements_to_voxel_write_list.glsl", include_directories);
+    add_voxel_write_list_counters_together_cs = ComputeShader(p / "shaders" / "voxel_grid" / "add_voxel_write_list_counters_together.glsl", include_directories);
     voxel_mesh_vs = VertexShader(p / "shaders" / "voxel_grid" / "voxel_mesh.vert", include_directories);
     voxel_mesh_fs = FragmentShader(p / "shaders" / "voxel_grid" / "voxel_mesh.frag", include_directories);
 }

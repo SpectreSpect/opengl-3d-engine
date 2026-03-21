@@ -2,13 +2,13 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
 layout(std430, binding=1) buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
 layout(std430, binding=2) readonly buffer LoadList { uint load_list_counter; uint load_list[]; };
-layout(std430, binding=3) writeonly restrict buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=6) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
@@ -19,7 +19,6 @@ uniform uint  u_voxels_per_chunk;
 uniform uint u_pack_bits;
 uniform int  u_pack_offset;
 
-uniform uint u_set_dirty_flag_bits; // 1u
 uniform uint u_seed;
 
 uniform uint u_hash_table_size;
@@ -27,15 +26,10 @@ uniform uint u_hash_table_size;
 // ----- include -----
 #include "../utils.glsl"
 
-#define NOT_INCLUDE_GET_OR_CREATE
-#include "common/hash_table.glsl"
+#define NOT_INCLUDE_ALL
+#define INCLUDE_MARK_DIRTY
+#include "../common/chunk_pool.glsl"
 // -------------------
-
-
-// ---- helpers ----
-uint voxel_index(ivec3 p) {
-    return uint((p.z * u_chunk_dim.y + p.y) * u_chunk_dim.x + p.x);
-}
 
 // ---- noise (value noise + fbm) ----
 float valueNoise(vec2 x) {
@@ -60,26 +54,6 @@ float fbm(vec2 p) {
         a *= 0.5;
     }
     return s;
-}
-
-void mark_dirty(uint chunkId) {
-    uint was = atomicCompSwap(enqueued[chunkId], 0u, 1u);
-    if (was == 0u) {
-        atomicOr(meta[chunkId].dirty_flags, u_set_dirty_flag_bits);
-        uint di = atomicAdd(dirty_count, 1u);
-        dirty_list[di] = chunkId;
-    }
-}
-
-void try_mark_neighbor(ivec3 ncoord) {
-    uint id = lookup_chunk(pack_key_uvec2(ncoord, u_pack_offset, u_pack_bits), false);
-    if (id == INVALID_ID) return;
-
-    // (опционально) "атомарное чтение", чтобы избежать странностей кеша
-    uint used = atomicAdd(meta[id].used, 0u);
-    if (used == 1u) {
-        mark_dirty(id);
-    }
 }
 
 void main() {
@@ -117,18 +91,13 @@ void main() {
     vd.color = pack_color(col);
 
     uint base = chunkId * u_voxels_per_chunk;
-    voxels[base + voxelId] = vd;
+
+    uint global_voxel_id = base + voxelId;
+    uint voxel_visability = (voxels[global_voxel_id].type_vis_flags >> VIS_SHIFT) & VIS_MASK;
+    voxels[global_voxel_id] = vd;
 
     // один раз на чанк
     if (voxelId == 0u) {
-        mark_dirty(chunkId); // Заставляем перестроить меш у себя
-
-        // А также у всех чанков вокруг
-        try_mark_neighbor(chunkCoord + ivec3( 1, 0, 0));
-        try_mark_neighbor(chunkCoord + ivec3(-1, 0, 0));
-        try_mark_neighbor(chunkCoord + ivec3( 0, 1, 0));
-        try_mark_neighbor(chunkCoord + ivec3( 0,-1, 0));
-        try_mark_neighbor(chunkCoord + ivec3( 0, 0, 1));
-        try_mark_neighbor(chunkCoord + ivec3( 0, 0,-1));
+        mark_dirty_around(chunkId, chunkCoord);
     }
 }

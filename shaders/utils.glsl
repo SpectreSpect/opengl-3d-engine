@@ -30,6 +30,14 @@ int floor_div(int a, int d) {
     return q;
 }
 
+ivec3 floor_div(ivec3 a, ivec3 d) {
+    return ivec3(
+        floor_div(a.x, d.x),
+        floor_div(a.y, d.y),
+        floor_div(a.z, d.z)
+    );
+}
+
 int floor_mod(int a, int d) {
     int q = floor_div(a, d);
     return a - q * d; // [0..d-1]
@@ -138,4 +146,12 @@ uint pack_color(vec4 rgba) {
 
 uint pack_color(vec3 rgb) {
     return pack_color(vec4(rgb, 1u));
+}
+
+uint pack_color(uvec4 rgba) {
+    return ((rgba.r & BYTE_MASK) << 24u) | ((rgba.g & BYTE_MASK) << 16u) | ((rgba.b & BYTE_MASK) << 8u) | (rgba.a & BYTE_MASK);
+}
+
+uint pack_color(uvec3 rgb) {
+    return pack_color(uvec4(rgb, 0xFFu));
 }

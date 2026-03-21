@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -30,7 +30,9 @@ uniform uint u_ib_page_inds;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "common/chunk_pool.glsl"
+
+#define NOT_INCLUDE_MARK_DIRTY
+#include "../common/chunk_pool.glsl"
 // -------------------
 
 #define AO_STEP   0.22   // сила затемнения за "ступень" 0..3

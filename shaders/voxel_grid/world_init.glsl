@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -22,7 +22,7 @@ uniform uint u_max_chunks;
 // ----- include -----
 #define NOT_INCLUDE_GET_OR_CREATE
 #define NOT_INCLUDE_LOOKUP_REMOVE
-#include "common/hash_table.glsl"
+#include "../common/hash_table.glsl"
 // -------------------
 
 void main() {
@@ -34,13 +34,13 @@ void main() {
     }
 
     if (i < u_max_chunks) {
-        free_list[i]   = i;
-        enqueued[i]    = 0u;
+        free_list[i] = i;
+        enqueued[i] = 0u;
 
-        meta[i].used       = 0u;
-        meta[i].key_lo     = 0u;
-        meta[i].key_hi     = 0u;
-        meta[i].dirty_flags= 0u;
+        meta[i].used = 0u;
+        meta[i].key_lo = 0u;
+        meta[i].key_hi = 0u;
+        meta[i].dirty_flags = NEED_GENERATION_FLAG_BIT;
     }
 
     if (i == 0u) {

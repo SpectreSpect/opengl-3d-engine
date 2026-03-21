@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
@@ -10,8 +10,6 @@ layout(std430, binding=1) buffer EnqueuedBuf { uint enqueued[]; };
 layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 layout(std430, binding=3) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
 layout(std430, binding=4) buffer FailedDirtyListBuf { uint failed_dirty_count; uint failed_dirty_list[]; }; 
-
-uniform uint u_dirty_flag_bits;
 
 // ----- include -----
 #include "../utils.glsl"
@@ -24,7 +22,7 @@ void main() {
 
     uint chunkId = dirty_list[dirtyIdx];
     
-    if (chunk_alloc[chunkId].v_startPage == INVALID_ID || chunk_alloc[chunkId].i_startPage == INVALID_ID) {
+    if (!chunk_alloc[chunkId].is_valid) {
         if (enqueued[chunkId] != 2u) {
             uint idx = atomicAdd(failed_dirty_count, 1u);
             failed_dirty_list[idx] = chunkId;
@@ -36,5 +34,5 @@ void main() {
     }
 
     // снять dirty флаг(и)
-    meta[chunkId].dirty_flags &= ~u_dirty_flag_bits;
+    meta[chunkId].dirty_flags &= ~DIRTY_FLAG_BIT;
 }

@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; }; // y = dirtyCount
@@ -27,7 +27,7 @@ uniform uint u_is_vb_phase;
 #include "../utils.glsl"
 
 #define PREFIX bb
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 // -------------------
 
 bool is_vb_phase = u_is_vb_phase == 1u;
@@ -50,7 +50,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
 
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = false;
         return;
     }
 
@@ -66,7 +66,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = true;
         return;
     }
 
@@ -84,7 +84,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = true;
         return;
     }
 
@@ -106,7 +106,7 @@ void main() {
             chunk_alloc_local[dirtyIdx].needI = 0u;
         }
         
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
+        chunk_alloc_local[dirtyIdx].is_valid = false;
         return;
     }
 
@@ -114,11 +114,11 @@ void main() {
         chunk_alloc_local[dirtyIdx].v_startPage = bStart;
         chunk_alloc_local[dirtyIdx].v_order = bOrder;
         chunk_alloc_local[dirtyIdx].needV = needB;
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
     } else {
         chunk_alloc_local[dirtyIdx].i_startPage = bStart;
         chunk_alloc_local[dirtyIdx].i_order = bOrder;
         chunk_alloc_local[dirtyIdx].needI = needB;
-        chunk_alloc_local[dirtyIdx].need_rebuild = 1u;
     }
+
+    chunk_alloc_local[dirtyIdx].is_valid = true;
 }

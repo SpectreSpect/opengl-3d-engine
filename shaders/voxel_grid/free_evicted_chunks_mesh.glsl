@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) buffer GlobalChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc_global[]; }; 
@@ -25,10 +25,10 @@ uniform uint ib_max_order;
 #include "../utils.glsl"
 
 #define PREFIX vb
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 
 #define PREFIX ib
-#include "common/allocator.glsl"
+#include "../common/allocator.glsl"
 // -------------------
 
 void main() {
@@ -50,5 +50,5 @@ void main() {
     chunk_alloc_global[chunk_id].i_startPage = INVALID_ID;
     chunk_alloc_global[chunk_id].i_order = 0u;
     chunk_alloc_global[chunk_id].needI = 0u;
-    chunk_alloc_global[chunk_id].need_rebuild = 0u;
+    chunk_alloc_global[chunk_id].is_valid = true;
 }

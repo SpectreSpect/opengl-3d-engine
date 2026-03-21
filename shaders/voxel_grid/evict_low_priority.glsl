@@ -2,7 +2,7 @@
 layout(local_size_x = 256) in;
 
 // ----- include -----
-#include "common/buffer_structures.glsl"
+#include "../common/buffer_structures.glsl"
 // -------------------
 
 layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
@@ -22,7 +22,7 @@ uniform uint u_bucket_count;
 #include "../utils.glsl"
 
 #define NOT_INCLUDE_GET_OR_CREATE
-#include "common/hash_table.glsl"
+#include "../common/hash_table.glsl"
 // -------------------
 
 // ABA проблемы не будет, так как везде используется либо только pop, либо только push (поэтому теги на heads пока не нужны)
@@ -71,7 +71,7 @@ void main() {
 
     // освобождаем метаданные
     meta[victim].used = 0u;
-    meta[victim].dirty_flags = 0u;
+    meta[victim].dirty_flags = NEED_GENERATION_FLAG_BIT;
     enqueued[victim] = 0u;
 
     // пушим обратно в free_list

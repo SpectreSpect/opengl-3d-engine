@@ -1,5 +1,9 @@
 #include "vao.h"
 
+VAO::VAO() {
+    glGenVertexArrays(1, &id);
+}
+
 VAO::~VAO() {
     if (id != 0)
         glDeleteVertexArrays(1, &id);
@@ -22,21 +26,21 @@ VAO& VAO::operator=(VAO&& o) noexcept {
     return *this;
 }
 
-VAO& VAO::init_vao() & {
-    glGenVertexArrays(1, &this->id);
-    if (this->id == 0) {
-        std::string message = "Failed to create VAO";
-        std::cout << message << std::endl;
-        throw std::runtime_error(message);
-    }
+// VAO& VAO::init_vao() & {
+//     glGenVertexArrays(1, &this->id);
+//     if (this->id == 0) {
+//         std::string message = "Failed to create VAO";
+//         std::cout << message << std::endl;
+//         throw std::runtime_error(message);
+//     }
     
-    return *this;
-}
+//     return *this;
+// }
 
-VAO&& VAO::init_vao() && {
-    static_cast<VAO&>(*this).init_vao();
-    return std::move(*this);
-}
+// VAO&& VAO::init_vao() && {
+//     static_cast<VAO&>(*this).init_vao();
+//     return std::move(*this);
+// }
 
 
 void VAO::setup(const BufferObject& vbo, const BufferObject& ebo, const VertexLayout& vertex_layout) {

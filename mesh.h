@@ -1,4 +1,6 @@
 #pragma once
+#include <iostream>
+
 #include "vao.h"
 #include "buffer_object.h"
 #include "vertex_layout.h"
@@ -9,14 +11,13 @@
 
 class Mesh : public Drawable, public Transformable {
 public:
-    VAO* vao;
-    BufferObject* vbo;
-    BufferObject* ebo;
-    VertexLayout* vertex_layout;
+    VAO vao;
+    BufferObject vbo;
+    BufferObject ebo;
+    VertexLayout vertex_layout;
     
-    
-    Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, VertexLayout* vertex_layout);
-    ~Mesh();
+    Mesh() = default;
+    Mesh(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, const VertexLayout& vertex_layout);
     // Mesh(const void* vertex_data, size_t vertex_data_size, const void* index_data, size_t index_data_size, VertexLayout* vertex_layout);
     void update(const std::vector<float>& vertices, const std::vector<unsigned int>& indices, GLenum usage = GL_DYNAMIC_DRAW);
     void update(const void* vertex_data, size_t vertex_data_size, const void* index_data, size_t index_data_size, GLenum usage = GL_DYNAMIC_DRAW);

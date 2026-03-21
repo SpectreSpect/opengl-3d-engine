@@ -12,9 +12,9 @@
 
 class VoxelRastorizator {
 public:
-    Gridable* gridable;
+    IGridable* gridable;
 
-    VoxelRastorizator(Gridable* gridable);
+    VoxelRastorizator(IGridable* gridable);
 
     static float fmin3(float a, float b, float c);
     static float fmax3(float a, float b, float c);

@@ -4,8 +4,8 @@
 Engine3D::Engine3D(){
     init();
 
-    mesh_manager = new MeshManager();
-    material_manager = new MaterialManager();
+    // mesh_manager = new MeshManager();
+    // material_manager = new MaterialManager();
 }
 
 Engine3D::~Engine3D(){
@@ -37,8 +37,8 @@ int Engine3D::init_glew() {
     }
     glGetError();
 
-    mesh_manager->load_cube();
-    material_manager->load_blinn_phong();
+    // mesh_manager->load_cube();
+    // material_manager->load_blinn_phong();
 
 
     default_vertex_shader = new VertexShader(default_vertex_shader_path);

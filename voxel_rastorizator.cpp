@@ -1,7 +1,7 @@
 #include "voxel_rastorizator.h"
 
 
-VoxelRastorizator::VoxelRastorizator(Gridable* gridable) {
+VoxelRastorizator::VoxelRastorizator(IGridable* gridable) {
     this->gridable = gridable;
 }
 
