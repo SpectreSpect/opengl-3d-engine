@@ -46,6 +46,7 @@ public:
     uint32_t eviction_bucket_shell_thickness;
     uint32_t vox_per_chunk;
     float render_distance;
+    uint32_t generation_distance;
 
     const uint32_t min_free_pages = 1024;
 
@@ -197,6 +198,7 @@ public:
         uint32_t ib_page_size_order_of_two,
         float buddy_allocator_nodes_factor,
         float render_distance,
+        uint32_t generation_distance,
         uint32_t max_write_count,
         ShaderManager& shader_manager);
 

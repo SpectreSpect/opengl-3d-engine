@@ -25,7 +25,11 @@ uniform uint u_pack_bits;
 // -------------------
 
 void main() {
+    // if (gl_GlobalInvocationID.x != 0u) return;
+
     uint voxel_write_id = gl_GlobalInvocationID.x;
+    // for (uint voxel_write_id = 0u; voxel_write_id < count_voxel_writes; voxel_write_id++) {
+        
     if (voxel_write_id >= count_voxel_writes) return;
 
     ivec3 chunk_pos = floor_div(voxel_writes[voxel_write_id].world_voxel.xyz, ivec3(u_chunk_dim));
@@ -43,4 +47,5 @@ void main() {
         uint load_chunk_id = atomicAdd(load_list_counter, 1u);
         load_list[load_chunk_id] = chunk_id;
     }
+    // }
 }

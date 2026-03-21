@@ -14,6 +14,7 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t ib_page_size_order_of_two,
     float buddy_allocator_nodes_factor,
     float render_distance,
+    uint32_t generation_distance,
     uint32_t max_write_count,
     ShaderManager& shader_manager)
  {
@@ -27,6 +28,7 @@ VoxelGridGPU::VoxelGridGPU(
     this->tomb_fraction_to_rebuild = tomb_fraction_to_rebuild;
     this->eviction_bucket_shell_thickness = eviction_bucket_shell_thickness;
     this->render_distance = render_distance;
+    this->generation_distance = generation_distance;
     this->shader_manager = &shader_manager;
 
     vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
@@ -237,10 +239,10 @@ void VoxelGridGPU::mark_write_chunks_to_generate(const BufferObject& dispatch_ar
 
     prog_mark_write_chunks_to_generate_.use();
 
-    glUniform3ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
-    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_hash_table_size"), chunk_hash_table_size);
-    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_pack_offset"), math_utils::OFFSET);
-    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_pack_bits"), math_utils::BITS);
+    glUniform3ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
+    glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_pack_offset"), math_utils::OFFSET);
+    glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_pack_bits"), math_utils::BITS);
 
     glDispatchComputeIndirect(0);
 
@@ -309,6 +311,8 @@ void VoxelGridGPU::reset_voxel_write_list_counter(BufferObject& voxel_write_list
 }
 
 void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radius_chunks, uint32_t seed) {
+    if (radius_chunks < 0) radius_chunks = generation_distance;
+
     // GPUTimestamp t0;
     ensure_free_chunks_gpu(cam_world_pos, math_utils::BITS, math_utils::OFFSET);
 
