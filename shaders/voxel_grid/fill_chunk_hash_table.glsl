@@ -18,7 +18,7 @@ uniform int u_pack_offset;
 // ----- include -----
 #include "../utils.glsl"
 
-#define NOT_INCLUDE_GET_OR_CREATE
+#define NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
 #include "../common/hash_table.glsl"
 // -------------------
 

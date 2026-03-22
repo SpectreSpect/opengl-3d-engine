@@ -27,26 +27,17 @@ class VoxelRasterizatorGPU {
 public:
     IGridable* gridable = nullptr;
     IGridableGPU* gridable_gpu = nullptr;
+    glm::ivec3 chunk_size; 
+    glm::vec3 voxel_size;
 
-    VoxelRasterizatorGPU(IGridable* gridable, ShaderManager& shader_manager);
+    VoxelRasterizatorGPU(IGridable* gridable, const glm::ivec3& chunk_size, const glm::vec3& voxel_size, ShaderManager& shader_manager);
     ~VoxelRasterizatorGPU();
 
     // ROI в координатах ЧАНКОВ (dense grid)
     void set_roi(glm::ivec3 chunk_origin, glm::uvec3 grid_dim);
 
-    // ПОТОМ ПЕРЕВЕСТИ НА GPU!!!
-    // void calculate_roi_on_cpu(const Mesh& mesh,
-    //                           float voxel_size,
-    //                           int chunk_size,
-    //                           int pad_voxels = 0);
-
-    // Основная функция: построить CSR на GPU для mesh_data в ROI.
-    // voxel_size: размер вокселя в world units
-    // chunk_size: размер чанка в ВОКСЕЛЯХ по стороне (например 16)
     void rasterize(
         const Mesh& mesh,
-        float voxel_size,
-        int chunk_size,
         uint32_t voxel_visability,
         uint32_t voxel_type,
         glm::uvec3 voxel_color,
@@ -123,7 +114,6 @@ private:
     void clear_counters();
     void count_triangles_in_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t tri_count); //pass 1
     void fill_triangle_indices(const Mesh& mesh, float voxel_size, int chunk_size, size_t tri_count); //pass 3
-    // void clear_active_voxels(int chunk_size, uint32_t active_count);
     void voxelize_chunks(const Mesh& mesh, float voxel_size, int chunk_size, uint32_t active_count, uint32_t tri_count);
 
     void pass2_build_offsets_and_active_gpu(uint32_t chunk_count);
@@ -136,7 +126,6 @@ private:
     void ensure_scan_level(uint32_t level, uint32_t numBlocks);
     void gpu_exclusive_scan_u32_impl(BufferObject& in_u32, BufferObject& out_u32, uint32_t n, uint32_t level);
 
-    // GPU exclusive scan: in=counters, out=offsets (первые n элементов), блок-суммы в scratch
     void gpu_exclusive_scan_u32(BufferObject& in_u32, BufferObject& out_u32, uint32_t n);
     void build_voxel_writes(
         uint32_t active_count,

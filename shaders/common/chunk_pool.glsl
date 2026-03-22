@@ -1,17 +1,14 @@
-#pragma once
 #include "../utils.glsl"
 
-#define NOT_INCLUDE_GET_OR_CREATE
+#define NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
 #include "hash_table.glsl"
-#undef NOT_INCLUDE_GET_OR_CREATE
-
 
 /*
 Параметры кода:
 #define TOMB_CHECK_LIST_SIZE n (число n должно быть n = 2^i)
 
 Параметры подключения:
-#define NOT_INCLUDE_ALL
+#define NOT_INCLUDE_ALL_CHUNK_POOL
 #define INCLUDE_VOXEL_INDEX/NOT_INCLUDE_VOXEL_INDEX:
     uniform ivec3 u_chunk_dim;
 
@@ -34,11 +31,11 @@
     buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 */
 
-#ifndef NOT_INCLUDE_ALL
-#define INCLUDE_ALL
+#ifndef NOT_INCLUDE_ALL_CHUNK_POOL
+#define INCLUDE_ALL_CHUNK_POOL
 #endif
 
-#if (defined(INCLUDE_ALL) || defined(INCLUDE_VOXEL_INDEX)) && !defined(NOT_INCLUDE_VOXEL_INDEX) && !defined(VOXEL_INDEX_INCLUDED)
+#if (defined(INCLUDE_ALL_CHUNK_POOL) || defined(INCLUDE_VOXEL_INDEX)) && !defined(NOT_INCLUDE_VOXEL_INDEX) && !defined(VOXEL_INDEX_INCLUDED)
 #define VOXEL_INDEX_INCLUDED
 
 uint voxel_index(ivec3 p) {
@@ -46,7 +43,7 @@ uint voxel_index(ivec3 p) {
 }
 #endif
 
-#if (defined(INCLUDE_ALL) || defined(INCLUDE_READ_VOXEL_FUNCS)) && !defined(NOT_INCLUDE_READ_VOXEL_FUNCS) && !defined(READ_VOXEL_FUNCS_INCLUDED)
+#if (defined(INCLUDE_ALL_CHUNK_POOL) || defined(INCLUDE_READ_VOXEL_FUNCS)) && !defined(NOT_INCLUDE_READ_VOXEL_FUNCS) && !defined(READ_VOXEL_FUNCS_INCLUDED)
 #define READ_VOXEL_FUNCS_INCLUDED
 
 uint voxel_type_in_chunk(uint chunkId, ivec3 p) {
@@ -96,7 +93,7 @@ uint occ(uint chunkId, ivec3 chunkCoord, ivec3 p, ivec3 d) {
 #endif
 
 
-#if (defined(INCLUDE_ALL) || defined(INCLUDE_MARK_DIRTY)) && !defined(NOT_INCLUDE_MARK_DIRTY) && !defined(MARK_DIRTY_INCLUDED)
+#if (defined(INCLUDE_ALL_CHUNK_POOL) || defined(INCLUDE_MARK_DIRTY)) && !defined(NOT_INCLUDE_MARK_DIRTY) && !defined(MARK_DIRTY_INCLUDED)
 #define MARK_DIRTY_INCLUDED
 
 void mark_dirty(uint chunkId) {
@@ -132,12 +129,12 @@ void mark_dirty_around(uint chunkId, ivec3 chunk_coord) {
 }
 #endif
 
-#ifdef INCLUDE_ALL
-#undef INCLUDE_ALL
+#ifdef INCLUDE_ALL_CHUNK_POOL
+#undef INCLUDE_ALL_CHUNK_POOL
 #endif
 
-#ifdef NOT_INCLUDE_ALL
-#undef NOT_INCLUDE_ALL
+#ifdef NOT_INCLUDE_ALL_CHUNK_POOL
+#undef NOT_INCLUDE_ALL_CHUNK_POOL
 #endif
 
 #ifdef INCLUDE_VOXEL_INDEX

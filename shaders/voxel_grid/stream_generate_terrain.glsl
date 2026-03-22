@@ -26,7 +26,7 @@ uniform uint u_hash_table_size;
 // ----- include -----
 #include "../utils.glsl"
 
-#define NOT_INCLUDE_ALL
+#define NOT_INCLUDE_ALL_CHUNK_POOL
 #define INCLUDE_MARK_DIRTY
 #include "../common/chunk_pool.glsl"
 // -------------------

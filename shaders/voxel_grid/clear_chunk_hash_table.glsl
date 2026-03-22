@@ -9,8 +9,8 @@ uniform uint u_hash_table_size;
 
 // ----- include -----
 
-#define NOT_INCLUDE_GET_OR_CREATE
-#define NOT_INCLUDE_LOOKUP_REMOVE
+#define NOT_INCLUDE_ALL_HASH_TABLE
+#define INCLUDE_HASH_TABLE_COMMON
 #include "../common/hash_table.glsl"
 // -------------------
 

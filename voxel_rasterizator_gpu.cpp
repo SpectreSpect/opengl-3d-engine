@@ -1,8 +1,10 @@
 #include "voxel_rasterizator_gpu.h"
 
-VoxelRasterizatorGPU::VoxelRasterizatorGPU(IGridable* gridable, ShaderManager& shader_manager) 
+VoxelRasterizatorGPU::VoxelRasterizatorGPU(IGridable* gridable, const glm::ivec3& chunk_size, const glm::vec3& voxel_size, ShaderManager& shader_manager) 
     :   gridable(gridable),
         gridable_gpu(dynamic_cast<IGridableGPU*>(gridable)),
+        chunk_size(chunk_size),
+        voxel_size(voxel_size),
         shader_manager(&shader_manager)
 {
     prog_count_ = ComputeProgram(&shader_manager.count_triangles_in_chunks_cs);
@@ -338,25 +340,6 @@ void VoxelRasterizatorGPU::fill_triangle_indices(
     }
 }
 
-// void VoxelRasterizatorGPU::clear_active_voxels(int chunk_size, uint32_t active_count) {
-//     const uint32_t chunkVoxelCount = chunk_size * chunk_size * chunk_size;
-//     const uint32_t total_voxels = chunk_count_ * chunkVoxelCount;
-    
-
-//     // 16 для chunk_size=16 и local_size_x=256
-//     uint32_t groupsX = math_utils::div_up_u32(chunkVoxelCount, 256u); // 4096/256 = 16
-//     uint32_t groupsY = active_count;
-//     uint32_t groupsZ = 1;
-
-//     voxels_ssbo_.bind_base_as_ssbo(0);
-
-//     prog_clear_.use();
-//     glUniform1ui(glGetUniformLocation(prog_clear_.id, "uChunkVoxelCount"), chunkVoxelCount);
-//     glUniform1ui(glGetUniformLocation(prog_clear_.id, "uActiveCount"), active_count);
-//     prog_clear_.dispatch_compute(groupsX, groupsY, groupsZ);
-//     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-// }
-
 void VoxelRasterizatorGPU::voxelize_chunks(
     const Mesh& mesh,
     float voxel_size, 
@@ -466,8 +449,6 @@ void VoxelRasterizatorGPU::pass2_build_offsets_and_active_gpu(uint32_t chunk_cou
 
 void VoxelRasterizatorGPU::rasterize(
     const Mesh& mesh,
-    float voxel_size,
-    int chunk_size,
     uint32_t voxel_visability,
     uint32_t voxel_type,
     glm::uvec3 voxel_color,
@@ -475,7 +456,7 @@ void VoxelRasterizatorGPU::rasterize(
     const ComputeShader* custom_apply_shader)
 {
     // 0) ROI (пока на CPU)
-    calculate_roi(mesh, voxel_size, chunk_size, 1);
+    calculate_roi(mesh, voxel_size.x, chunk_size.x, 1);
 
     chunk_count_ = roi_dim_.x * roi_dim_.y * roi_dim_.z;
     if (chunk_count_ == 0 || roi_dim_.x == 0 || roi_dim_.y == 0 || roi_dim_.z == 0) {
@@ -492,7 +473,7 @@ void VoxelRasterizatorGPU::rasterize(
         return;
     }
 
-    const uint32_t chunk_voxel_count = uint32_t(chunk_size) * uint32_t(chunk_size) * uint32_t(chunk_size);
+    const uint32_t chunk_voxel_count = uint32_t(chunk_size.x) * uint32_t(chunk_size.x) * uint32_t(chunk_size.x);
 
     // 1) Буферы (pair_capacity пока 1, после scan расширим)
     ensure_roi_buffers(vertex_count, tri_count, chunk_count_, chunk_voxel_count);
@@ -501,7 +482,7 @@ void VoxelRasterizatorGPU::rasterize(
     clear_counters();
 
     // 4) Pass1: COUNT (GPU)
-    count_triangles_in_chunks(mesh, voxel_size, chunk_size, tri_count);
+    count_triangles_in_chunks(mesh, voxel_size.x, chunk_size.x, tri_count);
 
     // ---------- Pass2 (CPU): counters -> offsets/cursor (debugged) ----------
     pass2_build_offsets_and_active_gpu(chunk_count_);
@@ -521,7 +502,7 @@ void VoxelRasterizatorGPU::rasterize(
 
     // ---------- end Pass2 ----------
     // Pass 3: fill triangleIndices
-    fill_triangle_indices(mesh, voxel_size, chunk_size, tri_count);
+    fill_triangle_indices(mesh, voxel_size.x, chunk_size.x, tri_count);
 
     // На этом этапе на GPU готов CSR:
     // offsets_BufferObject_ (uint[chunkCount+1])
@@ -529,7 +510,7 @@ void VoxelRasterizatorGPU::rasterize(
     //
     // Дальше Pass 4: "один workgroup на чанк" и растеризация по списку треугольников.
     // clear_active_voxels(chunk_size, activeCount);
-    voxelize_chunks(mesh, voxel_size, chunk_size, activeCount, tri_count);
+    voxelize_chunks(mesh, voxel_size.x, chunk_size.x, activeCount, tri_count);
 
     // std::cout << "PASS 5" << std::endl;
 
@@ -537,9 +518,9 @@ void VoxelRasterizatorGPU::rasterize(
     if (gridable_gpu != nullptr) {
         // std::cout << "COUNT_VOXELS: " << voxels_ssbo_.size_bytes() / sizeof(uint32_t) << std::endl;
 
-        voxel_writes.ensure_capacity(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * activeCount * chunk_size * chunk_size * chunk_size);
+        voxel_writes.ensure_capacity(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * activeCount * chunk_size.x * chunk_size.y * chunk_size.z);
         voxel_writes.update_subdata_fill<uint32_t>(0u, 0u, sizeof(uint32_t), *shader_manager);
-        build_voxel_writes(activeCount, glm::uvec3(chunk_size, chunk_size, chunk_size), voxel_visability, voxel_type, voxel_color, set_flags);
+        build_voxel_writes(activeCount, chunk_size, voxel_visability, voxel_type, voxel_color, set_flags);
 
         uint32_t count_voxel_writes = voxel_writes.read_scalar<uint32_t>(0);
         // std::cout << "COUNT_VOXEL_WRITES: " << count_voxel_writes << std::endl;
@@ -568,9 +549,9 @@ void VoxelRasterizatorGPU::rasterize(
             for (uint32_t i = 0; i < chunk_voxel_count; ++i) {
                 uint32_t packed = src[i];
                 if (packed != 0) {
-                    uint32_t lvp_x = i % chunk_size;
-                    uint32_t lvp_y = (i / chunk_size) % chunk_size;
-                    uint32_t lvp_z = i / (chunk_size * chunk_size);
+                    uint32_t lvp_x = i % chunk_size.x;
+                    uint32_t lvp_y = (i / chunk_size.x) % chunk_size.y;
+                    uint32_t lvp_z = i / (chunk_size.x * chunk_size.y);
                     glm::ivec3 voxel_pos = cpos * chunk_size + glm::ivec3(lvp_x, lvp_y, lvp_z);
                     voxel_positions.push_back(voxel_pos);
                 }
