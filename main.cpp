@@ -1,4 +1,3 @@
-// main.cpp
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -12,6 +11,10 @@
 #include <cmath>
 
 #include "engine3d.h"
+#include "opengl_engine.h"
+#include "vulkan_engine.h"
+#include <array>
+#include <tuple>
 
 #include "vao.h"
 #include "vbo.h"
@@ -62,996 +65,546 @@
 #include "pbr_skybox.h"
 #include <algorithm>
 #include <random>
-#include "gicp.h"
+#include "third_person_camera_controller.h"
+#include "spider.h"
+#include "vulkan_window.h"
 
-struct alignas(16) HashPoint {
+
+struct PipelineObjects {
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+
+    VkBuffer uniformBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
+};
+
+struct Vertex {
     glm::vec4 position;
     glm::vec4 normal;
+    glm::vec4 color;
 };
 
-struct alignas(16) PointNormal {
-    glm::vec4 normal;
-};
-
-struct alignas(16) HashTableSlot {
-    glm::uvec2     hash_key;
-    std::uint32_t  _pad0[2];     // forces hash_value to offset 16
-
-    HashPoint      hash_value;   // offset 16, size 32
-    std::uint32_t  hash_state;   // offset 48
-    std::uint32_t  _pad1[3];     // tail pad so sizeof == 64
-};
-
-struct alignas(16) Mat3Std430 {
-    glm::vec4 col0; // use xyz, w is padding
-    glm::vec4 col1; // use xyz, w is padding
-    glm::vec4 col2; // use xyz, w is padding
-};
-
-struct HAndG {
-    double h[6][6];
-    double g[6];
-    uint status; // lock flag
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
 };
 
 
-// struct OutputHG {
-//     double h[6][6];
-//     double g[6];
-// };
-
-struct alignas(16) Location {
-    glm::vec4 position;
-    glm::vec4 rotation;
-};
-
-struct alignas(8) TracePoint {
-    uint32_t counter;
-    uint32_t site_id;
-    double value;
-    uint32_t pad0;
-};
-
-
-class VoxelMap {
-public:
-    SSBO map_hash_table_ssbo;
-    SSBO map_points_ssbo;
-    SSBO map_normals_ssbo;
-    SSBO num_map_points_ssbo;
-
-    SSBO h_and_g_ssbo;
-    SSBO source_location_ssbo;
-
-    SSBO Mat3Std430_ssbo;
-
-    SSBO transform_normal_world_ssbo;
-    SSBO out_val_ssbo;
-
-    SSBO target_ids_ssbo;
-    SSBO output_hg;
-    SSBO trace_ssbo;
-    SSBO num_trace_points_ssbo;
-    
-
-    uint32_t num_map_points = 0;
-    ComputeProgram* add_point_cloud_program;
-    ComputeProgram* align_point_cloud_program;
-
-    int max_map_points_count = 0;
-
-    VoxelMap(ShaderManager& shader_manager, 
-             ComputeProgram& add_point_cloud_program, ComputeProgram& align_point_cloud_program, 
-             float voxel_size, int hash_table_size, int max_map_points_count) {
-        this->max_map_points_count = max_map_points_count;
-
-        map_hash_table_ssbo = SSBO::from_fill(sizeof(std::uint32_t) * 4 + sizeof(HashTableSlot) * hash_table_size, GL_DYNAMIC_DRAW, 0u, shader_manager);
-        map_points_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        map_normals_ssbo = SSBO::from_fill(sizeof(PointNormal) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        target_ids_ssbo = SSBO::from_fill(sizeof(uint32_t) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);\
-        output_hg = SSBO::from_fill(sizeof(OutputHG) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        trace_ssbo = SSBO::from_fill(sizeof(TracePoint) * (5000), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        num_trace_points_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        num_map_points_ssbo = SSBO::from_fill(sizeof(uint32_t), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        h_and_g_ssbo = SSBO::from_fill(sizeof(HAndG), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        source_location_ssbo = SSBO::from_fill(sizeof(Location), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        Mat3Std430_ssbo = SSBO::from_fill(sizeof(Mat3Std430), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        transform_normal_world_ssbo = SSBO::from_fill(sizeof(glm::vec4), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        out_val_ssbo = SSBO::from_fill(sizeof(glm::dvec4), GL_DYNAMIC_DRAW, 0u, shader_manager);
-        
-        
-        this->add_point_cloud_program = &add_point_cloud_program;
-        this->align_point_cloud_program = &align_point_cloud_program;
+std::vector<char> readFile(const std::string& filename) {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open file: " + filename);
     }
 
-    void add_point_cloud(Point& source_point_cloud, SSBO& source_normals_ssbo) {
-        // std::uint32_t num_points = point_cloud_video.frames[0].point_cloud.points.size();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        add_point_cloud_program->set_uint("num_source_points", num_source_points);
+    size_t fileSize = static_cast<size_t>(file.tellg());
+    std::vector<char> buffer(fileSize);
 
-        add_point_cloud_program->use();
-        add_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    file.seekg(0, std::ios::beg);
+    file.read(buffer.data(), static_cast<std::streamsize>(fileSize));
+    file.close();
 
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        // PointNormal normals[5];
-        // map_normals_ssbo.read_subdata(0u, &normals, sizeof(PointNormal) * 5);
-
-        // for (int i = 0; i < 5; i++) {
-        //     std::cout << i << ") " << "normal: (" << normals[i].normal.x << ", " << normals[i].normal.y << ", " << normals[i].normal.z << ")" << std::endl;
-        // }
-    }
-
-    void gicp_step_gpu(PointCloud& source_point_cloud, SSBO& source_normals_ssbo) {
-        Location source_location;
-        source_location.position = glm::vec4(source_point_cloud.position, 1.0f);
-        source_location.rotation = glm::vec4(source_point_cloud.rotation, 1.0f);
-
-        source_location_ssbo.update_subdata(0, &source_location, sizeof(Location));
-
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        source_location_ssbo.bind_base(7);
-        out_val_ssbo.bind_base(9);
-        target_ids_ssbo.bind_base(10);
-        output_hg.bind_base(11);
-        trace_ssbo.bind_base(12);
-        num_trace_points_ssbo.bind_base(13);
-        
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->use();
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-        
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        Location location_out = {};
-        source_location_ssbo.read_subdata(0u, &location_out, sizeof(Location));
-
-        source_point_cloud.position = location_out.position;
-        source_point_cloud.rotation = location_out.rotation;
-
-        std::cout << "position: (" << location_out.position.x << ", " << location_out.position.y << ", " << location_out.position.z << ")" << std::endl;
-        std::cout << "rotation: (" << location_out.rotation.x << ", " << location_out.rotation.y << ", " << location_out.rotation.z << ")" << std::endl;
-
-
-        glm::dvec4 out = {};
-        out_val_ssbo.read_subdata(0u, &out, sizeof(glm::dvec4));
-
-        
-        std::cout << "bool ok = " << out.x << std::endl;
-
-        HAndG out_h_and_g = {};
-        output_hg.read_subdata(0u, &out_h_and_g, sizeof(HAndG));
-
-        std::cout << std::setprecision(std::numeric_limits<double>::max_digits10);
-
-        std::cout << "double delta[6] = {";
-        for (int i = 0; i < 6; ++i) {
-            std::cout << out_h_and_g.g[i];
-            if (i < 5) std::cout << ", ";
-        }
-        std::cout << "};\n";
-
-        uint32_t num_trace_points = 0;
-        num_trace_points_ssbo.read_subdata(0u, &num_trace_points, sizeof(uint32_t));
-
-        TracePoint out_trace_points[num_trace_points];
-        trace_ssbo.read_subdata(0u, out_trace_points, sizeof(TracePoint) * num_trace_points);
-
-        std::ofstream out_stream("/home/spectre/Projects/test_open_3d/solve_6x6_gpu_dump.txt");
-        out_stream << std::setprecision(std::numeric_limits<double>::max_digits10);
-
-        for (int i = 0; i < num_trace_points; i++) {
-            out_stream << out_trace_points[i].counter << "." << out_trace_points[i].site_id << " = " << out_trace_points[i].value << '\n';
-        }
-        out_stream.close();
-        
-            
-
-        // for (int i = 0; i < 6; i++) {
-        //     for (int j = 0; j < 6; j++) {
-        //         std::cout << "h[" << i << "][" << j << "] = " << out_h_and_g.h[i][j] << std::endl;
-        //     }
-        // }
-
-        // std::cout << std::endl;
-
-        // for (int i = 0; i < 6; i++) {
-        //     std::cout << "g[" << i << "] = " << out_h_and_g.g[i] << std::endl;
-        // }
-    }
-
-    void align_point_cloud(PointCloud& source_point_cloud, SSBO& source_normals_ssbo) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        HAndG out_h_and_g = {};
-        h_and_g_ssbo.read_subdata(0u, &out_h_and_g, sizeof(HAndG));
-
-        for (int i = 0; i < 6; i++) {
-            for (int j = 0; j < 6; j++) {
-                std::cout << "h[" << i << "][" << j << "] = " << out_h_and_g.h[i][j] << std::endl;
-            }
-        }
-
-        std::cout << std::endl;
-
-        for (int i = 0; i < 6; i++) {
-            std::cout << "g[" << i << "] = " << out_h_and_g.g[i] << std::endl;
-        }
-    }
-
-    glm::mat3 test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, glm::vec3 euler) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        Mat3Std430_ssbo.bind_base(9);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-        align_point_cloud_program->set_vec3("uEuler", euler);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        Mat3Std430 out_Mat3Std430 = {};
-        Mat3Std430_ssbo.read_subdata(0u, &out_Mat3Std430, sizeof(Mat3Std430));
-
-        glm::mat3 result;
-        
-        for (int i = 0; i < 3; i++) {
-            result[0][i] = out_Mat3Std430.col0[i];
-        }
-        // std::cout << std::endl;
-        for (int i = 0; i < 3; i++) {
-            result[1][i] = out_Mat3Std430.col1[i];
-        }
-        // std::cout << std::endl;
-        for (int i = 0; i < 3; i++) {
-            result[2][i] = out_Mat3Std430.col2[i];
-        }
-        // std::cout << std::endl;
-
-        return result;
-    }
-
-    glm::vec3 transform_normal_world_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, const PointCloud& cloud, const glm::vec3& local_n) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        transform_normal_world_ssbo.bind_base(9);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-        align_point_cloud_program->set_vec3("uCloudRotation", cloud.rotation);
-        align_point_cloud_program->set_vec3("uCloudScale", cloud.scale);
-        align_point_cloud_program->set_vec3("uLocalN", local_n);
-
-
-        // align_point_cloud_program->set_vec3("uEuler", euler);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        glm::vec4 out = {};
-        transform_normal_world_ssbo.read_subdata(0u, &out, sizeof(glm::vec4));
-
-        return out;
-    }
-
-    glm::vec3 transform_point_world_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, const PointCloud& cloud, const glm::vec3& local_p) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        transform_normal_world_ssbo.bind_base(9);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-
-        align_point_cloud_program->set_vec3("uCloudRotation", cloud.rotation);
-        align_point_cloud_program->set_vec3("uCloudScale", cloud.scale);
-        align_point_cloud_program->set_vec3("uCloudPosition", cloud.position);
-        align_point_cloud_program->set_vec3("uLocalP", local_p);
-
-
-        // align_point_cloud_program->set_vec3("uEuler", euler);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        glm::vec4 out = {};
-        transform_normal_world_ssbo.read_subdata(0u, &out, sizeof(glm::vec4));
-
-        return out;
-    }
-
-
-    glm::mat3 covariance_from_normal_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, glm::vec3 raw_n, float eps) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        Mat3Std430_ssbo.bind_base(9);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-        align_point_cloud_program->set_vec3("uRawN", raw_n);
-        align_point_cloud_program->set_float("uEps", eps);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        Mat3Std430 out_Mat3Std430 = {};
-        Mat3Std430_ssbo.read_subdata(0u, &out_Mat3Std430, sizeof(Mat3Std430));
-
-        glm::mat3 result;
-        
-        for (int i = 0; i < 3; i++) {
-            result[0][i] = out_Mat3Std430.col0[i];
-        }
-        // std::cout << std::endl;
-        for (int i = 0; i < 3; i++) {
-            result[1][i] = out_Mat3Std430.col1[i];
-        }
-        // std::cout << std::endl;
-        for (int i = 0; i < 3; i++) {
-            result[2][i] = out_Mat3Std430.col2[i];
-        }
-        // std::cout << std::endl;
-
-        return result;
-    }
-
-    // vec3 mat3_to_euler_xyz(mat3 R)
-
-    glm::vec3 mat3_to_euler_xyz_test(PointCloud& source_point_cloud, SSBO& source_normals_ssbo, const glm::mat3& R) {
-        source_point_cloud.sync_gpu();
-        SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-        std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-        int x_count = math_utils::div_up_u32(num_source_points, 256);
-        
-        map_hash_table_ssbo.bind_base(0);
-        
-        map_points_ssbo.bind_base(1);
-        map_normals_ssbo.bind_base(2);
-        num_map_points_ssbo.bind_base(3);
-        
-        source_points_ssbo.bind_base(4);
-        source_normals_ssbo.bind_base(5);
-        h_and_g_ssbo.bind_base(6);
-        transform_normal_world_ssbo.bind_base(9);
-        
-        // // add_point_cloud_to_map_program.set_uint("num_points", num_points);
-        align_point_cloud_program->set_uint("num_source_points", num_source_points);
-
-        align_point_cloud_program->set_mat3("uR", R);
-
-
-        // align_point_cloud_program->set_vec3("uEuler", euler);
-
-        align_point_cloud_program->use();
-        align_point_cloud_program->dispatch_compute(x_count, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        num_map_points_ssbo.read_subdata(0u, &num_map_points, sizeof(uint32_t));
-
-        glm::vec4 out = {};
-        transform_normal_world_ssbo.read_subdata(0u, &out, sizeof(glm::vec4));
-
-        return out;
-    }
-
-    Point get_point_cloud() {
-        return Point(map_points_ssbo, (int)num_map_points);
-    }
-};
-
-
-
-
-void get_points(std::vector<PointInstance>& points, std::vector<glm::vec4>& normals, glm::vec4 color) {
-    // int size = 10;
-    // // float step = 0.2f; // distance between grid points
-    // float step = 2.0f; // distance between grid points
-    // for (int x = 0; x < size; x++) {
-    //     for (int z = 0; z < size; z++) {
-    //         PointInstance point;
-    //         point.color = color;
-
-    //         // Center the grid around (0, 0)
-    //         float px = (x - (size - 1) * 0.5f) * step;
-    //         float pz = (z - (size - 1) * 0.5f) * step;
-
-    //         // Surface: y = f(x, z)
-    //         float py =
-    //             0.15f * sinf(1.7f * px) +
-    //             0.10f * cosf(1.3f * pz) +
-    //             0.05f * px * pz;
-
-    //         point.pos = glm::vec4(px, py, pz, 1.0f);
-
-    //         // Partial derivatives of f(x, z)
-    //         float dfdx =
-    //             0.15f * 1.7f * cosf(1.7f * px) +
-    //             0.05f * pz;
-
-    //         float dfdz =
-    //         -0.10f * 1.3f * sinf(1.3f * pz) +
-    //             0.05f * px;
-
-    //         // For surface y = f(x,z), normal is (-df/dx, 1, -df/dz)
-    //         glm::vec3 n = glm::normalize(glm::vec3(-dfdx, 1.0f, -dfdz));
-    //         glm::vec4 normal = glm::vec4(n, 0.0f);
-    //         // glm::vec4 normal = n;
-
-    //         points.push_back(point);
-    //         normals.push_back(normal);
-    //     }
-    // }
-
-    PointInstance point;
-    point.pos = glm::vec4(0, 0, 0, 1);
-    point.color = color;
-
-    points.push_back(point);
-    normals.push_back(glm::vec4(0, 1, 0, 1));
-}
-
-void get_normals_ssbo(std::vector<glm::vec4> &normals, SSBO& normals_ssbo) {
-    normals_ssbo = SSBO(normals.size() * sizeof(glm::vec4), GL_DYNAMIC_DRAW, normals.data());
+    return buffer;
 }
 
 
-struct TraceLine {
-    unsigned long long counter;
-    unsigned long long site_id;
-    double value;
-};
+VkShaderModule createShaderModule(VkDevice& device, const std::vector<char>& code) {
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = code.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
-bool parse_line(const std::string& s, TraceLine& out) {
-    return std::sscanf(s.c_str(), "%llu.%llu = %lf",
-                       &out.counter, &out.site_id, &out.value) == 3;
+    VkShaderModule shaderModule = VK_NULL_HANDLE;
+    VulkanEngine::vk_check(
+        vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule),
+        "vkCreateShaderModule"
+    );
+
+    return shaderModule;
 }
 
-bool close_enough(double a, double b, double abs_eps = 1e-3, double rel_eps = 1e-6) {
-    double diff = std::abs(a - b);
-    if (diff <= abs_eps) {
-        return true;
+void createBuffer(
+    VkDevice device,
+    VkPhysicalDevice physicalDevice,
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties,
+    VkBuffer& buffer,
+    VkDeviceMemory& bufferMemory)
+{
+    buffer = VK_NULL_HANDLE;
+    bufferMemory = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VulkanEngine::vk_check(
+        vkCreateBuffer(device, &bufferInfo, nullptr, &buffer),
+        "vkCreateBuffer"
+    );
+
+    VkMemoryRequirements memRequirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = VulkanEngine::findMemoryType(
+        physicalDevice,
+        memRequirements.memoryTypeBits,
+        properties
+    );
+
+    VulkanEngine::vk_check(
+        vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory),
+        "vkAllocateMemory"
+    );
+
+    VulkanEngine::vk_check(
+        vkBindBufferMemory(device, buffer, bufferMemory, 0),
+        "vkBindBufferMemory"
+    );
+}
+
+
+PipelineObjects createGraphicsPipeline(
+    VulkanEngine& engine,
+    VkDevice device,
+    VkRenderPass renderPass,
+    VkExtent2D swapchainExtent,
+    VkShaderModule vertModule,
+    VkShaderModule fragModule
+) {
+    PipelineObjects out{};
+
+    VkPipelineShaderStageCreateInfo vertStage{};
+    vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertStage.module = vertModule;
+    vertStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragStage{};
+    fragStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragStage.module = fragModule;
+    fragStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
+
+    VkVertexInputBindingDescription bindingDesc{};
+    bindingDesc.binding = 0;
+    bindingDesc.stride = sizeof(Vertex);
+    bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 3> attrDescs{};
+
+    attrDescs[0].location = 0;
+    attrDescs[0].binding = 0;
+    attrDescs[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attrDescs[0].offset = offsetof(Vertex, position);
+
+    attrDescs[1].location = 1;
+    attrDescs[1].binding = 0;
+    attrDescs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attrDescs[1].offset = offsetof(Vertex, normal);
+
+    attrDescs[2].location = 2;
+    attrDescs[2].binding = 0;
+    attrDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attrDescs[2].offset = offsetof(Vertex, color);
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &bindingDesc;
+    vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs.size());
+    vertexInput.pVertexAttributeDescriptions = attrDescs.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swapchainExtent.width);
+    viewport.height = static_cast<float>(swapchainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = swapchainExtent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.sampleShadingEnable = VK_FALSE;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    uboLayoutBinding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &uboLayoutBinding;
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    VulkanEngine::vk_check(
+        vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout),
+        "vkCreateDescriptorSetLayout"
+    );
+
+    VkBuffer uniformBuffer;
+    VkDeviceMemory uniformBufferMemory;
+
+    createBuffer(
+        engine.device,
+        engine.physicalDevice,
+        sizeof(UniformBufferObject),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        uniformBuffer,
+        uniformBufferMemory
+    );
+
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = 1;
+
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+    VulkanEngine::vk_check(
+        vkCreateDescriptorPool(engine.device, &poolInfo, nullptr, &descriptorPool),
+        "vkCreateDescriptorPool"
+    );
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    VulkanEngine::vk_check(
+        vkAllocateDescriptorSets(engine.device, &allocInfo, &descriptorSet),
+        "vkAllocateDescriptorSets"
+    );
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = uniformBuffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(UniformBufferObject);
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSet;
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    vkUpdateDescriptorSets(engine.device, 1, &descriptorWrite, 0, nullptr);
+
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+    VulkanEngine::vk_check(
+        vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &out.layout),
+        "vkCreatePipelineLayout"
+    );
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.layout = out.layout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+    VulkanEngine::vk_check(
+        vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &out.pipeline),
+        "vkCreateGraphicsPipelines"
+    );
+
+
+    out.descriptorSetLayout = descriptorSetLayout;
+    out.descriptorPool = descriptorPool;
+    out.descriptorSet = descriptorSet;
+    out.uniformBuffer = uniformBuffer;
+    out.uniformBufferMemory = uniformBufferMemory;
+
+    return out;
+}
+
+uint32_t findMemoryType(
+    VkPhysicalDevice physicalDevice,
+    uint32_t typeFilter,
+    VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
     }
 
-    double scale = std::max(std::abs(a), std::abs(b));
-    return diff <= rel_eps * scale;
+    throw std::runtime_error("failed to find suitable memory type");
 }
 
 
 
 
-float clear_col[4] = {0.1f, 0.1f, 0.1f, 1.0f};
+float clear_col[4] = {0, 0, 0, 1};
 
 int main() {
-    Engine3D engine = Engine3D();
-    Window window = Window(&engine, 1280, 720, "3D visualization");
-    engine.set_window(&window);
-    ui::init(window.window);
+    VulkanEngine engine = VulkanEngine();
+    VulkanWindow window = VulkanWindow(&engine, 1280, 720, "3D visualization");
+    engine.set_vulkan_window(&window);
 
-    ComputeProgram add_point_cloud_to_map_program = ComputeProgram(&engine.shader_manager->add_point_cloud_to_map_cs);
-    ComputeProgram align_point_cloud_program = ComputeProgram(&engine.shader_manager->align_point_cloud_cs);
+    std::vector<char> vertCode = readFile("/home/spectre/Projects/test_open_3d/vulkan_test.vert.spv");
+    std::vector<char> fragCode = readFile("/home/spectre/Projects/test_open_3d/vulkan_test.frag.spv");
 
-    Camera camera;
-    window.set_camera(&camera);
-    FPSCameraController camera_controller = FPSCameraController(&camera);
-    camera_controller.speed = 50;
-
-    // PointCloudVideo point_cloud_video = PointCloudVideo();
-    // point_cloud_video.load_from_file("/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
-
-    PointCloud target_point_cloud;
-    PointCloud source_point_cloud;
-
-    std::vector<PointInstance> target_points;
-    std::vector<glm::vec4> target_normals;
-    SSBO target_normals_ssbo;
-
-    std::vector<PointInstance> source_points;
-    std::vector<glm::vec4> source_normals;
-    SSBO source_normals_ssbo;
-
-    get_points(target_points, target_normals, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
-    get_points(source_points, source_normals, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
-
-    get_normals_ssbo(target_normals, target_normals_ssbo);
-    get_normals_ssbo(source_normals, source_normals_ssbo);
-
-    target_point_cloud.update_points(target_points);
-    source_point_cloud.update_points(source_points);
-
-    target_point_cloud.sync_gpu();
-    source_point_cloud.sync_gpu();
-
-    // source_point_cloud.position = glm::vec4(0.8f, 0.2f, 1.0f, 1.0f);
-    source_point_cloud.position = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    // source_point_cloud.rotation = glm::vec3(0.6f, 0.5f, 0.1f);
-
-    
-    VoxelMap voxel_map = VoxelMap(*engine.shader_manager, add_point_cloud_to_map_program, align_point_cloud_program, 1, 100000, 1000);
-    
-    // point_cloud_video.frames[0].point_cloud.sync_gpu();
-    // align_point_cloud
-    voxel_map.add_point_cloud(target_point_cloud.point_renderer, target_normals_ssbo);
+    VkShaderModule vertModule = createShaderModule(engine.device, vertCode);
+    VkShaderModule fragModule = createShaderModule(engine.device, fragCode);
 
 
-    // std::vector<glm::mat3> r_tests = {
-    //     glm::mat3(1.0f),
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
 
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(10.0f, 0.0f, 0.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(0.0f, 20.0f, 0.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(0.0f, 0.0f, 30.0f))),
+    PipelineObjects graphics_pipeline_objects = createGraphicsPipeline(engine, engine.device, engine.renderPass, engine.swapchainExtent, vertModule, fragModule);
 
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(15.0f, 25.0f, 35.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-20.0f, 45.0f, -10.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(60.0f, -30.0f, 120.0f))),
 
-    //     // near gimbal lock
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(89.0f, 1.0f, -45.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-89.0f, 2.0f, 30.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(90.0f, 0.0f, 0.0f))),
-    //     GICP::euler_xyz_to_mat3(glm::radians(glm::vec3(-90.0f, 0.0f, 0.0f)))
-    // };
+    std::vector<Vertex> vertices = {
+        // +Z (front)
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) },
 
-    // const float eps = 1e-4f;
+        // -Z (back)
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f) },
 
-    // auto is_close_mat3 = [&](const glm::mat3& a, const glm::mat3& b, float eps) {
-    //     for (int c = 0; c < 3; c++) {
-    //         for (int r = 0; r < 3; r++) {
-    //             if (std::abs(a[c][r] - b[c][r]) > eps)
-    //                 return false;
-    //         }
-    //     }
-    //     return true;
-    // };
+        // +X (right)
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) },
 
-    // for (int i = 0; i < r_tests.size(); i++) {
-    //     glm::vec3 result_cpu = GICP::mat3_to_euler_xyz(r_tests[i]);
-    //     glm::vec3 result_gpu = voxel_map.mat3_to_euler_xyz_test(
-    //         source_point_cloud,
-    //         source_normals_ssbo,
-    //         r_tests[i]
-    //     );
+        // -X (left)
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f) },
 
-    //     glm::mat3 recon_cpu = GICP::euler_xyz_to_mat3(result_cpu);
-    //     glm::mat3 recon_gpu = GICP::euler_xyz_to_mat3(result_gpu);
+        // +Y (top)
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f) },
 
-    //     bool cpu_ok = is_close_mat3(r_tests[i], recon_cpu, eps);
-    //     bool gpu_ok = is_close_mat3(r_tests[i], recon_gpu, eps);
-    //     bool cpu_gpu_same_rotation = is_close_mat3(recon_cpu, recon_gpu, eps);
+        // -Y (bottom)
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) },
+    };
 
-    //     std::cout << "Test " << i << ": "
-    //             << ((cpu_ok && gpu_ok && cpu_gpu_same_rotation) ? "OK" : "MISMATCH")
-    //             << "\n";
+    std::vector<uint32_t> indices = {
+        0, 1, 2,  2, 3, 0,        // +Z
+        4, 5, 6,  6, 7, 4,        // -Z
+        8, 9,10, 10,11, 8,        // +X
+        12,13,14, 14,15,12,        // -X
+        16,17,18, 18,19,16,        // +Y
+        20,21,22, 22,23,20         // -Y
+    };
 
-    //     std::cout << "  CPU euler = ("
-    //             << result_cpu.x << ", "
-    //             << result_cpu.y << ", "
-    //             << result_cpu.z << ")\n";
 
-    //     std::cout << "  GPU euler = ("
-    //             << result_gpu.x << ", "
-    //             << result_gpu.y << ", "
-    //             << result_gpu.z << ")\n";
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+    createBuffer(
+        engine.device,
+        engine.physicalDevice,
+        sizeof(Vertex) * vertices.size(),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        vertexBuffer,
+        vertexBufferMemory
+    );
+    void* data = nullptr;
+    VulkanEngine::vk_check(
+        vkMapMemory(
+            engine.device,
+            vertexBufferMemory,
+            0,
+            sizeof(Vertex) * vertices.size(),
+            0,
+            &data
+        ),
+        "vkMapMemory(vertex)"
+    );
+    std::memcpy(data, vertices.data(), sizeof(Vertex) * vertices.size());
+    vkUnmapMemory(engine.device, vertexBufferMemory);
 
-    //     if (!(cpu_ok && gpu_ok && cpu_gpu_same_rotation)) {
-    //         std::cout << "  cpu_ok = " << cpu_ok
-    //                 << ", gpu_ok = " << gpu_ok
-    //                 << ", cpu_gpu_same_rotation = " << cpu_gpu_same_rotation
-    //                 << "\n";
 
-    //         std::cout << "  Original R:\n";
-    //         for (int r = 0; r < 3; r++) {
-    //             std::cout << r_tests[i][0][r] << " "
-    //                     << r_tests[i][1][r] << " "
-    //                     << r_tests[i][2][r] << "\n";
-    //         }
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
+    createBuffer(
+        engine.device,
+        engine.physicalDevice,
+        sizeof(uint32_t) * indices.size(),
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        indexBuffer,
+        indexBufferMemory
+    );
+    void* indexData = nullptr;
+    VulkanEngine::vk_check(
+        vkMapMemory(
+            engine.device,
+            indexBufferMemory,
+            0,
+            sizeof(uint32_t) * indices.size(),
+            0,
+            &indexData
+        ),
+        "vkMapMemory(index)"
+    );
+    std::memcpy(indexData, indices.data(), sizeof(uint32_t) * indices.size());
+    vkUnmapMemory(engine.device, indexBufferMemory);
 
-    //         std::cout << "  Reconstructed CPU R:\n";
-    //         for (int r = 0; r < 3; r++) {
-    //             std::cout << recon_cpu[0][r] << " "
-    //                     << recon_cpu[1][r] << " "
-    //                     << recon_cpu[2][r] << "\n";
-    //         }
-
-    //         std::cout << "  Reconstructed GPU R:\n";
-    //         for (int r = 0; r < 3; r++) {
-    //             std::cout << recon_gpu[0][r] << " "
-    //                     << recon_gpu[1][r] << " "
-    //                     << recon_gpu[2][r] << "\n";
-    //         }
-    //     }
-    // }
-
-    std::vector<PointInstance> test_map_points;
-    std::vector<glm::vec4> test_map_normals;
-
-    std::vector<PointInstance> test_source_points;
-    std::vector<glm::vec4> test_source_normals;
 
     
 
-    // map_points_ssbo = SSBO::from_fill(sizeof(PointInstance) * (max_map_points_count), GL_DYNAMIC_DRAW, 0u, shader_manager);
-
-    // voxel_map.
-
-    test_map_points.resize(voxel_map.max_map_points_count);
-    voxel_map.map_points_ssbo.read_subdata(0u, test_map_points.data(), sizeof(PointInstance) * voxel_map.max_map_points_count);
-
-    test_map_normals.resize(voxel_map.max_map_points_count);
-    voxel_map.map_normals_ssbo.read_subdata(0u, test_map_normals.data(), sizeof(glm::vec4) * voxel_map.max_map_points_count);
-
-    
-    std::uint32_t num_source_points = source_point_cloud.point_renderer.instance_count;
-    SSBO source_points_ssbo = SSBO(*source_point_cloud.point_renderer.instance_vbo);
-    test_source_points.resize(num_source_points);
-    source_points_ssbo.read_subdata(0u, test_source_points.data(), sizeof(PointInstance) * num_source_points);
-
-    test_source_normals.resize(num_source_points);
-    source_normals_ssbo.read_subdata(0u, test_source_normals.data(), sizeof(glm::vec4) * num_source_points);
-
-    Location test_source_location;
-    test_source_location.position = glm::vec4(source_point_cloud.position, 1.0f);
-    test_source_location.rotation = glm::vec4(source_point_cloud.rotation, 1.0f);
-    
-
-    Point map_points = voxel_map.get_point_cloud();
-
-    
-    glm::vec3 original_position = source_point_cloud.position;
-    glm::vec3 original_rotation = source_point_cloud.rotation;
 
 
-    // voxel_map.gicp_step_gpu(source_point_cloud, source_normals_ssbo);
-    
-    std::vector<uint32_t> target_ids_gpu = {};
-    target_ids_gpu.resize(num_source_points);
-    voxel_map.target_ids_ssbo.read_subdata(0u, target_ids_gpu.data(), sizeof(uint32_t) * num_source_points);
+    // Now we need to create the pipline as far as I understand. We will do it here, maybe using some functions that we will also define in this file (main.cpp)
 
-    std::vector<OutputHG> output_hg_gpu = {};
-    output_hg_gpu.resize(num_source_points);
-    voxel_map.output_hg.read_subdata(0u, output_hg_gpu.data(), sizeof(OutputHG) * num_source_points);
-
-    std::vector<uint32_t> target_ids_cpu = {};
-    target_ids_cpu.resize(num_source_points);
-
-    std::vector<OutputHG> output_hg_cpu = {};
-    output_hg_cpu.resize(num_source_points);
-
-    // test_source_location.position = glm::vec4(original_position, 1.0f);
-    // test_source_location.rotation = glm::vec4(original_rotation, 1.0f);
-    // GICP::step_test2(test_source_points, test_map_points, test_source_normals, test_map_normals, test_source_location.position, test_source_location.rotation, target_ids_cpu, output_hg_cpu);
-    // source_point_cloud.position = test_source_location.position;
-    // source_point_cloud.rotation = test_source_location.rotation;
-
-    // for (int i = 0; i < num_source_points; i++) {
-    //     if (target_ids_gpu[i] != target_ids_cpu[i]) {
-    //         std::cout << "MISMATCH" << std::endl;
-    //     }
-    // }
-
-    // for (int i = 0; i < num_source_points; i++) {
-    //     for (int a = 0; a < 6; a++) {
-            
-    //         if (std::abs(output_hg_cpu[i].g[a] - output_hg_gpu[i].g[a]) > 1e-1) {
-    //                 std::cout << "MISMATCH" << std::endl;
-    //             }
-
-    //         for (int b = 0; b < 6; b++) {
-    //             if (std::abs(output_hg_cpu[i].h[a][b] - output_hg_gpu[i].h[a][b]) > 1e-1) {
-    //                 std::cout << "MISMATCH" << std::endl;        
-    //             }
-    //         }
-    //     }
-    // }
-
-    // for (int i = 0; i < num_source_points; ++i) {
-    //     bool mismatch = false;
-
-    //     for (int a = 0; a < 6; ++a) {
-    //         if (std::abs(output_hg_cpu[i].g[a] - output_hg_gpu[i].g[a]) > 1e-1) {
-    //             mismatch = true;
-    //         }
-
-    //         for (int b = 0; b < 6; ++b) {
-    //             if (std::abs(output_hg_cpu[i].h[a][b] - output_hg_gpu[i].h[a][b]) > 1e-1) {
-    //                 mismatch = true;
-    //             }
-    //         }
-    //     }
-
-    //     // if (!mismatch) {
-    //     //     continue;
-    //     // }
-
-    //     std::cout << "\n==================== i = " << i << " ====================\n";
-
-    //     std::cout << "double test_H[6][6] = double[6][6](\n";
-    //     for (int a = 0; a < 6; ++a) {
-    //         std::cout << "    double[6](";
-    //         for (int b = 0; b < 6; ++b) {
-    //             std::cout << output_hg_cpu[i].h[a][b];
-    //             if (b < 5) std::cout << ", ";
-    //         }
-    //         std::cout << ")";
-    //         if (a < 5) std::cout << ",";
-    //         std::cout << "\n";
-    //     }
-    //     std::cout << ");\n\n";
-
-    //     std::cout << "double test_g[6] = double[6]( ";
-    //     for (int a = 0; a < 6; ++a) {
-    //         std::cout << output_hg_cpu[i].g[a];
-    //         if (a < 5) std::cout << ", ";
-    //     }
-    //     std::cout << " );\n\n";
-
-    //     std::cout << "double test_delta_out[6];\n";
-    //     std::cout << "bool ok = solve_6x6(test_H, test_g, test_delta_out);\n\n";
-
-    //     // Optional: print GPU too for side-by-side comparison
-    //     std::cout << "// GPU version\n";
-    //     std::cout << "double test_H_gpu[6][6] = double[6][6](\n";
-    //     for (int a = 0; a < 6; ++a) {
-    //         std::cout << "    double[6](";
-    //         for (int b = 0; b < 6; ++b) {
-    //             std::cout << output_hg_gpu[i].h[a][b];
-    //             if (b < 5) std::cout << ", ";
-    //         }
-    //         std::cout << ")";
-    //         if (a < 5) std::cout << ",";
-    //         std::cout << "\n";
-    //     }
-    //     std::cout << ");\n\n";
-
-    //     std::cout << "double test_g_gpu[6] = double[6]( ";
-    //     for (int a = 0; a < 6; ++a) {
-    //         std::cout << output_hg_gpu[i].g[a];
-    //         if (a < 5) std::cout << ", ";
-    //     }
-    //     std::cout << " );\n";
-
-    //     break; // print only first mismatch
-    // }
-
-    std::ifstream cpu("/home/spectre/Projects/test_open_3d/solve_6x6_cpu_dump.txt");
-    std::ifstream gpu("/home/spectre/Projects/test_open_3d/solve_6x6_gpu_dump.txt");
-
-    std::string cpu_line_str, gpu_line_str;
-    int line = 1;
-
-    while (true) {
-        bool ok_cpu = static_cast<bool>(std::getline(cpu, cpu_line_str));
-        bool ok_gpu = static_cast<bool>(std::getline(gpu, gpu_line_str));
-
-        if (!ok_cpu && !ok_gpu) {
-            std::cout << "Files match within tolerance\n";
-            break;
-        }
-
-        if (ok_cpu != ok_gpu) {
-            std::cout << "Files have different length at line " << line << "\n";
-            break;
-        }
-
-        TraceLine cpu_line, gpu_line;
-        if (!parse_line(cpu_line_str, cpu_line)) {
-            std::cout << "Failed to parse CPU line " << line << ":\n" << cpu_line_str << "\n";
-            break;
-        }
-        if (!parse_line(gpu_line_str, gpu_line)) {
-            std::cout << "Failed to parse GPU line " << line << ":\n" << gpu_line_str << "\n";
-            break;
-        }
-
-        if (cpu_line.counter != gpu_line.counter) {
-            std::cout << "Counter mismatch at line " << line << "\n";
-            std::cout << "CPU: " << cpu_line_str << "\n";
-            std::cout << "GPU: " << gpu_line_str << "\n";
-            break;
-        }
-
-        if (cpu_line.site_id != gpu_line.site_id) {
-            std::cout << "Site ID mismatch at line " << line << "\n";
-            std::cout << "CPU: " << cpu_line_str << "\n";
-            std::cout << "GPU: " << gpu_line_str << "\n";
-            break;
-        }
-
-        if (!close_enough(cpu_line.value, gpu_line.value)) {
-            std::cout << "Value mismatch at line " << line << "\n";
-            std::cout << "CPU: " << cpu_line_str << "\n";
-            std::cout << "GPU: " << gpu_line_str << "\n";
-            std::cout << "abs diff = " << std::abs(cpu_line.value - gpu_line.value) << "\n";
-            break;
-        }
-
-        line++;
-    }
-    
-
-    
-    
-    
-    float rel_thresh = 1.5f;
-    float last_frame = 0.0f;
-    float timer = 0.0f;
-    int cur_frame = 100;
-    bool map_initialized = false;
     while(window.is_open()) {
-        float currentFrame = (float)glfwGetTime();
-        float delta_time = currentFrame - last_frame;
-        timer += delta_time;
-        last_frame = currentFrame;   
-        float fps = 1.0f / delta_time;
+        engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
+
+
+        UniformBufferObject ubo{};
+        float t = static_cast<float>(glfwGetTime());
+
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(std::sin(t), 0.0f, 0.0f));
+        model = glm::rotate(model, t, glm::vec3(0.0f, 1.0f, 0.0f));
+
+        ubo.model = model;
         
-        camera_controller.update(&window, delta_time);
+        ubo.view = glm::lookAt(
+                        glm::vec3(2.0f, 2.0f, 2.0f),
+                        glm::vec3(0.0f, 0.0f, 0.0f),
+                        glm::vec3(0.0f, 1.0f, 0.0f)
+                    );
+        ubo.proj  = glm::perspective(glm::radians(45.0f),
+                                    float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height),
+                                    0.1f, 10.0f);
+        ubo.proj[1][1] *= -1.0f;
 
-        engine.update_lighting_system(camera, window);
-        window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
-
-        // window.draw(&layer_line, &camera);
-        // window.draw(&layer_line_blue, &camera);
-        window.draw(&map_points, &camera);
-
-
-        // window.draw(&target_point_cloud, &camera);
-        window.draw(&source_point_cloud, &camera);
-        
-
-        ui::begin_frame();
-        ui::update_mouse_mode(&window);
-
-        ImGui::Begin("Debug");
-
-        glm::vec3 p = camera.position; // or any vec3
-
-        ImGui::TextColored(ImVec4(1,0.5,0.5,1), "x: %.3f", p.x);
-        ImGui::TextColored(ImVec4(0.5,1,0.5,1), "y: %.3f", p.y);
-        ImGui::TextColored(ImVec4(0.5,0.5,1,1), "z: %.3f", p.z);
-        ImGui::TextColored(ImVec4(0.5,0.5,1,1), "fps: %.3f", fps);
-
-        if (ImGui::Button("GICP step")) {
-            // GICP::step_test(source_point_cloud, target_point_cloud, source_normals, target_normals)
-            
-            // std::vector<PointInstance> test_map_points;
-            // std::vector<glm::vec4> test_map_normals;
-
-            // std::vector<PointInstance> test_source_points;
-            // std::vector<glm::vec4> test_source_normals;
+        void* mapped = nullptr;
+        VulkanEngine::vk_check(
+            vkMapMemory(engine.device, graphics_pipeline_objects.uniformBufferMemory, 0, sizeof(ubo), 0, &mapped),
+            "vkMapMemory(ubo)"
+        );
+        std::memcpy(mapped, &ubo, sizeof(ubo));
+        vkUnmapMemory(engine.device, graphics_pipeline_objects.uniformBufferMemory);
 
 
+        vkCmdBindPipeline(
+            engine.currentCommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            graphics_pipeline_objects.pipeline
+        );
 
-            // test_source_location.position = glm::vec4(source_point_cloud.position, 1.0f);
-            // test_source_location.rotation = glm::vec4(source_point_cloud.rotation, 1.0f);
-            // GICP::step_test2(test_source_points, test_map_points, test_source_normals, test_map_normals, test_source_location.position, test_source_location.rotation, target_ids_cpu, output_hg_cpu);
-            // source_point_cloud.position = test_source_location.position;
-            // source_point_cloud.rotation = test_source_location.rotation;
+        vkCmdBindDescriptorSets(engine.currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                                graphics_pipeline_objects.layout, 0, 1, &graphics_pipeline_objects.descriptorSet, 0, nullptr);
 
+        VkBuffer vertexBuffers[] = { vertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
 
-            voxel_map.gicp_step_gpu(source_point_cloud, source_normals_ssbo);
-            // voxel_map.test(source_point_cloud, source_normals_ssbo, glm::vec3(1, 1, 1));
-        }
+        vkCmdBindVertexBuffers(engine.currentCommandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(engine.currentCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(engine.currentCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
-        ImGui::End();
-
-        ui::end_frame();
-        
-
-        window.swap_buffers();
+        engine.end_frame();
         engine.poll_events();
     }
-    
-    ui::shutdown();
 }

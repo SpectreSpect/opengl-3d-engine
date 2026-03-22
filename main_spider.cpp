@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "engine3d.h"
+#include "opengl_engine.h"
 
 #include "vao.h"
 #include "vbo.h"
@@ -65,10 +66,11 @@
 #include "spider.h"
 
 
+
 float clear_col[4] = {0, 0, 0, 1};
 
 int main() {
-    Engine3D engine = Engine3D();
+    OpenGLEngine engine = OpenGLEngine();
     Window window = Window(&engine, 1280, 720, "3D visualization");
     engine.set_window(&window);
     ui::init(window.window);

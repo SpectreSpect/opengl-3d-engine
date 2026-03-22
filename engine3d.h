@@ -40,8 +40,8 @@ class Window;
 
 class Engine3D{
 public:
-    Engine3D();
-    ~Engine3D();
+    // Engine3D();
+    // ~Engine3D();
 
     MeshManager* mesh_manager;
     MaterialManager* material_manager;
@@ -68,11 +68,14 @@ public:
     // FragmentShader* default_fragment_shader;
     VfProgram* default_program;
 
-    int init();
-    int init_glew();
-    void set_window(Window* window);
-    void update_lighting_system(const Camera& camera, const Window& window);
+    virtual int init() = 0;
+    virtual void set_window(Window* window) = 0;
+    virtual void update_lighting_system(const Camera& camera, const Window& window);
 
-    static void enable_depth_test();
-    static void poll_events();
+    virtual void enable_depth_test() = 0;
+    virtual void poll_events() = 0;
+
+    virtual void begin_frame(const glm::vec4& clear_color) = 0;
+    virtual void end_frame() = 0;
+    virtual void on_framebuffer_resized(int w, int h) = 0;
 };

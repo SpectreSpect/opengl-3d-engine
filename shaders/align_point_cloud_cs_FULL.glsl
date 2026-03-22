@@ -26,9 +26,5 @@ void main() {
         a[c][0] = some_array[0];
         break;
     }
-    a[c][0] = some_array[0];
-    // test_output.out_val.x = a[0][0];
-    // test_output.out_val.x = some_array[c];
-    a[0][0] = some_array[0];
     test_output.out_val.x = a[0][0];
 }
