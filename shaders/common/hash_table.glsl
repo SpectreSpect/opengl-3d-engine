@@ -1,30 +1,55 @@
 #include "../utils.glsl"
 
 /*
-Параметры кода:
-#define TOMB_CHECK_LIST_SIZE n (число n должно быть n = 2^i)
-
-Параметры подключения:
-#define INCLUDE_ALL_HASH_TABLE/NOT_INCLUDE_ALL_HASH_TABLE:
-    uniform uint u_hash_table_size;
-    coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-    coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-    buffer FreeList { uint free_list[]; };
-    buffer ChunkMetaBuf { ChunkMeta meta[]; };
-
-#define INCLUDE_HASH_TABLE_COMMON/NOT_INCLUDE_HASH_TABLE_COMMON
-
-#define INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK/NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK:
-    uniform uint u_hash_table_size;
-    coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-    coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-
-#define INCLUDE_HASH_TABLE_GET_OR_CREATE/NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE:
-    uniform uint u_hash_table_size;
-    coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-    coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-    buffer FreeList { uint free_list[]; };
-    buffer ChunkMetaBuf { ChunkMeta meta[]; };
+===== Параметры кода =====
+--- *********** Обязательные ***********
+---|--- #define SLOT_VALUE_TYPE uint (тип значения, хранимого в слоте хеш-таблицы)
+---|--- #define SLOT_KEY_TYPE uvec2 (тип ключа, хранимого в слоте хеш-таблицы)
+---|--- 
+---|--- Вместе они определяют структуру слота, из которых будет состоять хеш-таблица:
+---|--- struct HashTableSlot {
+---|---     SLOT_VALUE_TYPE value;
+---|---     SLOT_KEY_TYPE key;
+---|---     uint state;
+---|--- };
+---|--- **Обратите внимание, что название HashTableSlot вы задаёте проивольное и (важно)
+---|--- уникальное**
+---|---
+---|--- #define COUNT_TOMBS count_tombs (название счётчика tomb-слотов внутри хеш-таблицы)
+---|---
+---|--- #define SLOTS_BUFFER slots (название буффера слотов хеш-таблицы)
+---|---
+---|--- Подключаемый буффер должен выглядеть следующим образом:
+---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
+---|---
+---|--- #define KEY_HASH_FUNC hash_uvec2 (сигнатура функции - uint func(SLOT_KEY_TYPE key). Возвращает хеш-значение, соответствующие ключу)
+---|---
+--- *********** Не обязательные ***********
+---|--- #define KEY_COMP_FUNC func (сигнатура функции - bool func(SLOT_KEY_TYPE a, SLOT_KEY_TYPE b). Сравнивает два ключа между собой. Нужна, 
+---|--- если тип данных/структура не умеет сравнивать сама - такое бывает с вещественными данными).
+---|---
+---|--- #define VALUE_INIT_FUNC func (сигнатура функции - SLOT_VALUE_TYPE func(SLOT_KEY_TYPE key, out bool success). Инициализирует значение структуры 
+---|--- SLOT_VALUE_TYPE. При отсутствии функции структура будет заполненна дефолтными значениями (если определены) или мусором).
+---|---
+---|--- #define INIT_SLOT_CALLBACK func (сигнатура функции - void func(uint slot_id, SLOT_KEY_TYPE key, SLOT_VALUE_TYPE value). Callback-функция, вызываемая
+---|--- в момент успешной инициализации слота, но перед публикацией его состояния state).
+---|---
+---|--- #define TOMB_CHECK_LIST_SIZE n (размер очереди tomb-слотов, в которые будет происходит вставка в приоритете. Число n должно быть n = 2^i).
+---|---
+===== Параметры подключения =====
+--- #define INCLUDE_ALL_HASH_TABLE/NOT_INCLUDE_ALL_HASH_TABLE:
+---|--- uniform uint u_hash_table_size;
+---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
+---
+--- #define INCLUDE_HASH_TABLE_COMMON/NOT_INCLUDE_HASH_TABLE_COMMON
+---
+--- #define INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK/NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK:
+---|--- uniform uint u_hash_table_size;
+---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
+---
+--- #define INCLUDE_HASH_TABLE_GET_OR_CREATE/NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE:
+---|--- uniform uint u_hash_table_size;
+---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
 */
 
 #ifndef NOT_INCLUDE_ALL_HASH_TABLE
@@ -34,9 +59,10 @@
 #if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_COMMON)) && !defined(NOT_INCLUDE_HASH_TABLE_COMMON) && !defined(HASH_TABLE_COMMON_INCLUDED)
 #define HASH_TABLE_COMMON_INCLUDED
 
-#define SLOT_EMPTY   0xFFFFFFFFu
-#define SLOT_LOCKED  0xFFFFFFFEu
-#define SLOT_TOMB    0xFFFFFFFDu
+#define SLOT_EMPTY    0xFFFFFFFFu
+#define SLOT_LOCKED   0xFFFFFFFEu
+#define SLOT_TOMB     0xFFFFFFFDu
+#define SLOT_OCCUPIED 0xFFFFFFFCu
 #define MAX_PROBES   128u
 
 #ifndef TOMB_CHECK_LIST_SIZE
@@ -90,72 +116,85 @@ uint pop_tail_tomb_id() {
 #if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK)) && !defined(NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK) && !defined(HASH_TABLE_LOOKUP_REMOVE_CHUNK_INCLUDED)
 #define HASH_TABLE_LOOKUP_REMOVE_CHUNK_INCLUDED
 
-uint lookup_chunk(uvec2 key, bool read_only = false) {
-    uint mask = u_hash_table_size - 1u;
-    uint idx  = hash_uvec2(key) & mask;
+uint lookup_hash_table_slot_id(SLOT_KEY_TYPE key, bool read_only = false) {
+    uint idx = KEY_HASH_FUNC(key) % u_hash_table_size;
 
     for (uint probe = 0u; probe < MAX_PROBES;) {
-        uint v = read_only ? hash_vals[idx] : atomicAdd(hash_vals[idx], 0u);
+        uint state = read_only ? SLOTS_BUFFER[idx].state : atomicAdd(SLOTS_BUFFER[idx].state, 0u);
 
-        if (v == SLOT_LOCKED) continue;
+        if (state == SLOT_LOCKED) continue;
 
-        if (v == SLOT_TOMB) {
-            idx = (idx + 1u) & mask;
+        if (state == SLOT_TOMB) {
+            idx = (idx + 1u) % u_hash_table_size;
             probe++;
             continue;
         }
 
-        if (v == SLOT_EMPTY) return INVALID_ID;
+        if (state == SLOT_EMPTY) return INVALID_ID;
 
-        // Если мы сюда дошли, значит в слоте стоит чья-то запись. Нужно прочитать ключ
-        // Но чтобы прочитать ключ необходимо тоже залочить! (иначе во время прочтения его состояние может уже измениться) 
-        if (!read_only)
-            memoryBarrierBuffer();
-
-        if (all(equal(hash_keys[idx], key))) 
-            return v;
+        if (state == SLOT_OCCUPIED) {
+            if (!read_only)
+                memoryBarrierBuffer();
+            
+            #ifdef KEY_COMP_FUNC
+                if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key))
+                    return idx;
+            #else
+                if (SLOTS_BUFFER[idx].key == key) 
+                    return idx;
+            #endif
+        }
         
-        idx = (idx + 1u) & mask;
+        idx = (idx + 1u) % u_hash_table_size;
         probe++;
     }
 
     return INVALID_ID;
 }
 
-bool remove_from_table(uvec2 key) {
-    uint mask = u_hash_table_size - 1u;
-    uint idx  = hash_uvec2(key) & mask;
+bool remove_slot_from_hash_table(SLOT_KEY_TYPE key) {
+    uint idx  = KEY_HASH_FUNC(key) % u_hash_table_size;
 
     for (uint probe = 0u; probe < MAX_PROBES;) {
-        uint v = atomicAdd(hash_vals[idx], 0u);
+        uint state = atomicAdd(SLOTS_BUFFER[idx].state, 0u);
 
-        if (v == SLOT_LOCKED) continue;
+        if (state == SLOT_LOCKED) continue;
 
-        if (v == SLOT_EMPTY) return false;
+        if (state == SLOT_EMPTY) return false;
 
-        if (v == SLOT_TOMB) { 
-            idx = (idx + 1u) & mask;
+        if (state == SLOT_TOMB) { 
+            idx = (idx + 1u) % u_hash_table_size;
             probe++;
             continue;
         }
 
-        memoryBarrierBuffer();
+        if (state == SLOT_OCCUPIED) {
+            memoryBarrierBuffer();
 
-        if (all(equal(hash_keys[idx], key))) {
-            atomicExchange(hash_vals[idx], SLOT_TOMB); // Удаляем слот
-            atomicAdd(count_tomb, 1u);
-            return true;
+            #ifdef KEY_COMP_FUNC
+                if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key)) {
+                    atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB); // Удаляем слот
+                    atomicAdd(COUNT_TOMBS, 1u);
+                    return true;
+                }
+            #else
+                if (SLOTS_BUFFER[idx].key == key) {
+                    atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB); // Удаляем слот
+                    atomicAdd(COUNT_TOMBS, 1u);
+                    return true;
+                }
+            #endif
         }
 
-        idx = (idx + 1u) & mask;
+        idx = (idx + 1u) % u_hash_table_size;
         probe++;
     }
+
     return false;
 }
 
-bool set_chunk(uvec2 key, uint chunk_id) {
-    uint mask = u_hash_table_size - 1u;
-    uint idx  = hash_uvec2(key) & mask;
+bool set_slot_value(SLOT_KEY_TYPE key, SLOT_VALUE_TYPE value) {
+    uint idx  = KEY_HASH_FUNC(key) % u_hash_table_size;
     uint last_tomb_id = INVALID_ID;
 
     tomb_list_head_id = INVALID_ID;
@@ -163,9 +202,9 @@ bool set_chunk(uvec2 key, uint chunk_id) {
     tomb_list_count_elements = 0u;
 
     for (uint probe = 0u; probe < MAX_PROBES + 1u;) {
-        uint v = atomicAdd(hash_vals[idx], 0u);
+        uint state = atomicAdd(SLOTS_BUFFER[idx].state, 0u);
 
-        if (v == SLOT_EMPTY || probe == MAX_PROBES) {
+        if (state == SLOT_EMPTY || probe == MAX_PROBES) {
             if (probe >= MAX_PROBES) idx = INVALID_ID;
 
             // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
@@ -176,57 +215,69 @@ bool set_chunk(uvec2 key, uint chunk_id) {
 
             if (idx_to_create == INVALID_ID) return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
 
-            uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
+            uint prev = atomicCompSwap(SLOTS_BUFFER[idx_to_create].state, slot_state, SLOT_LOCKED);
             if (prev != slot_state) {
                 // кто-то успел — перепроверяем этот же idx
                 if (prev == SLOT_LOCKED) continue;
 
-                if (slot_state == SLOT_TOMB) {
+                if (slot_state == SLOT_TOMB && prev == SLOT_OCCUPIED) {
                     // Условие говорит, что мы проверяем tomb_check_list_counter - 1u слот и он оказался занят
 
                     memoryBarrierBuffer();
-                    if (all(equal(hash_keys[idx_to_create], key))) {
+                    #ifdef KEY_COMP_FUNC
+                    if (KEY_COMP_FUNC(SLOTS_BUFFER[idx_to_create].key, key))
                         return false;
-                    }
+                    #else
+                    if (SLOTS_BUFFER[idx_to_create].key == key)
+                        return false;
+                    #endif
                     
-                    last_tomb_id = INVALID_ID;  
+                    last_tomb_id = INVALID_ID;
                 }
 
                 continue;
             }
 
             if (slot_state == SLOT_TOMB) {
-                atomicAdd(count_tomb, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как count_tomb > 0)
+                atomicAdd(COUNT_TOMBS, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как COUNT_TOMBS > 0)
             }
 
-            // публикуем key
-            hash_keys[idx_to_create] = key;
+            // публикуем key и value
+            SLOTS_BUFFER[idx_to_create].key = key;
+            SLOTS_BUFFER[idx_to_create].value = value;
 
-            // гарантируем, что key/meta видимы до публикации id
+            // гарантируем, что key/value видимы до публикации id
             memoryBarrierBuffer();
 
-            // публикуем id (и одновременно "анлочим")
-            atomicExchange(hash_vals[idx_to_create], chunk_id);
+            // публикуем состояние (и одновременно "анлочим")
+            atomicExchange(SLOTS_BUFFER[idx_to_create].state, SLOT_OCCUPIED);
 
             return true;
         }
 
-        if (v == SLOT_LOCKED) continue;
+        if (state == SLOT_LOCKED) continue;
 
-        if (v == SLOT_TOMB) {
+        if (state == SLOT_TOMB) {
             push_tomb_id(idx);
-            idx = (idx + 1u) & mask;
+            idx = (idx + 1u) % u_hash_table_size;
             probe++;
             continue;
         }
 
-        memoryBarrierBuffer();
+        if (state == SLOT_OCCUPIED) {
+            memoryBarrierBuffer();
 
-        if (all(equal(hash_keys[idx], key))) {
-            return false;
+            #ifdef KEY_COMP_FUNC
+                if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key))
+                    return false;
+            #else
+                if (SLOTS_BUFFER[idx].key == key)
+                    return false;
+            #endif
         }
 
-        idx = (idx + 1u) & mask;
+
+        idx = (idx + 1u) % u_hash_table_size;
         probe++;
     }
 
@@ -249,9 +300,8 @@ uint pop_free_chunk_id() {
     }
 }
 
-bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
-    uint mask = u_hash_table_size - 1u;
-    uint idx  = hash_uvec2(key) & mask;
+bool get_or_create_chunk(SLOT_KEY_TYPE key, out uint out_slot_id, out bool created) {
+    uint idx  = KEY_HASH_FUNC(key) % u_hash_table_size;
     uint last_tomb_id = INVALID_ID;
 
     tomb_list_head_id = INVALID_ID;
@@ -259,9 +309,9 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
     tomb_list_count_elements = 0u;
 
     for (uint probe = 0u; probe < MAX_PROBES + 1u;) {
-        uint v = atomicAdd(hash_vals[idx], 0u);
+        uint state = atomicAdd(SLOTS_BUFFER[idx].state, 0u);
 
-        if (v == SLOT_EMPTY || probe == MAX_PROBES) {
+        if (state == SLOT_EMPTY || probe == MAX_PROBES) {
             if (probe >= MAX_PROBES) idx = INVALID_ID;
 
             // Не нашли элемент. Значит создаём (в приоритете в first_tomb)
@@ -271,86 +321,112 @@ bool get_or_create_chunk(uvec2 key, out uint outId, out bool created) {
             uint slot_state = last_tomb_id == INVALID_ID ? SLOT_EMPTY : SLOT_TOMB;
 
             if (idx_to_create == INVALID_ID) {
-                outId = INVALID_ID;
+                out_slot_id = INVALID_ID;
                 created = false;
                 return false; // Нет ни SLOT_EMPTY, ни SLOT_TOMB в очереди
             }
 
-            uint prev = atomicCompSwap(hash_vals[idx_to_create], slot_state, SLOT_LOCKED);
+            uint prev = atomicCompSwap(SLOTS_BUFFER[idx_to_create].state, slot_state, SLOT_LOCKED);
             if (prev != slot_state) {
                 // кто-то успел — перепроверяем этот же idx
                 if (prev == SLOT_LOCKED) continue;
 
-                if (slot_state == SLOT_TOMB) {
-                    // Условие говорит, что мы проверяем tomb_check_list_counter - 1u слот и он оказался занят
-
+                if (slot_state == SLOT_TOMB && prev == SLOT_OCCUPIED) {
                     memoryBarrierBuffer();
-                    if (all(equal(hash_keys[idx_to_create], key))) {
-                        outId = prev;
-                        created = false;
-                        return true;
-                    }
+
+                    #ifdef KEY_COMP_FUNC
+                        if (KEY_COMP_FUNC(SLOTS_BUFFER[idx_to_create].key, key)) {
+                            out_slot_id = idx_to_create;
+                            created = false;
+                            return true;
+                        }
+                    #else
+                        if (SLOTS_BUFFER[idx_to_create].key == key) {
+                            out_slot_id = idx_to_create;
+                            created = false;
+                            return true;
+                        }
+                    #endif
                     
-                    last_tomb_id = INVALID_ID;  
+                    last_tomb_id = INVALID_ID;
                 }
 
                 continue;
             }
 
-            uint id = pop_free_chunk_id();
-            if (id == INVALID_ID) {
-                atomicExchange(hash_vals[idx_to_create], slot_state);
-                outId = INVALID_ID;
-                created = false;
-                return false;
-            }
+            SLOT_VALUE_TYPE value;
+
+            #ifdef VALUE_INIT_FUNC
+                bool success = false;
+                value = VALUE_INIT_FUNC(key, success);
+                if (!success) {
+                    atomicExchange(SLOTS_BUFFER[idx_to_create].state, slot_state);
+                    out_slot_id = INVALID_ID;
+                    created = false;
+                    return false;
+                }
+            #endif
 
             if (slot_state == SLOT_TOMB) {
-                atomicAdd(count_tomb, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как count_tomb > 0)
+                atomicAdd(COUNT_TOMBS, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как COUNT_TOMBS > 0)
             }
 
-            // meta подготовим ДО публикации id
-            meta[id].used = 1u;
-            meta[id].key_lo = key.x;
-            meta[id].key_hi = key.y;
-            meta[id].dirty_flags = NEED_GENERATION_FLAG_BIT;
+            // публикуем key и value
+            SLOTS_BUFFER[idx_to_create].key = key;
+            SLOTS_BUFFER[idx_to_create].value = value;
 
-            // публикуем key
-            hash_keys[idx_to_create] = key;
+            #ifdef INIT_SLOT_CALLBACK
+                INIT_SLOT_CALLBACK(idx_to_create, key, value);
+                // meta подготовим ДО публикации id
+                // meta[id].used = 1u;
+                // meta[id].key_lo = key.x;
+                // meta[id].key_hi = key.y;
+                // meta[id].dirty_flags = NEED_GENERATION_FLAG_BIT;
+            #endif
 
-            // гарантируем, что key/meta видимы до публикации id
+            // гарантируем, что key/value видимы до публикации id
             memoryBarrierBuffer();
 
             // публикуем id (и одновременно "анлочим")
-            atomicExchange(hash_vals[idx_to_create], id);
+            atomicExchange(SLOTS_BUFFER[idx_to_create].state, SLOT_OCCUPIED);
 
-            outId = id;
+            out_slot_id = idx_to_create;
             created = true;
             return true;
         }
 
-        if (v == SLOT_LOCKED) continue;
+        if (state == SLOT_LOCKED) continue;
 
-        if (v == SLOT_TOMB) {
+        if (state == SLOT_TOMB) {
             push_tomb_id(idx);
-            idx = (idx + 1u) & mask;
+            idx = (idx + 1u) % u_hash_table_size;
             probe++;
             continue;
         }
 
-        memoryBarrierBuffer();
+        if (state == SLOT_OCCUPIED) {
+            memoryBarrierBuffer();
 
-        if (all(equal(hash_keys[idx], key))) {
-            outId = v;
-            created = false;
-            return true;
+            #ifdef KEY_COMP_FUNC
+                if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key)) {
+                    out_slot_id = idx_to_create;
+                    created = false;
+                    return true;
+                }
+            #else
+                if (SLOTS_BUFFER[idx].key == key) {
+                    out_slot_id = idx_to_create;
+                    created = false;
+                    return true;
+                }
+            #endif
         }
         
-        idx = (idx + 1u) & mask;
+        idx = (idx + 1u) % u_hash_table_size;
         probe++;
     }
 
-    outId = INVALID_ID;
+    out_slot_id = INVALID_ID;
     created = false;
     return false;
 }
