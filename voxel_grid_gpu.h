@@ -28,14 +28,8 @@
 #include "gridable_gpu.h"
 #include "voxel_engine_gpu_structures.h"
 
-#define DONT_CHANGE 0xFFFFFFFF
-
-
-
 class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
-    inline static bool debug = false;
-
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
     glm::vec3 voxel_size;

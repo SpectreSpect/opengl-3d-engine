@@ -732,10 +732,6 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         print_dirty_list();
     }
 
-    if (ImGui::Button("Print chunks hash table log")) {
-        print_chunks_hash_table_log();
-    }
-
     float render_distance_in_chunks = voxel_grid->render_distance / (voxel_grid->voxel_size.x * voxel_grid->chunk_size.x);
     if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 300.0f)) {
         voxel_grid->render_distance = render_distance_in_chunks * voxel_grid->voxel_size.x * voxel_grid->chunk_size.x;
@@ -962,7 +958,7 @@ void VoxelGridGPUDebugger::display_chunk_eviction_window() {
     ImGui::End();
 }
 
-void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
+void VoxelGridGPUDebugger::display_stream_chunks_pipeline_window() {
     ImGui::Begin("Steam chunks pipeline");
     
     if (ImGui::Button("Run all pipeline")) {
@@ -1004,5 +1000,22 @@ void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
             voxel_grid_generation_steps[i]();
         }
     }
+    ImGui::End();
+}
+
+void VoxelGridGPUDebugger::display_hash_table_window() {
+    ImGui::Begin("Hash table");
+
+    if (ImGui::Button("Print hash table log")) {
+        print_chunks_hash_table_log();
+    }
+
+    ImGui::Separator();
+
+    static glm::ivec3 chunk_pos(0);
+    ImGui::InputInt3("Chunk pos", &chunk_pos.x);
+    if (ImGui::Button("Find hash table matches"))
+        print_finded_chunks_in_hash_table(chunk_pos);
+    
     ImGui::End();
 }

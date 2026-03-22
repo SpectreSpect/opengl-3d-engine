@@ -89,36 +89,19 @@ int main() {
     VoxelGridGPUDebugger voxel_grid_debugger(voxel_grid_gpu, window);
     VoxelRasterizatorGPU voxel_rasterizator(voxel_grid_gpu.get(), shader_manager);
 
-    glm::vec3 prev_cam_pos = camera_controller.camera->position;
-
-    std::filesystem::path state_dumps_dir = executable_dir() / "voxel_grid" / "state_dumps";
-    std::filesystem::path dumps_dir = executable_dir() / "voxel_grid" / "dumps";
-    std::filesystem::path base_dump_path = dumps_dir / "base_dump";
-    std::filesystem::path dump_animations_path = dumps_dir / "dump_animations";
-    std::filesystem::path frames_path_to_load = dump_animations_path / "to_load";
-
-    int selected_frame_id = 0;
-    int offset_verify_stack = 0;
-    int count_elements_verify_stack = -1;
-    int dirty_count_to_set = 0;
-    bool use_verify_stack = false;
-
     float rotation_speed = glm::pi<float>() / 2.0f;
 
     int y_offset = 0;
     float timer = 0;
     float lastFrame = 0;
-    float rast_timer = 0;
     float wait_timer = 0;
 
-    glm::vec3 torus_offset = glm::vec3(0); 
-
-    float rasterise_time = 0.0;
+    glm::vec3 torus_offset = glm::vec3(0);
+    glm::ivec3 chunk_pos(0);
     while(window->is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
-        rast_timer += delta_time;
         wait_timer += delta_time;
         lastFrame = currentFrame;   
 
@@ -129,64 +112,38 @@ int main() {
 
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
-        // if (rast_timer >= rasterise_time)
+        ///////////////////////////////////////////////////////////////////////////////////////////////////
+        voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 1, 1, glm::ivec3(66, 135, 245), 0);
             
-        
-        VoxelGridGPU::debug = true;
         voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
-
-        // break;
-
         // window->draw(&torus, &camera);
+
+        voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 0, 0, glm::ivec3(66, 135, 245), 1);
+        ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+        torus.rotation.x += rotation_speed * delta_time;
+        torus.rotation.y += rotation_speed * delta_time;
+        torus.position = torus_origin_pos + torus_offset;
 
         ImGui::Begin("Torus");
         ImGui::SliderFloat("Position X", &torus_offset.x, -1000, 1000);
         ImGui::SliderFloat("Position Y", &torus_offset.y, -1000, 1000);
         ImGui::SliderFloat("Position Z", &torus_offset.z, -1000, 1000);
-
-        if (ImGui::Button("Rasterize torus")) {
-            voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 1, 1, glm::ivec3(66, 135, 245), 0);
-
-            // BufferObject voxel_writes = create_voxel_write_rect(glm::ivec3(0), glm::ivec3(chunk_size), glm::ivec3(66, 135, 245));
-            // voxel_grid_gpu->set_voxels(voxel_writes);
-        }
-
-        if (ImGui::Button("Find hash table matches (chunk = 0, 0, 0)")) {
-            voxel_grid_debugger.print_finded_chunks_in_hash_table(glm::ivec3(0));
-        }
-        
         ImGui::End();
-
-        if (rast_timer >= rasterise_time)
-            voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 0, 0, glm::ivec3(66, 135, 245), 1);
-
-        if (rast_timer >= rasterise_time) {
-            torus.rotation.x += rotation_speed * rast_timer;
-            torus.rotation.y += rotation_speed * rast_timer;
-            torus.position = torus_origin_pos + torus_offset;
-
-            rast_timer = 0;
-
-            voxel_rasterizator.rasterize(torus, voxel_size, chunk_size, 1, 1, glm::ivec3(66, 135, 245), 0);
-        }
-
-        
-
 
         voxel_grid_debugger.dispay_debug_window();
         voxel_grid_debugger.display_build_cmd_window();
         voxel_grid_debugger.display_build_from_dirty_window();
         voxel_grid_debugger.display_chunk_eviction_window();
         voxel_grid_debugger.display_draw_pipline_window();
-        voxel_grid_debugger.display_stream_chunks_pipeline();
+        voxel_grid_debugger.display_stream_chunks_pipeline_window();
+        voxel_grid_debugger.display_hash_table_window();
 
         ui::end_frame();
 
         window->swap_buffers();
         engine.poll_events();
-
-        prev_cam_pos = camera_controller.camera->position;
     }
     
     ui::shutdown();

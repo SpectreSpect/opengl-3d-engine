@@ -69,5 +69,6 @@ public:
     void display_build_cmd_window();
     void display_draw_pipline_window();
     void display_chunk_eviction_window();
-    void display_stream_chunks_pipeline();
+    void display_stream_chunks_pipeline_window();
+    void display_hash_table_window();
 };
