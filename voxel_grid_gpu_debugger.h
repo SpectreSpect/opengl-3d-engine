@@ -25,12 +25,25 @@ public:
     std::array<std::function<void()>, COUNT_DRAWING_STEPS> voxel_grid_draw_steps;
     std::string voxel_grid_draw_steps_names[COUNT_DRAWING_STEPS] = {"build_mesh_from_dirty()", "build_indirect_draw_commands_frustum_fn()", "draw_indirect()"};
 
-    static constexpr int COUNT_GENERATION_STEPS = 4; 
+    static constexpr int COUNT_GENERATION_STEPS = 9; 
     bool voxel_grid_generation_streaming[COUNT_GENERATION_STEPS] = {false};
     std::array<std::function<void()>, COUNT_GENERATION_STEPS> voxel_grid_generation_steps;
-    std::string voxel_grid_generation_steps_names[COUNT_GENERATION_STEPS] = {"reset_load_list_counter()", "ensure_free_chunks_gpu()", "mark_chunk_to_generate()", "generate_terrain()"};
+
+    std::string voxel_grid_generation_steps_names[COUNT_GENERATION_STEPS] = {
+        "ensure_free_chunks_gpu()",
+        "reset_load_list_counter()",
+        "mark_chunk_to_generate()",
+        "merge_voxel_write_lists()",
+        "reset_voxel_write_list_counter()",
+        "mark_write_chunks_to_generate()",
+        "generate_terrain()",
+        "write_voxels_to_grid()",
+        "reset_voxel_write_list_counter()"
+    };
 
     VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window);
+
+    void print_finded_chunks_in_hash_table(glm::ivec3 chunk_pos);
 
     void print_counters();
     void print_count_free_mesh_alloc();
@@ -56,5 +69,6 @@ public:
     void display_build_cmd_window();
     void display_draw_pipline_window();
     void display_chunk_eviction_window();
-    void display_stream_chunks_pipeline();
+    void display_stream_chunks_pipeline_window();
+    void display_hash_table_window();
 };

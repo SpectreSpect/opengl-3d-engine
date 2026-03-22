@@ -28,14 +28,8 @@
 #include "gridable_gpu.h"
 #include "voxel_engine_gpu_structures.h"
 
-#define DONT_CHANGE 0xFFFFFFFF
-
-
-
 class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
-    inline static bool debug = false;
-
     glm::ivec3 chunk_size;
     uint32_t count_active_chunks;
     glm::vec3 voxel_size;
@@ -46,6 +40,7 @@ public:
     uint32_t eviction_bucket_shell_thickness;
     uint32_t vox_per_chunk;
     float render_distance;
+    uint32_t generation_distance;
 
     const uint32_t min_free_pages = 1024;
 
@@ -197,6 +192,7 @@ public:
         uint32_t ib_page_size_order_of_two,
         float buddy_allocator_nodes_factor,
         float render_distance,
+        uint32_t generation_distance,
         uint32_t max_write_count,
         ShaderManager& shader_manager);
 

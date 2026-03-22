@@ -2,6 +2,12 @@
 
 VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window) 
 : voxel_grid(voxel_grid), window(window) {
+    std::fill(std::begin(voxel_grid_draw_streaming), std::end(voxel_grid_draw_streaming), voxel_grid_draw_streaming[0]);
+    std::fill(std::begin(voxel_grid_generation_streaming), std::end(voxel_grid_generation_streaming), voxel_grid_generation_streaming[0]);
+    
+    voxel_grid_generation_streaming[6] = false;
+
+
     std::function<void()> build_mesh_from_dirty_fn = [&](){
         voxel_grid->build_mesh_from_dirty(math_utils::BITS, math_utils::OFFSET);
     };
@@ -25,26 +31,90 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
 
     voxel_grid_draw_steps = {build_mesh_from_dirty_fn, build_indirect_draw_commands_frustum_fn, draw_indirect_fn};
 
-    std::function<void()> ensure_free_chunks_fn = [&]() {
+    
+
+
+    std::function<void()> ensure_free_chunks_gpu_fn = [&](){
         voxel_grid->ensure_free_chunks_gpu(window->camera->position, math_utils::BITS, math_utils::OFFSET);
     };
 
-    std::function<void()> reset_load_list_counter_fn = [&]() {
+    std::function<void()> reset_load_list_counter_fn = [&](){
         voxel_grid->reset_load_list_counter();
     };
 
-    std::function<void()> mark_chunk_to_generate_fn = [&]() {
-        int radius_chunks = 15;
-        voxel_grid->mark_chunk_to_generate(window->camera->position, radius_chunks);
+    std::function<void()> mark_chunk_to_generate_fn = [&](){
+        voxel_grid->mark_chunk_to_generate(window->camera->position, voxel_grid->generation_distance);
     };
 
-    std::function<void()> generate_terrain_fn = [&]() {
-        uint32_t seed = 45345345u;
+    std::function<void()> merge_voxel_write_lists_fn = [&](){
+        voxel_grid->merge_voxel_write_lists(voxel_grid->local_voxel_write_list_, voxel_grid->voxel_write_list_);
+    };
+
+    std::function<void()> reset_voxel_write_list_counter_local_fn = [&](){
+        voxel_grid->reset_voxel_write_list_counter(voxel_grid->local_voxel_write_list_);
+    };
+
+    std::function<void()> mark_write_chunks_to_generate_fn = [&](){
+        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0));
+        voxel_grid->mark_write_chunks_to_generate(voxel_grid->dispatch_args);
+    };
+
+    std::function<void()> generate_terrain_fn = [&](){
         voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, ValueDispatchArg(voxel_grid->vox_per_chunk), BufferDispatchArg(&voxel_grid->load_list_, 0u));
-        voxel_grid->generate_terrain(voxel_grid->dispatch_args, seed);
+        voxel_grid->generate_terrain(voxel_grid->dispatch_args, 45345345);
     };
 
-    voxel_grid_generation_steps = {reset_load_list_counter_fn, ensure_free_chunks_fn, mark_chunk_to_generate_fn, generate_terrain_fn};
+    std::function<void()> write_voxels_to_grid_fn = [&](){
+        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0u));
+        voxel_grid->write_voxels_to_grid();
+    };
+    
+    std::function<void()> reset_voxel_write_list_counter_fn = [&](){
+        voxel_grid->reset_voxel_write_list_counter(voxel_grid->voxel_write_list_);
+    };
+
+    voxel_grid_generation_steps = {
+        ensure_free_chunks_gpu_fn,
+        reset_load_list_counter_fn,
+        mark_chunk_to_generate_fn,
+        merge_voxel_write_lists_fn,
+        reset_voxel_write_list_counter_local_fn,
+        mark_write_chunks_to_generate_fn,
+        generate_terrain_fn,
+        write_voxels_to_grid_fn,
+        reset_voxel_write_list_counter_fn
+    };
+}
+
+void VoxelGridGPUDebugger::print_finded_chunks_in_hash_table(glm::ivec3 chunk_pos) {
+    std::vector<uint64_t> hash_keys(voxel_grid->chunk_hash_table_size);
+    std::vector<uint32_t> hash_vals(voxel_grid->chunk_hash_table_size);
+
+    voxel_grid->chunk_hash_keys_.read_subdata(0, sizeof(uint64_t) * voxel_grid->chunk_hash_table_size, hash_keys.data());
+    voxel_grid->chunk_hash_vals_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * voxel_grid->chunk_hash_table_size, hash_vals.data());
+
+    uint64_t key = math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+    
+    uint32_t count_matches = 0;
+    std::cout << "==== HASH TABLE (" << chunk_pos.x << ", " << chunk_pos.y << ", " << chunk_pos.z << ") MATCHES ====" << std::endl;
+    for (uint32_t slot_id = 0; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
+        if (key == hash_keys[slot_id]) {
+            std::string slot_value_str;
+            if (hash_vals[slot_id] == SLOT_EMPTY) slot_value_str = "SLOT_EMPTY";
+            else if (hash_vals[slot_id] == SLOT_TOMB) slot_value_str = "SLOT_TOMB";
+            else if (hash_vals[slot_id] == SLOT_LOCKED) slot_value_str = "SLOT_LOCKED";
+            else slot_value_str = std::to_string(hash_vals[slot_id]);
+
+            std::cout << "SLOT_ID " << slot_id << ": " << "slot_value = " << slot_value_str << std::endl;
+            count_matches++;
+        }
+    }
+
+    if (count_matches == 0) {
+        std::cout << "No matches has been detected." << std::endl;
+    }
+
+    std::cout << std::endl;
 }
 
 
@@ -662,12 +732,8 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         print_dirty_list();
     }
 
-    if (ImGui::Button("Print chunks hash table log")) {
-        print_chunks_hash_table_log();
-    }
-
     float render_distance_in_chunks = voxel_grid->render_distance / (voxel_grid->voxel_size.x * voxel_grid->chunk_size.x);
-    if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 30.0f)) {
+    if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 300.0f)) {
         voxel_grid->render_distance = render_distance_in_chunks * voxel_grid->voxel_size.x * voxel_grid->chunk_size.x;
     }
 
@@ -892,7 +958,7 @@ void VoxelGridGPUDebugger::display_chunk_eviction_window() {
     ImGui::End();
 }
 
-void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
+void VoxelGridGPUDebugger::display_stream_chunks_pipeline_window() {
     ImGui::Begin("Steam chunks pipeline");
     
     if (ImGui::Button("Run all pipeline")) {
@@ -934,5 +1000,22 @@ void VoxelGridGPUDebugger::display_stream_chunks_pipeline() {
             voxel_grid_generation_steps[i]();
         }
     }
+    ImGui::End();
+}
+
+void VoxelGridGPUDebugger::display_hash_table_window() {
+    ImGui::Begin("Hash table");
+
+    if (ImGui::Button("Print hash table log")) {
+        print_chunks_hash_table_log();
+    }
+
+    ImGui::Separator();
+
+    static glm::ivec3 chunk_pos(0);
+    ImGui::InputInt3("Chunk pos", &chunk_pos.x);
+    if (ImGui::Button("Find hash table matches"))
+        print_finded_chunks_in_hash_table(chunk_pos);
+    
     ImGui::End();
 }
