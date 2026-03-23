@@ -13,6 +13,9 @@
 #include <vector>
 #include "vulkan_window.h"
 
+class GraphicsPipeline;
+class VideoBuffer;
+
 class VulkanEngine : public Engine3D {
 public:
     VulkanEngine();
@@ -46,6 +49,13 @@ public:
     static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
     static void createDepthResources(VkDevice device, VkPhysicalDevice physicalDevice, VkExtent2D extent, VkImage& depthImage, 
                                      VkDeviceMemory& depthImageMemory, VkImageView& depthImageView, VkFormat& depthFormat);
+    
+    void bind_pipeline(GraphicsPipeline& graphics_pipeline);
+    void bind_vertex_buffer(VideoBuffer& vertex_buffer);
+    void bind_index_buffer(VideoBuffer& index_buffer);
+    void draw_indexed(uint32_t num_indices);
+
+    // vkCmdDrawIndexed(engine.currentCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     static void vk_check(VkResult res, const char* what) {
         if (res != VK_SUCCESS) {

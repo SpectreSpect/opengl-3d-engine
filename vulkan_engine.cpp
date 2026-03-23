@@ -1,4 +1,5 @@
 #include "vulkan_engine.h"
+#include "vulkan/graphics_pipeline.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -279,6 +280,32 @@ void VulkanEngine::createDepthResources(
             ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)
             : VK_IMAGE_ASPECT_DEPTH_BIT
     );
+}
+
+void VulkanEngine::bind_pipeline(GraphicsPipeline& graphics_pipeline) {
+    vkCmdBindPipeline(
+            currentCommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            graphics_pipeline.pipeline
+        );
+
+    vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                            graphics_pipeline.pipeline_layout, 0, 1, &graphics_pipeline.descriptorSet, 0, nullptr);
+}
+
+void VulkanEngine::bind_vertex_buffer(VideoBuffer& vertex_buffer) {
+    VkBuffer vertexBuffers[] = {vertex_buffer.buffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, vertexBuffers, offsets);
+}
+
+
+void VulkanEngine::bind_index_buffer(VideoBuffer& index_buffer) {        
+    vkCmdBindIndexBuffer(currentCommandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+}
+
+void VulkanEngine::draw_indexed(uint32_t num_indices) {
+    vkCmdDrawIndexed(currentCommandBuffer, num_indices, 1, 0, 0, 0);
 }
 
 void VulkanEngine::begin_frame(const glm::vec4& clear_color) {

@@ -90,6 +90,10 @@ add_executable(app
   opengl_engine.cpp
   vulkan_engine.cpp
   vulkan_window.cpp
+  vulkan/shader_module.cpp
+  vulkan/video_buffer.cpp
+  vulkan/vulkan_vertex_layout.cpp
+  vulkan/graphics_pipeline.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
