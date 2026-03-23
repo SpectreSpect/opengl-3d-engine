@@ -134,32 +134,32 @@ void Window::clear_color(const glm::vec4& color) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
-    float aspect = get_fbuffer_aspect_ratio();
+// void Window::draw(Drawable* drawable, Camera* camera, Program* program) {
+//     float aspect = get_fbuffer_aspect_ratio();
 
-    RenderState states;
-    states.proj = camera->get_projection_matrix(aspect);
-    states.vp = states.proj * camera->get_view_matrix();
-    states.transform = glm::mat4(1.0f);
-    states.program = program ? program : engine->default_program;
-    states.camera = camera;
-    states.camera->update_frustum_planes(states.vp);
-    states.engine = engine;
+//     RenderState states;
+//     states.proj = camera->get_projection_matrix(aspect);
+//     states.vp = states.proj * camera->get_view_matrix();
+//     states.transform = glm::mat4(1.0f);
+//     states.program = program ? program : engine->default_program;
+//     states.camera = camera;
+//     states.camera->update_frustum_planes(states.vp);
+//     states.engine = engine;
 
-    int fbW, fbH;
-    glfwGetFramebufferSize(window, &fbW, &fbH);
+//     int fbW, fbH;
+//     glfwGetFramebufferSize(window, &fbW, &fbH);
 
-    states.viewport_px = {fbW, fbH};
+//     states.viewport_px = {fbW, fbH};
 
-    drawable->draw(states);
+//     drawable->draw(states);
 
-    // glm::mat4 projection = camera->get_projection_matrix(aspect);
-    // glm::mat4 view = camera->get_view_matrix();
-    // glm::mat4 model = ???
-    // glm::mat4 mvp = projection * view * model;
+//     // glm::mat4 projection = camera->get_projection_matrix(aspect);
+//     // glm::mat4 view = camera->get_view_matrix();
+//     // glm::mat4 model = ???
+//     // glm::mat4 mvp = projection * view * model;
 
-    // program->use();
-    // program->set_mat4("uMVP", mvp);
+//     // program->use();
+//     // program->set_mat4("uMVP", mvp);
 
-    // mesh->draw();
-}
+//     // mesh->draw();
+// }

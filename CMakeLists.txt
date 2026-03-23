@@ -94,6 +94,7 @@ add_executable(app
   vulkan/video_buffer.cpp
   vulkan/vulkan_vertex_layout.cpp
   vulkan/graphics_pipeline.cpp
+  vulkan/pbr_renderer.cpp
 )
 
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")

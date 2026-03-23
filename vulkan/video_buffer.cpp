@@ -1,4 +1,5 @@
 #include "video_buffer.h"
+#include "../vulkan_engine.h"
 
 
 VideoBuffer::VideoBuffer(VkDevice& device, VkPhysicalDevice& physical_device, VkDeviceSize size, 

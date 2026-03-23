@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "mesh_loader.h"
+#include "vertex_layout.h"
 
 
 namespace fs = std::filesystem;

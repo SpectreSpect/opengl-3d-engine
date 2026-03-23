@@ -54,7 +54,7 @@ public:
     void hide_cursor();
     void show_cursor();
     
-    void draw(Drawable* drawable, Camera* camera, Program* program = nullptr);
+    // void draw(Drawable* drawable, Camera* camera, Program* program = nullptr);
 
 
     void clear_color(const glm::vec4& color);

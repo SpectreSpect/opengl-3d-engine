@@ -308,6 +308,21 @@ void VulkanEngine::draw_indexed(uint32_t num_indices) {
     vkCmdDrawIndexed(currentCommandBuffer, num_indices, 1, 0, 0, 0);
 }
 
+// void VulkanEngine::draw(Drawable& drawable, Camera& camera) {
+//     RenderState render_state = {};
+
+//     float aspect = float(swapchainExtent.width) / float(swapchainExtent.height);
+//     render_state.proj = camera.get_projection_matrix(aspect);
+//     render_state.vp = render_state.proj * camera.get_view_matrix();
+//     render_state.engine = this;
+//     render_state.transform = glm::mat4(1.0f);
+//     render_state.graphics_pipeline = &graphics_pipeline;
+//     render_state.camera = &camera;
+//     render_state.vp = render_state.proj * camera.get_view_matrix();
+
+//     drawable.draw(render_state);
+// }
+
 void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
     if (frameInProgress) {
         throw std::runtime_error("begin_frame called while a frame is already in progress");

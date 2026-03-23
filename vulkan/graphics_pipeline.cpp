@@ -1,7 +1,8 @@
 #include "graphics_pipeline.h"
+#include "../vulkan_engine.h"
 
 GraphicsPipeline::GraphicsPipeline(VulkanEngine& engine, uint32_t uniform_buffer_size, ShaderModule& vert_module, ShaderModule& frag_module) {
-    create(engine, sizeof(UniformBufferObject), vert_module, frag_module);
+    create(engine, uniform_buffer_size, vert_module, frag_module);
 }
 
 void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_device, VkRenderPass& render_pass, VkExtent2D& swapchain_extent, uint32_t uniform_buffer_size,

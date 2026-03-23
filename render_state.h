@@ -2,7 +2,9 @@
 #include <glm/glm.hpp>
 #include "camera.h"
 #include "vulkan/shader_module.h"
-#include "vulkan/graphics_pipeline.h"
+// #include "renderer.h"
+
+class Renderer;
 
 class VulkanEngine;
 
@@ -14,7 +16,7 @@ struct RenderState {
     ShaderModule* fragment_shader;
     Camera* camera;
     VulkanEngine* engine;
-    GraphicsPipeline* graphics_pipeline;
+    Renderer* renderer;
 
     glm::ivec2 viewport_px;
 };

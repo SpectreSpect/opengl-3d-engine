@@ -2,7 +2,8 @@
 #include <vulkan/vulkan.h>
 #include <cstring>
 #include "vulkan_utils.h"
-#include "../vulkan_engine.h"
+
+class VulkanEngine;
 
 class VideoBuffer {
 public:

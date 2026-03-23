@@ -17,6 +17,7 @@
 #include <vector>
 #include "vulkan_window.h"
 #include <stdexcept>
+#include "drawable.h"
 
 class GraphicsPipeline;
 class VideoBuffer;
@@ -59,6 +60,8 @@ public:
     void bind_vertex_buffer(VideoBuffer& vertex_buffer);
     void bind_index_buffer(VideoBuffer& index_buffer);
     void draw_indexed(uint32_t num_indices);
+
+    // void draw(Drawable& drawable, Camera& camera);
 
     // vkCmdDrawIndexed(engine.currentCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 

@@ -5,8 +5,6 @@
 #include "vulkan/video_buffer.h"
 #include "vulkan/vulkan_vertex_layout.h"
 
-#include "pbr_uniform.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -23,13 +21,6 @@
 
 class Mesh : public Drawable, public Transformable {
 public:
-    struct UniformBufferObject {
-        glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 proj;
-    };
-
-
     VideoBuffer vertex_buffer;
     VideoBuffer index_buffer;
     uint32_t num_indices = 0;

@@ -73,6 +73,7 @@
 #include "vulkan/video_buffer.h"
 #include "vulkan/vulkan_vertex_layout.h"
 #include "vulkan/graphics_pipeline.h"
+#include "vulkan/pbr_renderer.h"
 #include "mesh.h"
 #include "pbr_uniform.h"
 #include "imgui_layer.h"
@@ -104,11 +105,12 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 20;
 
-
     ShaderModule vert_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.vert.spv");
     ShaderModule frag_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.frag.spv");
 
     GraphicsPipeline graphics_pipeline = GraphicsPipeline(engine, sizeof(PBRUniform), vert_module, frag_module);
+
+    PBRRenderer renderer = PBRRenderer(engine, graphics_pipeline);
     
     std::vector<Vertex> vertices = {
         // +Z (front)
@@ -159,13 +161,6 @@ int main() {
 
     Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
 
-    // VideoBuffer vertex_buffer = VideoBuffer(engine, sizeof(Vertex) * vertices.size());
-    // vertex_buffer.update_data(vertices.data(), sizeof(Vertex) * vertices.size());
-
-    // VideoBuffer index_buffer =  VideoBuffer(engine, sizeof(uint32_t) * indices.size());
-    // index_buffer.update_data(indices.data(), sizeof(uint32_t) * indices.size());
-
-
     // Now we need to create the pipline as far as I understand. We will do it here, maybe using some functions that we will also define in this file (main.cpp)
 
     float last_frame = 0.0f;
@@ -178,53 +173,7 @@ int main() {
 
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
 
-        RenderState render_state = {};
-
-        float aspect = window.get_fbuffer_aspect_ratio();
-        render_state.proj = camera.get_projection_matrix(aspect);
-        render_state.vp = render_state.proj * camera.get_view_matrix();
-        render_state.engine = &engine;
-        render_state.graphics_pipeline = &graphics_pipeline;
-        render_state.camera = &camera;
-
-        float t = static_cast<float>(glfwGetTime());
-
-        mesh.position = glm::vec3(std::sin(t), 0.0f, 0.0f);
-        mesh.rotation = glm::vec3(0.0f, 1.0f, 0.0f);
-
-
-        // UniformBufferObject ubo{};
-        // // float t = static_cast<float>(glfwGetTime());
-
-        // glm::mat4 model = glm::mat4(1.0f);
-        // model = glm::translate(model, glm::vec3(std::sin(t), 0.0f, 0.0f));
-        // model = glm::rotate(model, t, glm::vec3(0.0f, 1.0f, 0.0f));
-
-        // ubo.model = model;
-
-        // ubo.view = glm::lookAt(
-        //                 glm::vec3(2.0f, 2.0f, 2.0f),
-        //                 glm::vec3(0.0f, 0.0f, 0.0f),
-        //                 glm::vec3(0.0f, 1.0f, 0.0f)
-        //             );
-        // ubo.proj  = glm::perspective(glm::radians(45.0f),
-        //                             float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height),
-        //                             0.1f, 10.0f);
-        // ubo.proj[1][1] *= -1.0f;
-
-        // graphics_pipeline.uniform_buffer.update_data(&ubo, sizeof(ubo));
-
-        
-
-        
-        // engine.bind_pipeline(graphics_pipeline);
-        // engine.bind_vertex_buffer(mesh.vertex_buffer);
-        // engine.bind_index_buffer(mesh.index_buffer);
-
-        // engine.draw_indexed(indices.size());
-
-
-        mesh.draw(render_state);
+        renderer.render(mesh, camera);
 
         engine.end_frame();
         engine.poll_events();
