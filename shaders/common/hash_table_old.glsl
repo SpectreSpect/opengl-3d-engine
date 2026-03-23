@@ -1,6 +1,12 @@
 #include "../utils.glsl"
 
 /*
+ВАЖНО: #pragma once для этого кода не включён! Его нужно обязательно делать самим с помощью дефайнов вот таким образом:
+#ifndef SOME_YOUR_PRAGMA_ONCE_DEFINE
+#define SOME_YOUR_PRAGMA_ONCE_DEFINE
+#include "path/to/hash_table.glsl"
+#endif
+
 ===== Параметры кода =====
 --- *********** Обязательные ***********
 ---|--- #define SLOT_VALUE_TYPE uint (тип значения, хранимого в слоте хеш-таблицы)
@@ -37,13 +43,15 @@
 ---|--- #define TOMB_CHECK_LIST_SIZE n (размер очереди tomb-слотов, в которые будет происходит вставка в приоритете. Число n должно быть n = 2^i).
 ---|---
 ===== Параметры подключения =====
+--- #define NOT_UNDEF (убирает разопределение дефайнов в конце файла)
+--- 
 --- #define INCLUDE_ALL_HASH_TABLE/NOT_INCLUDE_ALL_HASH_TABLE:
 ---|--- uniform uint u_hash_table_size;
 ---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
 ---
 --- #define INCLUDE_HASH_TABLE_COMMON/NOT_INCLUDE_HASH_TABLE_COMMON
 ---
---- #define INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK/NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK:
+--- #define INCLUDE_HASH_TABLE_LOOKUP_REMOVE/NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE:
 ---|--- uniform uint u_hash_table_size;
 ---|--- coherent buffer HashTable { uint COUNT_TOMBS; HashTableSlot SLOTS_BUFFER[]; };
 ---
@@ -56,9 +64,7 @@
 #define INCLUDE_ALL_HASH_TABLE
 #endif
 
-#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_COMMON)) && !defined(NOT_INCLUDE_HASH_TABLE_COMMON) && !defined(HASH_TABLE_COMMON_INCLUDED)
-#define HASH_TABLE_COMMON_INCLUDED
-
+#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_COMMON)) && !defined(NOT_INCLUDE_HASH_TABLE_COMMON)
 #define SLOT_EMPTY    0xFFFFFFFFu
 #define SLOT_LOCKED   0xFFFFFFFEu
 #define SLOT_TOMB     0xFFFFFFFDu
@@ -113,9 +119,7 @@ uint pop_tail_tomb_id() {
 }
 #endif
 
-#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK)) && !defined(NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK) && !defined(HASH_TABLE_LOOKUP_REMOVE_CHUNK_INCLUDED)
-#define HASH_TABLE_LOOKUP_REMOVE_CHUNK_INCLUDED
-
+#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_LOOKUP_REMOVE)) && !defined(NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE)
 uint lookup_hash_table_slot_id(SLOT_KEY_TYPE key, bool read_only = false) {
     uint idx = KEY_HASH_FUNC(key) % u_hash_table_size;
 
@@ -285,21 +289,7 @@ bool set_slot_value(SLOT_KEY_TYPE key, SLOT_VALUE_TYPE value) {
 }
 #endif
 
-#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_GET_OR_CREATE)) && !defined(NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE) && !defined(HASH_TABLE_GET_OR_CREATE_INCLUDED)
-#define HASH_TABLE_GET_OR_CREATE_INCLUDED
-
-uint pop_free_chunk_id() {
-    for (;;) {
-        uint old_counter = atomicAdd(free_count, 0u);
-        if (old_counter == 0u) return INVALID_ID;
-        
-        if (atomicCompSwap(free_count, old_counter, old_counter - 1u) == old_counter) {
-            memoryBarrierBuffer();
-            return free_list[old_counter - 1u];
-        }
-    }
-}
-
+#if (defined(INCLUDE_ALL_HASH_TABLE) || defined(INCLUDE_HASH_TABLE_GET_OR_CREATE)) && !defined(NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE)
 bool get_or_create_chunk(SLOT_KEY_TYPE key, out uint out_slot_id, out bool created) {
     uint idx  = KEY_HASH_FUNC(key) % u_hash_table_size;
     uint last_tomb_id = INVALID_ID;
@@ -377,11 +367,6 @@ bool get_or_create_chunk(SLOT_KEY_TYPE key, out uint out_slot_id, out bool creat
 
             #ifdef INIT_SLOT_CALLBACK
                 INIT_SLOT_CALLBACK(idx_to_create, key, value);
-                // meta подготовим ДО публикации id
-                // meta[id].used = 1u;
-                // meta[id].key_lo = key.x;
-                // meta[id].key_hi = key.y;
-                // meta[id].dirty_flags = NEED_GENERATION_FLAG_BIT;
             #endif
 
             // гарантируем, что key/value видимы до публикации id
@@ -409,13 +394,13 @@ bool get_or_create_chunk(SLOT_KEY_TYPE key, out uint out_slot_id, out bool creat
 
             #ifdef KEY_COMP_FUNC
                 if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key)) {
-                    out_slot_id = idx_to_create;
+                    out_slot_id = idx;
                     created = false;
                     return true;
                 }
             #else
                 if (SLOTS_BUFFER[idx].key == key) {
-                    out_slot_id = idx_to_create;
+                    out_slot_id = idx;
                     created = false;
                     return true;
                 }
@@ -432,38 +417,72 @@ bool get_or_create_chunk(SLOT_KEY_TYPE key, out uint out_slot_id, out bool creat
 }
 #endif
 
-#ifdef INCLUDE_ALL_HASH_TABLE
-#undef INCLUDE_ALL_HASH_TABLE
-#endif
+#ifndef NOT_UNDEF
+    #ifdef INCLUDE_ALL_HASH_TABLE
+        #undef INCLUDE_ALL_HASH_TABLE
+    #endif
 
-#ifdef NOT_INCLUDE_ALL_HASH_TABLE
-#undef NOT_INCLUDE_ALL_HASH_TABLE
-#endif
+    #ifdef NOT_INCLUDE_ALL_HASH_TABLE
+        #undef NOT_INCLUDE_ALL_HASH_TABLE
+    #endif
 
-#ifdef INCLUDE_HASH_TABLE_COMMON
-#undef INCLUDE_HASH_TABLE_COMMON
-#endif
+    #ifdef INCLUDE_HASH_TABLE_COMMON
+        #undef INCLUDE_HASH_TABLE_COMMON
+    #endif
 
-#ifdef NOT_INCLUDE_HASH_TABLE_COMMON
-#undef NOT_INCLUDE_HASH_TABLE_COMMON
-#endif
+    #ifdef NOT_INCLUDE_HASH_TABLE_COMMON
+        #undef NOT_INCLUDE_HASH_TABLE_COMMON
+    #endif
 
-#ifdef TOMB_CHECK_LIST_SIZE
-#undef TOMB_CHECK_LIST_SIZE
-#endif
+    #ifdef TOMB_CHECK_LIST_SIZE
+        #undef TOMB_CHECK_LIST_SIZE
+    #endif
 
-#ifdef INCLUDE_HASH_TABLE_GET_OR_CREATE
-#undef INCLUDE_HASH_TABLE_GET_OR_CREATE
-#endif
+    #ifdef INCLUDE_HASH_TABLE_GET_OR_CREATE
+        #undef INCLUDE_HASH_TABLE_GET_OR_CREATE
+    #endif
 
-#ifdef NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
-#undef NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
-#endif
+    #ifdef NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
+        #undef NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
+    #endif
 
-#ifdef INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK
-#undef INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK
-#endif
+    #ifdef INCLUDE_HASH_TABLE_LOOKUP_REMOVE
+        #undef INCLUDE_HASH_TABLE_LOOKUP_REMOVE
+    #endif
 
-#ifdef NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK
-#undef NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE_CHUNK
+    #ifdef NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE
+        #undef NOT_INCLUDE_HASH_TABLE_LOOKUP_REMOVE
+    #endif
+
+    #ifdef SLOT_VALUE_TYPE
+        #undef SLOT_VALUE_TYPE
+    #endif
+
+    #ifdef SLOT_KEY_TYPE
+        #undef SLOT_KEY_TYPE
+    #endif
+
+    #ifdef COUNT_TOMBS
+        #undef COUNT_TOMBS
+    #endif
+
+    #ifdef SLOTS_BUFFER
+        #undef SLOTS_BUFFER
+    #endif
+
+    #ifdef KEY_HASH_FUNC
+        #undef KEY_HASH_FUNC
+    #endif
+
+    #ifdef KEY_COMP_FUNC
+        #undef KEY_COMP_FUNC
+    #endif
+
+    #ifdef VALUE_INIT_FUNC
+        #undef VALUE_INIT_FUNC
+    #endif
+
+    #ifdef INIT_SLOT_CALLBACK
+        #undef INIT_SLOT_CALLBACK
+    #endif
 #endif

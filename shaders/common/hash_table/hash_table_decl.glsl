@@ -1,0 +1,8 @@
+#pragma once
+#define HASH_TABLE_PREFIX(NAME) PR(HT_PREFIX, NAME)
+
+#define SLOT_EMPTY    0xFFFFFFFFu
+#define SLOT_LOCKED   0xFFFFFFFEu
+#define SLOT_TOMB     0xFFFFFFFDu
+#define SLOT_OCCUPIED 0xFFFFFFFCu
+#define MAX_PROBES   128u

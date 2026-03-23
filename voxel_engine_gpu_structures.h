@@ -35,6 +35,14 @@ struct alignas(8) VoxelDataGPU {
 static_assert(sizeof(VoxelDataGPU) == 8);
 static_assert(alignof(VoxelDataGPU) == 8);
 
+struct ChunkHashTableSlot {
+    alignas(8) uint64_t key;
+    uint32_t value;
+    uint32_t state;
+};
+
+static_assert(sizeof(ChunkHashTableSlot) == 16);
+static_assert(alignof(ChunkHashTableSlot) == 8);
 
 struct alignas(16) VoxelWriteGPU {
     glm::ivec4 world_voxel;  // xyz, w unused

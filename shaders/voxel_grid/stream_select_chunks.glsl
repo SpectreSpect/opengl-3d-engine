@@ -5,14 +5,13 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
-layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=5) buffer LoadList { uint load_list_counter; uint load_list[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=3) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=4) buffer LoadList { uint load_list_counter; uint load_list[]; };
 
-uniform uint  u_hash_table_size;   // pow2
+uniform uint  u_chunk_hash_table_size;   // pow2
 uniform uint  u_max_load_entries;  // обычно = count_active_chunks
 uniform ivec3 u_chunk_dim;
 uniform vec3  u_voxel_size;
@@ -25,7 +24,9 @@ uniform int  u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "../common/hash_table.glsl"
+#include "chunk_hash_table/common.glsl"
+#include "chunk_hash_table/get_or_create.glsl"
+#include "chunk_hash_table/lookup_remove.glsl"
 // -------------------
 
 void main() {
@@ -47,14 +48,16 @@ void main() {
     ivec3 chunkCoord = camChunk + off;
     uvec2 key = pack_key_uvec2(chunkCoord, u_pack_offset, u_pack_bits);
 
-    uint chunkId;
+    uint slot_id;
     bool created;
 
-    if (!get_or_create_chunk(key, chunkId, created)) return;
+    if (!chunk_hash_table_get_or_create_slot(key, slot_id, created)) return;
 
-    if ((meta[chunkId].dirty_flags & NEED_GENERATION_FLAG_BIT) > 0u) {
+    uint chunk_id = chunk_hash_table_slots[slot_id].value;
+
+    if ((meta[chunk_id].dirty_flags & NEED_GENERATION_FLAG_BIT) > 0u) {
         uint i = atomicAdd(load_list_counter, 1u);
-        if (i < u_max_load_entries) load_list[i] = chunkId;
-        meta[chunkId].dirty_flags &= ~NEED_GENERATION_FLAG_BIT;
+        if (i < u_max_load_entries) load_list[i] = chunk_id;
+        meta[chunk_id].dirty_flags &= ~NEED_GENERATION_FLAG_BIT;
     }
 }

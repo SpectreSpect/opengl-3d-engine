@@ -5,16 +5,15 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) readonly buffer VoxelWriteList { uint write_count; VoxelWrite writes[]; };
-layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=4) buffer FreeList { uint free_count; uint free_list[]; };
-layout(std430, binding=5) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=6) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=7) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) readonly buffer VoxelWriteList { uint write_count; VoxelWrite writes[]; };
+layout(std430, binding=2) buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=3) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=6) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
-uniform uint  u_hash_table_size;
+uniform uint  u_chunk_hash_table_size;
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
 
@@ -23,8 +22,9 @@ uniform int  u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
-#include "../common/chunk_pool.glsl"
-#include "../common/hash_table.glsl"
+#include "chunk_pool/voxel_index.glsl"
+#include "chunk_pool/mark_dirty.glsl"
+#include "chunk_hash_table/get_or_create.glsl"
 // -------------------
 
 // ---------- helpers ----------
@@ -54,16 +54,16 @@ void main() {
 
     uvec2 key = pack_key_uvec2(chunkCoord, u_pack_offset, u_pack_bits);
 
-    uint chunkId;
+    uint slot_id;
     bool created;
 
-    if (!get_or_create_chunk(key, chunkId, created)) return;
-    if (chunkId == INVALID_ID) return;
+    if (!chunk_hash_table_get_or_create_slot(key, slot_id, created)) return;
+    uint chunk_id = chunk_hash_table_slots[slot_id].value;
 
     uint vi = voxel_index(local);
 
     // просто пишем VoxelData как есть (8 байт)
-    voxels[chunkId * u_voxels_per_chunk + vi] = w.voxel_data;
+    voxels[chunk_id * u_voxels_per_chunk + vi] = w.voxel_data;
 
-    mark_dirty_around(chunkId, chunkCoord);
+    mark_dirty_around(chunk_id, chunkCoord);
 }

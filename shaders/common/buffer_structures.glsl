@@ -65,3 +65,9 @@ struct BucketHead {
     uint id;
     uint count;
 };
+
+struct ChunkHashTableSlot {
+    uvec2 key;
+    uint value;
+    uint state;
+};

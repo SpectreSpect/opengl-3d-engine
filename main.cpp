@@ -113,13 +113,13 @@ int main() {
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
-        voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
+        // voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
             
         voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
         // window->draw(&torus, &camera);
 
-        voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
+        // voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
         ///////////////////////////////////////////////////////////////////////////////////////////////////
 
         torus.rotation.x += rotation_speed * delta_time;

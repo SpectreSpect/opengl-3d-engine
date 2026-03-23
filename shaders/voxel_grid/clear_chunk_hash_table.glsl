@@ -1,23 +1,23 @@
 #version 430
 layout(local_size_x = 256) in;
 
-// --- hash table ---
-layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
+// ----- include -----
+#include "../common/buffer_structures.glsl"
+// -------------------
 
-uniform uint u_hash_table_size;
+// --- hash table ---
+layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+
+uniform uint u_chunk_hash_table_size;
 
 // ----- include -----
-
-#define NOT_INCLUDE_ALL_HASH_TABLE
-#define INCLUDE_HASH_TABLE_COMMON
-#include "../common/hash_table.glsl"
+#include "chunk_hash_table/common.glsl"
 // -------------------
 
 void main() {
     uint slot_id = gl_GlobalInvocationID.x;
-    if (slot_id >= u_hash_table_size) return;
+    if (slot_id >= u_chunk_hash_table_size) return;
 
-    hash_keys[slot_id] = uvec2(0u, 0u);
-    hash_vals[slot_id] = SLOT_EMPTY;
+    chunk_hash_table_slots[slot_id].key = uvec2(0u, 0u);
+    chunk_hash_table_slots[slot_id].value = SLOT_EMPTY;
 }

@@ -124,12 +124,11 @@ public:
     ComputeProgram prog_add_voxel_write_list_counters_together_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
+    BufferObject chunk_hash_table_;
     BufferObject dispatch_args;
     BufferObject dispatch_args_additional;
     BufferObject voxels_;
     BufferObject chunk_meta_;
-    BufferObject chunk_hash_keys_;
-    BufferObject chunk_hash_vals_;
     BufferObject free_list_;
     BufferObject mesh_buffers_status_;
     BufferObject local_voxel_write_list_;

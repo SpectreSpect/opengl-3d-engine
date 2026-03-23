@@ -120,8 +120,8 @@ VoxelGridGPU::VoxelGridGPU(
     uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
     voxels_ = BufferObject::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, shader_manager);
 
-    chunk_hash_keys_ = BufferObject(sizeof(glm::uvec2) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
-    chunk_hash_vals_ = BufferObject(sizeof(uint32_t) * (1 + chunk_hash_table_size), GL_DYNAMIC_DRAW);
+    // alignof(ChunkHashTableSlot) == 8!!!
+    chunk_hash_table_ = BufferObject(sizeof(uint32_t) * 2 + sizeof(ChunkHashTableSlot) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
 
     world_init_gpu();
     init_draw_buffers();
@@ -131,18 +131,17 @@ VoxelGridGPU::VoxelGridGPU(
 void VoxelGridGPU::apply_writes_to_world_gpu(uint32_t write_count) {
     voxel_write_list_.update_subdata(0u, sizeof(uint32_t), &write_count);
 
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    voxel_write_list_.bind_base_as_ssbo(2);
-    voxels_.bind_base_as_ssbo(3);
-    free_list_.bind_base_as_ssbo(4);
-    chunk_meta_.bind_base_as_ssbo(5);
-    enqueued_.bind_base_as_ssbo(6);
-    dirty_list_.bind_base_as_ssbo(7);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    voxel_write_list_.bind_base_as_ssbo(1);
+    voxels_.bind_base_as_ssbo(2);
+    free_list_.bind_base_as_ssbo(3);
+    chunk_meta_.bind_base_as_ssbo(4);
+    enqueued_.bind_base_as_ssbo(5);
+    dirty_list_.bind_base_as_ssbo(6);
 
     prog_apply_writes_.use();
 
-    glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform3i(glGetUniformLocation(prog_apply_writes_.id, "u_chunk_dim"),
                 chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_apply_writes_.id, "u_voxels_per_chunk"), vox_per_chunk);
@@ -194,15 +193,14 @@ void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int ra
     glm::mat4 invM = glm::inverse(get_model_matrix());
     glm::vec3 cam_local = glm::vec3(invM * glm::vec4(cam_world_pos, 1.0f));
 
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    free_list_.bind_base_as_ssbo(2);
-    chunk_meta_.bind_base_as_ssbo(3);
-    enqueued_.bind_base_as_ssbo(4);
-    load_list_.bind_base_as_ssbo(5);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    free_list_.bind_base_as_ssbo(1);
+    chunk_meta_.bind_base_as_ssbo(2);
+    enqueued_.bind_base_as_ssbo(3);
+    load_list_.bind_base_as_ssbo(4);
 
     prog_stream_select_chunks_.use();
-    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_stream_select_chunks_.id, "u_max_load_entries"), count_active_chunks);
     glUniform3i(glGetUniformLocation(prog_stream_select_chunks_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform3f(glGetUniformLocation(prog_stream_select_chunks_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
@@ -223,18 +221,16 @@ void VoxelGridGPU::mark_chunk_to_generate(const glm::vec3& cam_world_pos, int ra
 void VoxelGridGPU::mark_write_chunks_to_generate(const BufferObject& dispatch_args) {
     voxel_write_list_.bind_base_as_ssbo(0);
     load_list_.bind_base_as_ssbo(1);
-
-    chunk_hash_keys_.bind_base_as_ssbo(2);
-    chunk_hash_vals_.bind_base_as_ssbo(3);
-    free_list_.bind_base_as_ssbo(4);
-    chunk_meta_.bind_base_as_ssbo(5);
+    chunk_hash_table_.bind_base_as_ssbo(2);
+    free_list_.bind_base_as_ssbo(3);
+    chunk_meta_.bind_base_as_ssbo(4);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mark_write_chunks_to_generate_.use();
 
     glUniform3ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
-    glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_pack_offset"), math_utils::OFFSET);
     glUniform1ui(glGetUniformLocation(prog_mark_write_chunks_to_generate_.id, "u_pack_bits"), math_utils::BITS);
 
@@ -244,15 +240,14 @@ void VoxelGridGPU::mark_write_chunks_to_generate(const BufferObject& dispatch_ar
 }
 
 void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t seed) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
+    chunk_hash_table_.bind_base_as_ssbo(0);
 
-    load_list_.bind_base_as_ssbo(2);
+    load_list_.bind_base_as_ssbo(1);
 
-    voxels_.bind_base_as_ssbo(3);
-    chunk_meta_.bind_base_as_ssbo(4);
-    enqueued_.bind_base_as_ssbo(5);
-    dirty_list_.bind_base_as_ssbo(6);
+    voxels_.bind_base_as_ssbo(2);
+    chunk_meta_.bind_base_as_ssbo(3);
+    enqueued_.bind_base_as_ssbo(4);
+    dirty_list_.bind_base_as_ssbo(5);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
@@ -262,7 +257,7 @@ void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t 
     glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_bits"), math_utils::BITS);
     glUniform1i(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_pack_offset"), math_utils::OFFSET);
     glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_seed"), seed);
-    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_stream_generate_terrain_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
 
     glDispatchComputeIndirect(0);
 
@@ -270,20 +265,19 @@ void VoxelGridGPU::generate_terrain(const BufferObject& dispatch_args, uint32_t 
 }
 
 void VoxelGridGPU::write_voxels_to_grid() {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    free_list_.bind_base_as_ssbo(2);
-    chunk_meta_.bind_base_as_ssbo(3);
-    enqueued_.bind_base_as_ssbo(4);
-    dirty_list_.bind_base_as_ssbo(5);
-    voxel_write_list_.bind_base_as_ssbo(6);
-    voxels_.bind_base_as_ssbo(7);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    free_list_.bind_base_as_ssbo(1);
+    chunk_meta_.bind_base_as_ssbo(2);
+    enqueued_.bind_base_as_ssbo(3);
+    dirty_list_.bind_base_as_ssbo(4);
+    voxel_write_list_.bind_base_as_ssbo(5);
+    voxels_.bind_base_as_ssbo(6);
     
     prog_write_voxels_to_grid_.use();
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
-    glUniform1ui(glGetUniformLocation(prog_write_voxels_to_grid_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_write_voxels_to_grid_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform3i(glGetUniformLocation(prog_write_voxels_to_grid_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_write_voxels_to_grid_.id, "u_voxels_per_chunk"), vox_per_chunk);
 
@@ -413,19 +407,18 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
 }
 
 void VoxelGridGPU::world_init_gpu() {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    free_list_.bind_base_as_ssbo(2);
-    mesh_buffers_status_.bind_base_as_ssbo(3);
-    chunk_meta_.bind_base_as_ssbo(4);
-    enqueued_.bind_base_as_ssbo(5);
-    dirty_list_.bind_base_as_ssbo(6);
-    voxel_write_list_.bind_base_as_ssbo(7);
-    indirect_cmds_.bind_base_as_ssbo(8);
-    failed_dirty_list_.bind_base_as_ssbo(9);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    free_list_.bind_base_as_ssbo(1);
+    mesh_buffers_status_.bind_base_as_ssbo(2);
+    chunk_meta_.bind_base_as_ssbo(3);
+    enqueued_.bind_base_as_ssbo(4);
+    dirty_list_.bind_base_as_ssbo(5);
+    voxel_write_list_.bind_base_as_ssbo(6);
+    indirect_cmds_.bind_base_as_ssbo(7);
+    failed_dirty_list_.bind_base_as_ssbo(8);
 
     prog_world_init_.use();
-    glUniform1ui(glGetUniformLocation(prog_world_init_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_world_init_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_world_init_.id, "u_max_chunks"), count_active_chunks);
 
     uint32_t maxItems = std::max(chunk_hash_table_size, count_active_chunks);
@@ -485,13 +478,12 @@ void VoxelGridGPU::init_mesh_pool() {
 }
 
 void VoxelGridGPU::clear_chunk_hash_table(const BufferObject& dispatch_args) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
+    chunk_hash_table_.bind_base_as_ssbo(0);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_clear_chunk_hash_table_.use();
-    glUniform1ui(glGetUniformLocation(prog_clear_chunk_hash_table_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_clear_chunk_hash_table_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     
     glDispatchComputeIndirect(0);
 
@@ -499,16 +491,15 @@ void VoxelGridGPU::clear_chunk_hash_table(const BufferObject& dispatch_args) {
 }
 
 void VoxelGridGPU::fill_chunk_hash_table(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    chunk_meta_.bind_base_as_ssbo(2);
-    enqueued_.bind_base_as_ssbo(3);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    chunk_meta_.bind_base_as_ssbo(1);
+    enqueued_.bind_base_as_ssbo(2);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_fill_chunk_hash_table_.use();
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_max_chunks"), count_active_chunks);
-    glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_pack_bits"), pack_bits);
     glUniform1ui(glGetUniformLocation(prog_fill_chunk_hash_table_.id, "u_pack_offset"), pack_offset);
 
@@ -518,14 +509,14 @@ void VoxelGridGPU::fill_chunk_hash_table(const BufferObject& dispatch_args, uint
 }
 
 void VoxelGridGPU::conditional_prepare_rebuild(BufferObject& clear_dispatch_args, BufferObject& fill_dispatch_args) {
-    chunk_hash_vals_.bind_base_as_ssbo(0);
+    chunk_hash_table_.bind_base_as_ssbo(0);
     clear_dispatch_args.bind_base_as_ssbo(1);
     fill_dispatch_args.bind_base_as_ssbo(2);
     
     uint32_t tombs_to_rebuild = (uint32_t)(tomb_fraction_to_rebuild * chunk_hash_table_size);
 
     prog_hash_table_conditional_dispatch_adapter_.use();
-    glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_max_chunks"), count_active_chunks);
     glUniform1ui(glGetUniformLocation(prog_hash_table_conditional_dispatch_adapter_.id, "u_tombs_to_rebuild"), tombs_to_rebuild);
 
@@ -614,20 +605,19 @@ void VoxelGridGPU::prepare_evict_lowpriority_chunks(const BufferObject& dispatch
 }
 
 void VoxelGridGPU::evict_lowpriority_chunks(const BufferObject& dispatch_args) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    free_list_.bind_base_as_ssbo(2);
-    chunk_meta_.bind_base_as_ssbo(3);
-    enqueued_.bind_base_as_ssbo(4);
-    bucket_heads_.bind_base_as_ssbo(5);
-    bucket_next_.bind_base_as_ssbo(6);
-    chunk_mesh_alloc_.bind_base_as_ssbo(7);
-    evicted_chunks_list_.bind_base_as_ssbo(8);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    free_list_.bind_base_as_ssbo(1);
+    chunk_meta_.bind_base_as_ssbo(2);
+    enqueued_.bind_base_as_ssbo(3);
+    bucket_heads_.bind_base_as_ssbo(4);
+    bucket_next_.bind_base_as_ssbo(5);
+    chunk_mesh_alloc_.bind_base_as_ssbo(6);
+    evicted_chunks_list_.bind_base_as_ssbo(7);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_evict_low_priority_.use();
-    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_evict_low_priority_.id, "u_bucket_count"), count_evict_buckets);
 
     glDispatchComputeIndirect(0);
@@ -708,17 +698,16 @@ void VoxelGridGPU::mesh_reset(const BufferObject& dispatch_args) {
 }
 
 void VoxelGridGPU::mesh_count(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
-    voxels_.bind_base_as_ssbo(2);
-    dirty_list_.bind_base_as_ssbo(3);
-    dirty_quad_count_.bind_base_as_ssbo(4);
-    chunk_meta_.bind_base_as_ssbo(5);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    voxels_.bind_base_as_ssbo(1);
+    dirty_list_.bind_base_as_ssbo(2);
+    dirty_quad_count_.bind_base_as_ssbo(3);
+    chunk_meta_.bind_base_as_ssbo(4);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_count_.use();
-    glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform3i(glGetUniformLocation(prog_mesh_count_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_voxels_per_chunk"), vox_per_chunk);
     glUniform1ui(glGetUniformLocation(prog_mesh_count_.id, "u_pack_bits"), pack_bits);
@@ -847,24 +836,22 @@ void VoxelGridGPU::return_free_alloc_nodes(const BufferObject& dispatch_args) {
 }
 
 void VoxelGridGPU::mesh_emit(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset) {
-    chunk_hash_keys_.bind_base_as_ssbo(0);
-    chunk_hash_vals_.bind_base_as_ssbo(1);
+    chunk_hash_table_.bind_base_as_ssbo(0);
+    voxels_.bind_base_as_ssbo(1);
+    mesh_buffers_status_.bind_base_as_ssbo(2);
+    dirty_list_.bind_base_as_ssbo(3);
+    emit_counters_.bind_base_as_ssbo(4);
+    chunk_mesh_alloc_.bind_base_as_ssbo(5);
 
-    voxels_.bind_base_as_ssbo(2);
-    mesh_buffers_status_.bind_base_as_ssbo(3);
-    dirty_list_.bind_base_as_ssbo(4);
-    emit_counters_.bind_base_as_ssbo(5);
-    chunk_mesh_alloc_.bind_base_as_ssbo(6);
+    chunk_meta_.bind_base_as_ssbo(6);
 
-    chunk_meta_.bind_base_as_ssbo(7);
-
-    global_vertex_buffer_.bind_base_as_ssbo(8);
-    global_index_buffer_.bind_base_as_ssbo(9);
+    global_vertex_buffer_.bind_base_as_ssbo(7);
+    global_index_buffer_.bind_base_as_ssbo(8);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_mesh_emit_.use();
-    glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_hash_table_size"), chunk_hash_table_size);
+    glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_chunk_hash_table_size"), chunk_hash_table_size);
     glUniform3i(glGetUniformLocation(prog_mesh_emit_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform1ui(glGetUniformLocation(prog_mesh_emit_.id, "u_voxels_per_chunk"), vox_per_chunk);
     glUniform3f(glGetUniformLocation(prog_mesh_emit_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);

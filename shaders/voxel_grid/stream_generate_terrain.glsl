@@ -5,13 +5,12 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) readonly buffer LoadList { uint load_list_counter; uint load_list[]; };
-layout(std430, binding=3) buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=5) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=6) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=0) buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) readonly buffer LoadList { uint load_list_counter; uint load_list[]; };
+layout(std430, binding=2) buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=5) buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
@@ -21,14 +20,11 @@ uniform int  u_pack_offset;
 
 uniform uint u_seed;
 
-uniform uint u_hash_table_size;
+uniform uint u_chunk_hash_table_size;
 
 // ----- include -----
 #include "../utils.glsl"
-
-#define NOT_INCLUDE_ALL_CHUNK_POOL
-#define INCLUDE_MARK_DIRTY
-#include "../common/chunk_pool.glsl"
+#include "chunk_pool/mark_dirty.glsl"
 // -------------------
 
 // ---- noise (value noise + fbm) ----

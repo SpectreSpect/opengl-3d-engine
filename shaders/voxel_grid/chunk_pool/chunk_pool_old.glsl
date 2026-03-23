@@ -1,7 +1,7 @@
 #include "../utils.glsl"
 
-#define NOT_INCLUDE_HASH_TABLE_GET_OR_CREATE
-#include "hash_table.glsl"
+#include "chunk_hash_table/common.glsl"
+#include "chunk_hash_table/lookup_remove.glsl"
 
 /*
 Параметры кода:

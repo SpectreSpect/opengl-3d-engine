@@ -5,24 +5,22 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) buffer FreeList { uint free_count; uint free_list[]; };
-layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=4) buffer EnqueuedBuf { uint enqueued[]; };
-layout(std430, binding=5) coherent buffer BucketHeads { BucketHead bucket_heads[]; };
-layout(std430, binding=6) coherent buffer BucketNext  { uint bucket_next[]; };
-layout(std430, binding=7) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
-layout(std430, binding=8) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) buffer FreeList { uint free_count; uint free_list[]; };
+layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=3) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=4) coherent buffer BucketHeads { BucketHead bucket_heads[]; };
+layout(std430, binding=5) coherent buffer BucketNext  { uint bucket_next[]; };
+layout(std430, binding=6) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; };
+layout(std430, binding=7) buffer EvictedChunksList { uint evicted_chunks_counter; uint evicted_chunks_list[]; };
 
-uniform uint u_hash_table_size;
+uniform uint u_chunk_hash_table_size;
 uniform uint u_bucket_count;
 
 // ----- include -----
 #include "../utils.glsl"
-
-#define NOT_INCLUDE_GET_OR_CREATE
-#include "../common/hash_table.glsl"
+#include "chunk_hash_table/common.glsl"
+#include "chunk_hash_table/lookup_remove.glsl"
 // -------------------
 
 // ABA проблемы не будет, так как везде используется либо только pop, либо только push (поэтому теги на heads пока не нужны)
@@ -67,7 +65,7 @@ void main() {
     uvec2 key = uvec2(meta[victim].key_lo, meta[victim].key_hi);
 
     // выкидываем из таблицы
-    remove_from_table(key);
+    chunk_hash_table_remove_slot_from_hash_table(key);
 
     // освобождаем метаданные
     meta[victim].used = 0u;

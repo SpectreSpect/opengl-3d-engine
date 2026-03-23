@@ -87,23 +87,20 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
 }
 
 void VoxelGridGPUDebugger::print_finded_chunks_in_hash_table(glm::ivec3 chunk_pos) {
-    std::vector<uint64_t> hash_keys(voxel_grid->chunk_hash_table_size);
-    std::vector<uint32_t> hash_vals(voxel_grid->chunk_hash_table_size);
-
-    voxel_grid->chunk_hash_keys_.read_subdata(0, sizeof(uint64_t) * voxel_grid->chunk_hash_table_size, hash_keys.data());
-    voxel_grid->chunk_hash_vals_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * voxel_grid->chunk_hash_table_size, hash_vals.data());
+    std::vector<ChunkHashTableSlot> chunk_hash_table_slot(voxel_grid->chunk_hash_table_size);
+    voxel_grid->chunk_hash_table_.read_subdata(sizeof(uint32_t) * 2, sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
 
     uint64_t key = math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
     
     uint32_t count_matches = 0;
     std::cout << "==== HASH TABLE (" << chunk_pos.x << ", " << chunk_pos.y << ", " << chunk_pos.z << ") MATCHES ====" << std::endl;
     for (uint32_t slot_id = 0; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
-        if (key == hash_keys[slot_id]) {
+        if (key == chunk_hash_table_slot[slot_id].key) {
             std::string slot_value_str;
-            if (hash_vals[slot_id] == SLOT_EMPTY) slot_value_str = "SLOT_EMPTY";
-            else if (hash_vals[slot_id] == SLOT_TOMB) slot_value_str = "SLOT_TOMB";
-            else if (hash_vals[slot_id] == SLOT_LOCKED) slot_value_str = "SLOT_LOCKED";
-            else slot_value_str = std::to_string(hash_vals[slot_id]);
+            if (chunk_hash_table_slot[slot_id].value == SLOT_EMPTY) slot_value_str = "SLOT_EMPTY";
+            else if (chunk_hash_table_slot[slot_id].value == SLOT_TOMB) slot_value_str = "SLOT_TOMB";
+            else if (chunk_hash_table_slot[slot_id].value == SLOT_LOCKED) slot_value_str = "SLOT_LOCKED";
+            else slot_value_str = std::to_string(chunk_hash_table_slot[slot_id].value);
 
             std::cout << "SLOT_ID " << slot_id << ": " << "slot_value = " << slot_value_str << std::endl;
             count_matches++;
@@ -371,14 +368,14 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
 }
 
 void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
-    std::vector<uint32_t> hash_table_vals(voxel_grid->chunk_hash_table_size);
-    uint32_t count_tombs_gpu = voxel_grid->chunk_hash_vals_.read_scalar<uint32_t>(0u);
+    std::vector<ChunkHashTableSlot> chunk_hash_table_slot(voxel_grid->chunk_hash_table_size);
+    voxel_grid->chunk_hash_table_.read_subdata(sizeof(uint32_t) * 2, sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
 
-    voxel_grid->chunk_hash_vals_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * voxel_grid->chunk_hash_table_size, hash_table_vals.data());
+    uint32_t count_tombs_gpu = voxel_grid->chunk_hash_table_.read_scalar<uint32_t>(0u);
 
     uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_alloc_slots = 0u;
     for (uint32_t slot_id = 0u; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
-        uint32_t v = hash_table_vals[slot_id];
+        uint32_t v = chunk_hash_table_slot[slot_id].value;
 
         if (v == SLOT_EMPTY) count_empty_slots++;
         else if (v == SLOT_LOCKED) count_lock_slots++;
