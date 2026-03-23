@@ -84,13 +84,6 @@ struct Vertex {
     glm::vec4 color;
 };
 
-// struct UniformBufferObject {
-//     glm::mat4 model;
-//     glm::mat4 view;
-//     glm::mat4 proj;
-// };
-
-
 float clear_col[4] = {0, 0, 0, 1};
 
 int main() {
@@ -105,8 +98,8 @@ int main() {
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 20;
 
-    ShaderModule vert_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.vert.spv");
-    ShaderModule frag_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.frag.spv");
+    ShaderModule vert_module = ShaderModule(engine.device, "shaders/pbr.vert.spv");
+    ShaderModule frag_module = ShaderModule(engine.device, "shaders/pbr.frag.spv");
 
     GraphicsPipeline graphics_pipeline = GraphicsPipeline(engine, sizeof(PBRUniform), vert_module, frag_module);
 
@@ -160,8 +153,6 @@ int main() {
     };
 
     Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
-
-    // Now we need to create the pipline as far as I understand. We will do it here, maybe using some functions that we will also define in this file (main.cpp)
 
     float last_frame = 0.0f;
     while(window.is_open()) {

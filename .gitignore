@@ -1,5 +1,5 @@
 # Build directories
-build/
+/build/
 /build-*/
 /bin/
 /CMakeFiles/
@@ -16,7 +16,7 @@ build/
 *.exe
 *.out
 
-# Visual Studio / VSCode / CLion / JetBrains IDEs
+# IDEs
 .vscode/
 .idea/
 *.sln
@@ -27,15 +27,14 @@ build/
 *.suo
 *.DS_Store
 
-# Backup / temporary files
+# Temporary files
 *~
 *.swp
 *.tmp
 *.log
 
-# Shader cache or compiled shader files (optional)
+# Compiled shaders
 *.spv
 
 # Misc
 *.pyc
-

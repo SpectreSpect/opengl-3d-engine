@@ -97,6 +97,40 @@ add_executable(app
   vulkan/pbr_renderer.cpp
 )
 
+find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
+
+set(SHADERS_SRC_DIR "${CMAKE_SOURCE_DIR}/shaders")
+set(SHADERS_BIN_DIR "${CMAKE_BINARY_DIR}/shaders")
+
+file(MAKE_DIRECTORY "${SHADERS_BIN_DIR}")
+
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS
+  "${SHADERS_SRC_DIR}/*.vert"
+  "${SHADERS_SRC_DIR}/*.frag"
+  "${SHADERS_SRC_DIR}/*.comp"
+)
+
+set(SPIRV_OUTPUTS)
+
+foreach(SHADER ${SHADER_SOURCES})
+  get_filename_component(SHADER_NAME ${SHADER} NAME)
+  set(SPIRV_OUTPUT "${SHADERS_BIN_DIR}/${SHADER_NAME}.spv")
+
+  add_custom_command(
+    OUTPUT "${SPIRV_OUTPUT}"
+    COMMAND ${GLSLANG_VALIDATOR} -V "${SHADER}" -o "${SPIRV_OUTPUT}"
+    DEPENDS "${SHADER}"
+    COMMENT "Compiling shader ${SHADER_NAME}"
+    VERBATIM
+  )
+
+  list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
+endforeach()
+
+add_custom_target(compile_shaders ALL DEPENDS ${SPIRV_OUTPUTS})
+add_dependencies(app compile_shaders)
+
+
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
 add_custom_target(copy_assets ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -106,14 +140,14 @@ add_custom_target(copy_assets ALL
 )
 add_dependencies(copy_assets app)
 
-set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
-add_custom_target(copy_shaders ALL
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${SHADERS_SRC}"
-          "$<TARGET_FILE_DIR:app>/shaders"
-  COMMENT "Copying shaders next to app"
-)
-add_dependencies(copy_shaders app)
+# set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
+# add_custom_target(copy_shaders ALL
+#   COMMAND ${CMAKE_COMMAND} -E copy_directory
+#           "${SHADERS_SRC}"
+#           "$<TARGET_FILE_DIR:app>/shaders"
+#   COMMENT "Copying shaders next to app"
+# )
+# add_dependencies(copy_shaders app)
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
 include(FetchContent)
