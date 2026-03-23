@@ -38,29 +38,29 @@ int VulkanEngine::init() {
     return 1;
 }
 
-void VulkanEngine::set_window(Window* window) {
-    // if (!window || !window->window) {
-    //     std::cerr << "set_window: GLFWwindow is null\n";
-    //     return;
-    // }
+// void VulkanEngine::set_window(Window* window) {
+//     // if (!window || !window->window) {
+//     //     std::cerr << "set_window: GLFWwindow is null\n";
+//     //     return;
+//     // }
 
-    // m_window = window;
+//     // m_window = window;
 
-    // try {
-    //     createInstance();
-    //     createSurface();
-    //     pickPhysicalDevice();
-    //     createLogicalDevice();
+//     // try {
+//     //     createInstance();
+//     //     createSurface();
+//     //     pickPhysicalDevice();
+//     //     createLogicalDevice();
 
-    //     // Needed for actual rendering to the window:
-    //     createSwapchain();
-    //     createImageViews();
+//     //     // Needed for actual rendering to the window:
+//     //     createSwapchain();
+//     //     createImageViews();
 
-    //     std::cout << "Vulkan initialized successfully\n";
-    // } catch (const std::exception& e) {
-    //     std::cerr << "Vulkan init failed: " << e.what() << "\n";
-    // }
-}
+//     //     std::cout << "Vulkan initialized successfully\n";
+//     // } catch (const std::exception& e) {
+//     //     std::cerr << "Vulkan init failed: " << e.what() << "\n";
+//     // }
+// }
 
 void VulkanEngine::set_vulkan_window(VulkanWindow* window) {
     if (!window || !window->window) {

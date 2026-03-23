@@ -21,73 +21,73 @@ find_package(Vulkan REQUIRED)
 
 add_executable(app
   main.cpp
-  engine3d.cpp
-  window.cpp
-  vao.cpp
-  vbo.cpp
-  ebo.cpp
-  vertex_shader.cpp
-  fragment_shader.cpp
-  program.cpp
-  shader.cpp
-  vertex_layout.cpp
+  # engine3d.cpp
+  # window.cpp
+  # vao.cpp
+  # vbo.cpp
+  # ebo.cpp
+  # vertex_shader.cpp
+  # fragment_shader.cpp
+  # program.cpp
+  # shader.cpp
+  # vertex_layout.cpp
   camera.cpp
   mesh.cpp
   transformable.cpp
-  cube.cpp
+  # cube.cpp
   fps_camera_controller.cpp
-  material_template.cpp
-  material_manager.cpp
+  # material_template.cpp
+  # material_manager.cpp
   imgui_layer.cpp
-  voxel_engine/voxel.cpp
-  voxel_engine/chunk.cpp
-  voxel_engine/voxel_grid.cpp
-  voxel_rastorizator.cpp
-  ui_elements/triangle_controller.cpp
-  triangle.cpp
-  voxel_engine/voxel_editor.cpp
-  a_star/a_star.cpp
-  a_star/occupancy_cell.cpp
-  a_star/occupancy_grid_3d.cpp
-  a_star/voxel_occupancy_grid_3d.cpp
-  line.cpp
-  point.cpp
-  a_star/nonholonomic_a_star.cpp
-  a_star/curvature_a_star.cpp
-  grid_3d.cpp
-  a_star/reeds_shepp.cpp
-  vtk_mesh_loader.cpp
-  compute_shader.cpp
-  vf_program.cpp
-  compute_program.cpp
-  ssbo.cpp
-  voxel_rasterizator_gpu.cpp
-  voxel_grid_gpu.cpp
-  shader_manager.cpp
-  point_cloud/point_cloud_frame.cpp
-  point_cloud/point_cloud.cpp
-  point_cloud/point_cloud_video.cpp
-  lighting_system.cpp
-  circle_cloud.cpp
-  texture.cpp
-  cubemap.cpp
-  skybox.cpp
-  framebuffer.cpp
-  sphere.cpp
-  quad.cpp
-  texture_manager.cpp
-  pbr_environment.cpp
-  pbr_skybox.cpp
-  third_person_camera_controller.cpp
-  limb.cpp
-  leg.cpp
-  spider.cpp
-  gicp.cpp
-  dispatch_arg.cpp
-  buffer_dispatch_arg.cpp
-  value_dispatch_arg.cpp
-  glsl_preprocessor.cpp
-  opengl_engine.cpp
+  # voxel_engine/voxel.cpp
+  # voxel_engine/chunk.cpp
+  # voxel_engine/voxel_grid.cpp
+  # voxel_rastorizator.cpp
+  # ui_elements/triangle_controller.cpp
+  # triangle.cpp
+  # voxel_engine/voxel_editor.cpp
+  # a_star/a_star.cpp
+  # a_star/occupancy_cell.cpp
+  # a_star/occupancy_grid_3d.cpp
+  # a_star/voxel_occupancy_grid_3d.cpp
+  # line.cpp
+  # point.cpp
+  # a_star/nonholonomic_a_star.cpp
+  # a_star/curvature_a_star.cpp
+  # grid_3d.cpp
+  # a_star/reeds_shepp.cpp
+  # vtk_mesh_loader.cpp
+  # compute_shader.cpp
+  # vf_program.cpp
+  # compute_program.cpp
+  # ssbo.cpp
+  # voxel_rasterizator_gpu.cpp
+  # voxel_grid_gpu.cpp
+  # shader_manager.cpp
+  # point_cloud/point_cloud_frame.cpp
+  # point_cloud/point_cloud.cpp
+  # point_cloud/point_cloud_video.cpp
+  # lighting_system.cpp
+  # circle_cloud.cpp
+  # texture.cpp
+  # cubemap.cpp
+  # skybox.cpp
+  # framebuffer.cpp
+  # sphere.cpp
+  # quad.cpp
+  # texture_manager.cpp
+  # pbr_environment.cpp
+  # pbr_skybox.cpp
+  # third_person_camera_controller.cpp
+  # limb.cpp
+  # leg.cpp
+  # spider.cpp
+  # gicp.cpp
+  # dispatch_arg.cpp
+  # buffer_dispatch_arg.cpp
+  # value_dispatch_arg.cpp
+  # glsl_preprocessor.cpp
+  # opengl_engine.cpp
   vulkan_engine.cpp
   vulkan_window.cpp
   vulkan/shader_module.cpp

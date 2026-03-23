@@ -1,8 +1,10 @@
 #pragma once
 #include "unordered_map"
 #include "iostream"
-#include "mesh.h"
+// #include "mesh.h"
 #include "memory"
+
+class Mesh;
 
 class MeshManager {
 public:

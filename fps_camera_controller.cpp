@@ -6,7 +6,7 @@ FPSCameraController::FPSCameraController(Camera* camera) {
     this->camera = camera;
 }
 
-void FPSCameraController::update_keyboard(Window* window, float delta_time) {
+void FPSCameraController::update_keyboard(VulkanWindow* window, float delta_time) {
     if (window->mouse_state.mode != MouseMode::DISABLED)
         return;
 
@@ -23,7 +23,7 @@ void FPSCameraController::update_keyboard(Window* window, float delta_time) {
             window->show_cursor();
 }
 
-void FPSCameraController::update_mouse(Window* window, float delta_time) {
+void FPSCameraController::update_mouse(VulkanWindow* window, float delta_time) {
     MouseState mouse_state = window->mouse_state;
 
 
@@ -70,7 +70,7 @@ void FPSCameraController::update_mouse(Window* window, float delta_time) {
     camera->front = glm::normalize(front);
 }
 
-void FPSCameraController::update(Window* window, float delta_time) {
+void FPSCameraController::update(VulkanWindow* window, float delta_time) {
     ImGuiIO& io = ImGui::GetIO();
 
     bool ui_wants_mouse = io.WantCaptureMouse;

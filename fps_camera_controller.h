@@ -1,7 +1,7 @@
 #pragma once
 #include "camera.h"
 
-#include <GL/glew.h>
+// #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
@@ -10,7 +10,8 @@
 #include <iostream>
 #include <string>
 #include <chrono>
-#include "window.h"
+// #include "window.h"
+#include "vulkan_window.h"
 
 class FPSCameraController {
 public:
@@ -26,9 +27,9 @@ public:
     float speed = 5.0f;
 
     FPSCameraController(Camera* camera);
-    void update_keyboard(Window* window, float delta_time);
-    void update_mouse(Window* window, float delta_time);
-    void update(Window* window, float delta_time);
+    void update_keyboard(VulkanWindow* window, float delta_time);
+    void update_mouse(VulkanWindow* window, float delta_time);
+    void update(VulkanWindow* window, float delta_time);
 
 
     void move_forward(float dt) {

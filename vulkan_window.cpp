@@ -1,7 +1,8 @@
 #include "vulkan_window.h"
+#include "vulkan_engine.h"
 #include <iostream>
 
-VulkanWindow::VulkanWindow(Engine3D* engine, int width, int height, const std::string& title) {
+VulkanWindow::VulkanWindow(VulkanEngine* engine, int width, int height, const std::string& title) {
     this->engine = engine;
     this->width = width;
     this->height = height;

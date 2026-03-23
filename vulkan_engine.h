@@ -1,8 +1,12 @@
 #pragma once
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/euler_angles.hpp>
+
 #include <vulkan/vulkan.h>
-#include "engine3d.h"
-#include "window.h"
+// #include "engine3d.h"
+// #include "window.h"
 
 
 #include <GLFW/glfw3.h>
@@ -12,24 +16,25 @@
 #include <string>
 #include <vector>
 #include "vulkan_window.h"
+#include <stdexcept>
 
 class GraphicsPipeline;
 class VideoBuffer;
 
-class VulkanEngine : public Engine3D {
+class VulkanEngine {
 public:
     VulkanEngine();
     ~VulkanEngine();
 
-    int init() override;
-    void set_window(Window* window) override;
+    int init();
+    // void set_window(Window* window);
     void set_vulkan_window(VulkanWindow* window);
-    void poll_events() override;
-    void enable_depth_test() override;
+    void poll_events();
+    void enable_depth_test();
 
-    virtual void begin_frame(const glm::vec4& clear_color) override;
-    virtual void end_frame() override;
-    virtual void on_framebuffer_resized(int w, int h) override;
+    virtual void begin_frame(const glm::vec4& clear_color);
+    virtual void end_frame();
+    virtual void on_framebuffer_resized(int w, int h);
 
     void recreate_swapchain();
     void create_framebuffers();

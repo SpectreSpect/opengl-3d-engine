@@ -1,3 +1,4 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -10,68 +11,71 @@
 #include <chrono>
 #include <cmath>
 
-#include "engine3d.h"
-#include "opengl_engine.h"
+// #include "engine3d.h"
+// #include "opengl_engine.h"
 #include "vulkan_engine.h"
 #include <array>
 #include <tuple>
 
-#include "vao.h"
-#include "vbo.h"
-#include "ebo.h"
-#include "vertex_layout.h"
-#include "program.h"
+// #include "vao.h"
+// #include "vbo.h"
+// #include "ebo.h"
+// #include "vertex_layout.h"
+// #include "program.h"
 #include "camera.h"
-#include "mesh.h"
-#include "cube.h"
-#include "window.h"
+// #include "mesh.h"
+// #include "cube.h"
+// #include "window.h"
 #include "fps_camera_controller.h"
-#include "voxel_engine/chunk.h"
-#include "voxel_engine/voxel_grid.h"
-#include "imgui_layer.h"
-#include "voxel_rastorizator.h"
-#include "ui_elements/triangle_controller.h"
-#include "triangle.h"
-#include "a_star/a_star.h"
-#include "line.h"
-#include "a_star/nonholonomic_a_star.h"
-#include "a_star/reeds_shepp.h"
+// #include "voxel_engine/chunk.h"
+// #include "voxel_engine/voxel_grid.h"
+// #include "imgui_layer.h"
+// #include "voxel_rastorizator.h"
+// #include "ui_elements/triangle_controller.h"
+// #include "triangle.h"
+// #include "a_star/a_star.h"
+// #include "line.h"
+// #include "a_star/nonholonomic_a_star.h"
+// #include "a_star/reeds_shepp.h"
 
 #include <cstdint>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <stdexcept>
-#include "point.h"
-#include "point_cloud/point_cloud_frame.h"
-#include "point_cloud/point_cloud_video.h"
+// #include "point.h"
+// #include "point_cloud/point_cloud_frame.h"
+// #include "point_cloud/point_cloud_video.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <vector>
 #include <cmath>
 #include <cstdint>
-#include "math_utils.h"
-#include "light_source.h"
-#include "circle_cloud.h"
-#include "texture.h"
-#include "cubemap.h"
-#include "skybox.h"
-#include "framebuffer.h"
-#include "sphere.h"
-#include "cube.h"
-#include "quad.h"
-#include "texture_manager.h"
-#include "pbr_skybox.h"
+// #include "math_utils.h"
+// #include "light_source.h"
+// #include "circle_cloud.h"
+// #include "texture.h"
+// #include "cubemap.h"
+// #include "skybox.h"
+// #include "framebuffer.h"
+// #include "sphere.h"
+// #include "cube.h"
+// #include "quad.h"
+// #include "texture_manager.h"
+// #include "pbr_skybox.h"
 #include <algorithm>
 #include <random>
-#include "third_person_camera_controller.h"
-#include "spider.h"
+// #include "third_person_camera_controller.h"
+// #include "spider.h"
 #include "vulkan_window.h"
 #include "vulkan/shader_module.h"
 #include "vulkan/video_buffer.h"
 #include "vulkan/vulkan_vertex_layout.h"
 #include "vulkan/graphics_pipeline.h"
+#include "mesh.h"
+#include "pbr_uniform.h"
+#include "imgui_layer.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -79,11 +83,11 @@ struct Vertex {
     glm::vec4 color;
 };
 
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
+// struct UniformBufferObject {
+//     glm::mat4 model;
+//     glm::mat4 view;
+//     glm::mat4 proj;
+// };
 
 
 float clear_col[4] = {0, 0, 0, 1};
@@ -92,11 +96,19 @@ int main() {
     VulkanEngine engine = VulkanEngine();
     VulkanWindow window = VulkanWindow(&engine, 1280, 720, "3D visualization");
     engine.set_vulkan_window(&window);
+    ui::init(window.window);
+
+    Camera camera = Camera();
+    window.set_camera(&camera);
+
+    FPSCameraController camera_controller = FPSCameraController(&camera);
+    camera_controller.speed = 20;
+
 
     ShaderModule vert_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.vert.spv");
     ShaderModule frag_module = ShaderModule(engine.device, "/home/spectre/Projects/test_open_3d/vulkan_test.frag.spv");
 
-    GraphicsPipeline graphics_pipeline = GraphicsPipeline(engine, sizeof(UniformBufferObject), vert_module, frag_module);
+    GraphicsPipeline graphics_pipeline = GraphicsPipeline(engine, sizeof(PBRUniform), vert_module, frag_module);
     
     std::vector<Vertex> vertices = {
         // +Z (front)
@@ -145,46 +157,74 @@ int main() {
         20,21,22, 22,23,20         // -Y
     };
 
-    VideoBuffer vertex_buffer = VideoBuffer(engine, sizeof(Vertex) * vertices.size());
-    vertex_buffer.update_data(vertices.data(), sizeof(Vertex) * vertices.size());
+    Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
 
-    VideoBuffer index_buffer =  VideoBuffer(engine, sizeof(uint32_t) * indices.size());
-    index_buffer.update_data(indices.data(), sizeof(uint32_t) * indices.size());
+    // VideoBuffer vertex_buffer = VideoBuffer(engine, sizeof(Vertex) * vertices.size());
+    // vertex_buffer.update_data(vertices.data(), sizeof(Vertex) * vertices.size());
+
+    // VideoBuffer index_buffer =  VideoBuffer(engine, sizeof(uint32_t) * indices.size());
+    // index_buffer.update_data(indices.data(), sizeof(uint32_t) * indices.size());
 
 
     // Now we need to create the pipline as far as I understand. We will do it here, maybe using some functions that we will also define in this file (main.cpp)
 
+    float last_frame = 0.0f;
     while(window.is_open()) {
+        float currentFrame = (float)glfwGetTime();
+        float delta_time = currentFrame - last_frame;
+        last_frame = currentFrame;  
+
+        camera_controller.update(&window, delta_time);
+
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
 
+        RenderState render_state = {};
 
-        UniformBufferObject ubo{};
+        float aspect = window.get_fbuffer_aspect_ratio();
+        render_state.proj = camera.get_projection_matrix(aspect);
+        render_state.vp = render_state.proj * camera.get_view_matrix();
+        render_state.engine = &engine;
+        render_state.graphics_pipeline = &graphics_pipeline;
+        render_state.camera = &camera;
+
         float t = static_cast<float>(glfwGetTime());
 
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(std::sin(t), 0.0f, 0.0f));
-        model = glm::rotate(model, t, glm::vec3(0.0f, 1.0f, 0.0f));
+        mesh.position = glm::vec3(std::sin(t), 0.0f, 0.0f);
+        mesh.rotation = glm::vec3(0.0f, 1.0f, 0.0f);
 
-        ubo.model = model;
 
-        ubo.view = glm::lookAt(
-                        glm::vec3(2.0f, 2.0f, 2.0f),
-                        glm::vec3(0.0f, 0.0f, 0.0f),
-                        glm::vec3(0.0f, 1.0f, 0.0f)
-                    );
-        ubo.proj  = glm::perspective(glm::radians(45.0f),
-                                    float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height),
-                                    0.1f, 10.0f);
-        ubo.proj[1][1] *= -1.0f;
+        // UniformBufferObject ubo{};
+        // // float t = static_cast<float>(glfwGetTime());
 
-        graphics_pipeline.uniform_buffer.update_data(&ubo, sizeof(ubo));
+        // glm::mat4 model = glm::mat4(1.0f);
+        // model = glm::translate(model, glm::vec3(std::sin(t), 0.0f, 0.0f));
+        // model = glm::rotate(model, t, glm::vec3(0.0f, 1.0f, 0.0f));
+
+        // ubo.model = model;
+
+        // ubo.view = glm::lookAt(
+        //                 glm::vec3(2.0f, 2.0f, 2.0f),
+        //                 glm::vec3(0.0f, 0.0f, 0.0f),
+        //                 glm::vec3(0.0f, 1.0f, 0.0f)
+        //             );
+        // ubo.proj  = glm::perspective(glm::radians(45.0f),
+        //                             float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height),
+        //                             0.1f, 10.0f);
+        // ubo.proj[1][1] *= -1.0f;
+
+        // graphics_pipeline.uniform_buffer.update_data(&ubo, sizeof(ubo));
 
         
-        engine.bind_pipeline(graphics_pipeline);
-        engine.bind_vertex_buffer(vertex_buffer);
-        engine.bind_index_buffer(index_buffer);
 
-        engine.draw_indexed(indices.size());
+        
+        // engine.bind_pipeline(graphics_pipeline);
+        // engine.bind_vertex_buffer(mesh.vertex_buffer);
+        // engine.bind_index_buffer(mesh.index_buffer);
+
+        // engine.draw_indexed(indices.size());
+
+
+        mesh.draw(render_state);
 
         engine.end_frame();
         engine.poll_events();

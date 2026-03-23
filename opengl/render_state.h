@@ -1,6 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
-#include "camera.h"
+// #include "camera.h"
 #include "vulkan/shader_module.h"
 #include "vulkan/graphics_pipeline.h"
 
@@ -12,7 +12,7 @@ struct RenderState {
     glm::mat4 transform;    // accumulated parent->world transform
     ShaderModule* vertex_shader;
     ShaderModule* fragment_shader;
-    Camera* camera;
+    // Camera* camera;
     VulkanEngine* engine;
     GraphicsPipeline* graphics_pipeline;
 

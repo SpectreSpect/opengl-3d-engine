@@ -5,11 +5,11 @@
 #include "mouse_state.h"
 
 class Camera;
-class Engine3D;
+class VulkanEngine;
 
 class VulkanWindow {
 public:
-    Engine3D* engine = nullptr;
+    VulkanEngine* engine = nullptr;
     GLFWwindow* window = nullptr;
     int width = 0;
     int height = 0;
@@ -17,7 +17,7 @@ public:
     MouseState mouse_state;
     Camera* camera = nullptr;
 
-    VulkanWindow(Engine3D* engine, int width, int height, const std::string& title);
+    VulkanWindow(VulkanEngine* engine, int width, int height, const std::string& title);
     ~VulkanWindow();
 
     bool is_open() const;

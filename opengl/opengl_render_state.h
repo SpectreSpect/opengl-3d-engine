@@ -1,20 +1,18 @@
 #pragma once
 #include <glm/glm.hpp>
 #include "camera.h"
-#include "vulkan/shader_module.h"
-#include "vulkan/graphics_pipeline.h"
 
-class VulkanEngine;
+struct Program; // forward
+
+class Engine3D;
 
 struct RenderState {
     glm::mat4 proj;
     glm::mat4 vp;       // projection * view
     glm::mat4 transform;    // accumulated parent->world transform
-    ShaderModule* vertex_shader;
-    ShaderModule* fragment_shader;
+    Program* program;   // shader program to use (optional)
     Camera* camera;
-    VulkanEngine* engine;
-    GraphicsPipeline* graphics_pipeline;
+    Engine3D* engine;
 
     glm::ivec2 viewport_px;
 };

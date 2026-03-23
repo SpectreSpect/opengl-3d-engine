@@ -16,7 +16,7 @@ namespace ui {
     ImGui::NewFrame();
   }
 
-  void update_mouse_mode(Window* window) {
+  void update_mouse_mode(VulkanWindow* window) {
     ImGuiIO& io = ImGui::GetIO();
     if (window->mouse_state.mode == MouseMode::NORMAL)
         io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;

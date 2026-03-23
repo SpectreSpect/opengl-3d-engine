@@ -13,6 +13,7 @@
 #include "drawable.h"
 #include "camera.h"
 #include "mouse_state.h"
+#include "drawable.h"
 // #include "engine3d.h"
 
 class Engine3D;
