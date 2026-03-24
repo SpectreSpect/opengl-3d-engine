@@ -19,6 +19,7 @@ public:
     void bind_combined_image_sampler(uint32_t binding, Texture2D& texture);
     void bind_combined_image_sampler(uint32_t binding, Cubemap& texture);
     void bind_storage_buffer(uint32_t binding, VideoBuffer& buffer);
+    void bind_image_storage(uint32_t binding, Cubemap& buffer);
 
     DescriptorSetBundle() = default;
 };

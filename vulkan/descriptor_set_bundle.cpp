@@ -16,6 +16,10 @@ void DescriptorSetBundle::bind_storage_buffer(uint32_t binding, VideoBuffer& buf
     descriptor_set.write_storage_buffer(binding, buffer);
 }
 
+void DescriptorSetBundle::bind_image_storage(uint32_t binding, Cubemap& texture) {
+    descriptor_set.write_storage_image(binding, texture);
+}
+
 void DescriptorSetBundleBuilder::add_uniform_buffer(uint32_t binding, VkShaderStageFlags stage_flags) {
     entries[binding] = Entry{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, stage_flags, std::monostate{}};
 }
@@ -26,6 +30,10 @@ void DescriptorSetBundleBuilder::add_storage_buffer(uint32_t binding, VkShaderSt
 
 void DescriptorSetBundleBuilder::add_combined_image_sampler(uint32_t binding, VkShaderStageFlags stage_flags) {
     entries[binding] = Entry{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, stage_flags, std::monostate{}};
+}
+
+void DescriptorSetBundleBuilder::add_image_storage(uint32_t binding, VkShaderStageFlags stage_flags) {
+    entries[binding] = Entry{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, stage_flags, std::monostate{}};
 }
 
 void DescriptorSetBundleBuilder::add_uniform_buffer(uint32_t binding, VideoBuffer& video_buffer, VkShaderStageFlags stage_flags) {

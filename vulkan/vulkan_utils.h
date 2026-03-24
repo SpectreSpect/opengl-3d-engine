@@ -124,5 +124,9 @@ namespace vulkan_utils {
 
         throw std::runtime_error("Failed to find a compute queue family");
     }
+
+    inline static uint32_t div_up_u32(uint32_t a, uint32_t b) { 
+        return (a + b - 1u) / b; 
+    }
 }
 

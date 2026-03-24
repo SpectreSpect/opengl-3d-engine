@@ -15,6 +15,7 @@ public:
     VkCommandBuffer buffer;
     CommandBuffer() = default;
     CommandBuffer(CommandPool& command_pool);
+    void create(CommandPool& command_pool);
     void begin();
     void end();
     void bind_pipeline(Pipeline& pipeline);

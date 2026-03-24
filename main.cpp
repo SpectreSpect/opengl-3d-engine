@@ -81,12 +81,12 @@
 #include "vulkan/render_target_2d.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/cubemap.h"
-#include "vulkan/pbr/equirect_to_cubemap_pass.h"
 #include "vulkan/command_pool.h"
 #include "vulkan/command_buffer.h"
 #include "vulkan/compute_pipeline.h"
 #include "vulkan/cubemap.h"
 #include "math_utils.h"
+#include "vulkan/pbr/equirect_to_cubemap_pass.h"
 
 
 struct Vertex {
@@ -98,28 +98,6 @@ struct Vertex {
 };
 
 float clear_col[4] = {0, 0, 0, 1};
-
-
-// GraphicsPipeline get_equirect_to_cubemap_pipeline() {
-//     VulkanVertexLayout vertex_layout;
-//     LayoutInitializer layout_initializer = vertex_layout.get_initializer();
-//     layout_initializer.add(AttrFormat::FLOAT4);
-//     layout_initializer.add(AttrFormat::FLOAT4);
-//     layout_initializer.add(AttrFormat::FLOAT4);
-//     layout_initializer.add(AttrFormat::FLOAT2);
-//     layout_initializer.add(AttrFormat::FLOAT4);
-//     VkPipelineVertexInputStateCreateInfo vertexInput = vertex_layout.get_vertex_intput();
-
-//     uniform_buffer = VideoBuffer(engine, sizeof(PBRUniform));
-
-//     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
-//     builder.add_uniform_buffer(0, uniform_buffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-//     builder.add_combined_image_sampler(1, VK_SHADER_STAGE_FRAGMENT_BIT); // albedo
-
-//     descriptor_set_bundle = builder.create(engine.device);
-
-//     pipeline = GraphicsPipeline(engine, sizeof(PBRUniform), descriptor_set_bundle, vertex_layout, vertex_shader, fragment_shader);
-// }
 
 struct CubePosVertex {
     glm::vec4 position;
@@ -275,27 +253,7 @@ int main() {
 
     Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
 
-    Texture2D hdr_texture = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-                    Texture2D::Wrap::Repeat,
-                    Texture2D::MagFilter::Linear,
-                    Texture2D::MinFilter::LinearMipmapLinear,
-                    true,   // sRGB
-                    true    // flipY
-    );
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
-
-    int face_size = 512;
-    
-    // std::array<Texture2D, 6> faces;
-
-    // for (int i = 0; i < faces.size(); i++) {
-    //     faces[i].create(engine, face_size, face_size, nullptr);
-    //     faces[i].transition_to_general_layout(engine);
-    // }
-
-    // std::array<Texture2D, 6> faces;
-
-    // Texture2D equirectangular_map(engine, "assets/hdr/st_peters_square_night_4k.hdr");
+    EquirectToCubemapPass equirect_to_cubemap_pass(engine);
 
     Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
                 Texture2D::Wrap::Repeat,
@@ -304,111 +262,12 @@ int main() {
                 true,   // sRGB
                 true    // flipY
     );
-    // equirectangular_map.transition_to_general_layout(engine);
 
-    // std::array<std::string, 6> paths = {
-    //     "assets/hdr/st_peters_square_night_4k.hdr",
-    //     "assets/hdr/st_peters_square_night_4k.hdr",
-    //     "assets/hdr/st_peters_square_night_4k.hdr",
-    //     "assets/hdr/st_peters_square_night_4k.hdr",
-    //     "assets/hdr/st_peters_square_night_4k.hdr",
-    //     "assets/hdr/st_peters_square_night_4k.hdr"
-    // };
-
-    // std::array<std::string, 6> paths = {
-    //     "assets/textures/minecraft_dirt/texture.png",
-    //     "assets/textures/minecraft_dirt/texture.png",
-    //     "assets/textures/minecraft_dirt/texture.png",
-    //     "assets/textures/minecraft_dirt/texture.png",
-    //     "assets/textures/minecraft_dirt/texture.png",
-    //     "assets/textures/minecraft_dirt/texture.png"
-    // };
-
-    // Cubemap cubemap(engine, paths);
     Cubemap cubemap;
-    cubemap.createEmpty(engine, face_size);
-    cubemap.transition_to_general_layout(engine);
-    // cubemap.transition_image_layout();
+    cubemap.createEmpty(engine, 512);
     
-
-    CommandPool command_pool(engine.device, engine.physicalDevice);
-    CommandBuffer command_buffer(command_pool);
-
-    ShaderModule equirect_to_cubemap_cs(engine.device, "shaders/equirect_to_cubemap.comp.spv");
-
-    VideoBuffer equirect_to_cubemap_uniform_buffer(engine, sizeof(EquirectToCubemapUniform));
-    // VideoBuffer temp_storage_buffer(engine, sizeof(glm::dvec4));
-
-    EquirectToCubemapUniform equirect_to_cubemap_uniform{};
-    equirect_to_cubemap_uniform.image_width = face_size;
-    equirect_to_cubemap_uniform.image_height = face_size;
-    equirect_to_cubemap_uniform.num_layers = 6;
-    equirect_to_cubemap_uniform_buffer.update_data(&equirect_to_cubemap_uniform, sizeof(EquirectToCubemapUniform));
-
-
-    DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
-    builder.add_uniform_buffer(0, equirect_to_cubemap_uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
-    builder.add_combined_image_sampler(1, equirectangular_map, VK_SHADER_STAGE_COMPUTE_BIT);
-    builder.add_image_storage(2, cubemap, VK_SHADER_STAGE_COMPUTE_BIT);
-    
-    DescriptorSetBundle descriptor_set_bundle = builder.create(engine.device);
-
-    ComputePipeline compute_pipeline(engine.device, descriptor_set_bundle, equirect_to_cubemap_cs);
-
-    uint32_t x_groups = math_utils::div_up_u32(equirect_to_cubemap_uniform.image_width, 256);
-    uint32_t y_groups = equirect_to_cubemap_uniform.image_height;
-    uint32_t z_groups = equirect_to_cubemap_uniform.num_layers;
-    
-
-    command_buffer.begin();
-    command_buffer.bind_pipeline(compute_pipeline);
-    command_buffer.dispatch(x_groups, y_groups, z_groups);
-    // command_buffer.memory_barrier(temp_storage_buffer);
-    command_buffer.end();
-
-    Fence fence(engine.device);
-
-    command_buffer.submit(fence);
-
-    fence.wait_for_fence();
-
-    // glm::dvec4 out{};
-    // temp_storage_buffer.read_subdata(0, &out, sizeof(glm::dvec4));
-
-    // std::cout << "(" << out.x << ", " << out.y << ", " << out.z << ", " << out.w << ")" << std::endl;
-
-    // equirectangular_map.transition_to_shader_read_only_layout(engine);
-    cubemap.transition_to_shader_read_only_layout(engine);
-
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, faces[0]);
+    equirect_to_cubemap_pass.generate(equirectangular_map, cubemap);
     renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
-
-    // Mesh cube_mesh = create_position_cube_mesh(engine);
-    // Cubemap output_cubemap;
-
-    // EquirectToCubemapPass equirect_to_cubemap_pass;
-    // equirect_to_cubemap_pass.create(engine, 512);
-    // equirect_to_cubemap_pass.render(cube_mesh, hdr_texture, output_cubemap);
-
-
-
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
-
-    // RenderPass offscreen_render_pass = RenderPassBuilder()
-    //             .set_color_attachment(RenderPassBuilder::make_offscreen_color_attachment(VK_FORMAT_R16G16B16A16_SFLOAT))
-    //             .set_depth_attachment(RenderPassBuilder::make_offscreen_depth_attachment(vulkan_utils::find_depth_format(engine.physicalDevice)))
-    //             .create(engine.device);
-
-
-    // RenderTarget2D target;
-    // target.create_color_and_depth(
-    //     engine,
-    //     offscreen_render_pass,
-    //     512,
-    //     512,
-    //     VK_FORMAT_R16G16B16A16_SFLOAT
-    // );
-    
 
 
     float last_frame = 0.0f;

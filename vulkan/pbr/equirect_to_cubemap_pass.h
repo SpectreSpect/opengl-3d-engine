@@ -1,40 +1,56 @@
 #pragma once
-#include <vulkan/vulkan.h>
-#include <glm/glm.hpp>
+// #include <vulkan/vulkan.h>
+// #include <glm/glm.hpp>
 
 #include "../../vulkan_engine.h"
+#include "../compute_pipeline.h"
+#include "../fence.h"
 #include "../texture2d.h"
 #include "../cubemap.h"
 #include "../graphics_pipeline.h"
 #include "../descriptor_set_bundle.h"
 #include "../render_target_2d.h"
+#include "../command_pool.h"
+#include "../command_buffer.h"
+// #include "../../math_utils.h"
+// #include <utility>
 
 class Mesh;
 
 class EquirectToCubemapPass {
 public:
-    struct EquirectToCubemapPassUniform {
-        glm::mat4 proj;
-        glm::mat4 view;
+    struct EquirectToCubemapUniform {
+        uint32_t image_width;
+        uint32_t image_height;
+        uint32_t num_layers;
     };
 
     EquirectToCubemapPass() = default;
-
-    void create(VulkanEngine& engine, uint32_t size);
-    void render(Mesh& cube_mesh, Texture2D& hdr_texture, Cubemap& output_cubemap);
+    EquirectToCubemapPass(VulkanEngine& engine);
+    void create(VulkanEngine& engine);
+    void generate(Texture2D& equirectangular_map, Cubemap& output_cubemap);
     void destroy();
 
 private:
     VulkanEngine* engine = nullptr;
-    bool render_target_initialized = false;
-
-    GraphicsPipeline pipeline;
+    ComputePipeline pipeline;
     DescriptorSetBundle descriptor_set_bundle;
-    RenderTarget2D render_target;
-    RenderPass render_pass;
+    Fence fence;
+    VideoBuffer equirect_to_cubemap_uniform_buffer;
+    ShaderModule equirect_to_cubemap_cs;
+    CommandPool command_pool;
+    CommandBuffer command_buffer;
+    uint32_t cubemap_face_size;
 
-    ShaderModule vertex_shader;
-    ShaderModule fragment_shader;
+    // bool render_target_initialized = false;
 
-    VideoBuffer uniform_buffer;
+    // GraphicsPipeline pipeline;
+    // DescriptorSetBundle descriptor_set_bundle;
+    // RenderTarget2D render_target;
+    // RenderPass render_pass;
+
+    // ShaderModule vertex_shader;
+    // ShaderModule fragment_shader;
+
+    // VideoBuffer uniform_buffer;
 };

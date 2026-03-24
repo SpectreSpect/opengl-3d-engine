@@ -3,7 +3,11 @@
 
 
 CommandBuffer::CommandBuffer(CommandPool& command_pool) {
-    if (!command_pool.device)
+    create(command_pool);
+}
+
+void CommandBuffer::create(CommandPool& command_pool) {
+   if (!command_pool.device)
         throw std::runtime_error("Device was nullptr.");
     
     this->command_pool = &command_pool;
