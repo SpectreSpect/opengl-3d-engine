@@ -58,12 +58,13 @@ bool HASH_TABLE_PREFIX(remove_slot_from_hash_table)(SLOT_KEY_TYPE key) {
             #ifdef KEY_COMP_FUNC
                 if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key)) {
                     // atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB);
-                    // atomicAdd(COUNT_TOMBS, 1u);
+                    // atomicAdd(TABLE_COUNTERS.count_tomb, 1u);
                     // return true;
 
                     uint prev = atomicCompSwap(SLOTS_BUFFER[idx].state, SLOT_OCCUPIED, SLOT_TOMB);
                     if (prev == SLOT_OCCUPIED) { // Удаляем слот
-                        atomicAdd(COUNT_TOMBS, 1u);
+                        HASH_TABLE_PREFIX(add_tomb_counter)(idx, 1u);
+                        HASH_TABLE_PREFIX(add_occupied_counter)(idx, 0xFFFFFFFFu);
                         return true;
                     } else if (prev == SLOT_TOMB) return true;
                     else continue;
@@ -72,13 +73,14 @@ bool HASH_TABLE_PREFIX(remove_slot_from_hash_table)(SLOT_KEY_TYPE key) {
                 if (SLOTS_BUFFER[idx].key == key) {
                     uint prev = atomicCompSwap(SLOTS_BUFFER[idx].state, SLOT_OCCUPIED, SLOT_TOMB);
                     if (prev == SLOT_OCCUPIED) { // Удаляем слот
-                        atomicAdd(COUNT_TOMBS, 1u);
+                        HASH_TABLE_PREFIX(add_tomb_counter)(idx, 1u);
+                        HASH_TABLE_PREFIX(add_occupied_counter)(idx, 0xFFFFFFFFu);
                         return true;
                     } else if (prev == SLOT_TOMB) return true;
                     else continue;
 
                     // atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB);
-                    // atomicAdd(COUNT_TOMBS, 1u);
+                    // atomicAdd(TABLE_COUNTERS.count_tomb, 1u);
                     // return true;
                 }
             #endif
@@ -137,8 +139,12 @@ bool HASH_TABLE_PREFIX(set_slot_value)(SLOT_KEY_TYPE key, SLOT_VALUE_TYPE value)
             }
 
             if (slot_state == SLOT_TOMB) {
-                atomicAdd(COUNT_TOMBS, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как COUNT_TOMBS > 0)
+                HASH_TABLE_PREFIX(add_tomb_counter)(idx_to_create, 0xFFFFFFFFu);
+            } else {
+                HASH_TABLE_PREFIX(add_empty_counter)(idx_to_create, 0xFFFFFFFFu);
             }
+
+            HASH_TABLE_PREFIX(add_occupied_counter)(idx_to_create, 1u);
 
             // публикуем key и value
             SLOTS_BUFFER[idx_to_create].key = key;

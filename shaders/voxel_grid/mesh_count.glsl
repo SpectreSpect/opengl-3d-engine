@@ -5,7 +5,7 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
 layout(std430, binding=1) readonly buffer ChunkVoxels { VoxelData voxels[]; };
 layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
 layout(std430, binding=3) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };

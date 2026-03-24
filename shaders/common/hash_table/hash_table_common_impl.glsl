@@ -1,6 +1,8 @@
 #include "../../utils.glsl"
 #include "hash_table_decl.glsl"
 
+#define HASH_TABLE_PREFIX(NAME) PR(HT_PREFIX, NAME)
+
 #ifndef TOMB_CHECK_LIST_SIZE
 #define TOMB_CHECK_LIST_SIZE 32u
 #endif
@@ -11,6 +13,15 @@ uint HASH_TABLE_PREFIX(tomb_check_list)[TOMB_CHECK_LIST_SIZE];
 uint HASH_TABLE_PREFIX(tomb_list_head_id) = INVALID_ID;
 uint HASH_TABLE_PREFIX(tomb_list_tail_id) = INVALID_ID;
 uint HASH_TABLE_PREFIX(tomb_list_count_elements) = 0u;
+
+#define COUNTER_TYPE_NAME empty
+#include "hash_table_counters_impl.glsl"
+
+#define COUNTER_TYPE_NAME occupied
+#include "hash_table_counters_impl.glsl"
+
+#define COUNTER_TYPE_NAME tomb
+#include "hash_table_counters_impl.glsl"
 
 bool HASH_TABLE_PREFIX(push_tomb_id)(uint slot_id) {
     if (HASH_TABLE_PREFIX(tomb_list_count_elements) >= TOMB_CHECK_LIST_SIZE)

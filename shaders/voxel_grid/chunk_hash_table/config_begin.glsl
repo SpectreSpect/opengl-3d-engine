@@ -2,7 +2,7 @@
 #define SLOT_VALUE_TYPE uint
 #define SLOT_KEY_TYPE uvec2
 #define SLOT_TYPE ChunkHashTableSlot
-#define COUNT_TOMBS chunk_hash_table_count_tombs
+#define TABLE_COUNTERS chunk_hash_table_counters
 #define SLOTS_BUFFER chunk_hash_table_slots
 #define HASH_TABLE_SIZE u_chunk_hash_table_size
 #define KEY_HASH_FUNC hash_uvec2

@@ -5,7 +5,7 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=0) buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
 layout(std430, binding=1) buffer FreeList { uint free_count; uint free_list[]; };
 layout(std430, binding=2) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
 layout(std430, binding=3) buffer ChunkMetaBuf { ChunkMeta meta[]; };
@@ -50,5 +50,7 @@ void main() {
         
         is_vb_full = 0u;
         is_ib_full = 0u;
+
+        reset_all_counters_as_empty();
     }
 }

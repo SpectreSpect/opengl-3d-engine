@@ -2,6 +2,7 @@
 #undef SLOT_VALUE_TYPE
 #undef SLOT_KEY_TYPE
 #undef SLOT_TYPE
+#undef TABLE_COUNTERS
 #undef COUNT_TOMBS
 #undef SLOTS_BUFFER
 #undef HASH_TABLE_SIZE

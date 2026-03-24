@@ -44,6 +44,27 @@ struct ChunkHashTableSlot {
 static_assert(sizeof(ChunkHashTableSlot) == 16);
 static_assert(alignof(ChunkHashTableSlot) == 8);
 
+static constexpr uint32_t COUNT_TABLE_COUNTERS = 16u;
+
+struct HashTableCounters {
+    uint32_t count_empty[COUNT_TABLE_COUNTERS];
+    uint32_t count_occupied[COUNT_TABLE_COUNTERS];
+    uint32_t count_tomb[COUNT_TABLE_COUNTERS];
+
+    uint32_t reduce_read_count(size_t counter_offset_bytes) {
+        uint32_t* counter = (uint32_t*)((char*)this + counter_offset_bytes);
+        uint32_t count = 0u;
+        for (uint32_t i = 0u; i < COUNT_TABLE_COUNTERS; i++) count += counter[i];
+        return count;
+    }
+
+    uint32_t reduce_read_count_empty() { return reduce_read_count(offsetof(HashTableCounters, count_empty)); }
+    uint32_t reduce_read_count_occupied() { return reduce_read_count(offsetof(HashTableCounters, count_occupied)); }
+    uint32_t reduce_read_count_tomb() { return reduce_read_count(offsetof(HashTableCounters, count_tomb)); }
+};
+static_assert(sizeof(HashTableCounters) == 192);
+
+
 struct alignas(16) VoxelWriteGPU {
     glm::ivec4 world_voxel;  // xyz, w unused
     VoxelDataGPU voxel_data;

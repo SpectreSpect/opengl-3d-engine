@@ -121,7 +121,9 @@ VoxelGridGPU::VoxelGridGPU(
     voxels_ = BufferObject::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, shader_manager);
 
     // alignof(ChunkHashTableSlot) == 8!!!
-    chunk_hash_table_ = BufferObject(sizeof(uint32_t) * 2 + sizeof(ChunkHashTableSlot) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
+    chunk_hash_table_ = BufferObject(sizeof(HashTableCounters) + sizeof(ChunkHashTableSlot) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
+
+    
 
     world_init_gpu();
     init_draw_buffers();

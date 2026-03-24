@@ -67,9 +67,13 @@ bool HASH_TABLE_PREFIX(get_or_create_slot)(SLOT_KEY_TYPE key, out uint out_slot_
                 }
             #endif
 
-            if (slot_state == SLOT_TOMB) {
-                atomicAdd(COUNT_TOMBS, 0xFFFFFFFFu); // Вычитаем единицу через переполнение (безопасно, так как COUNT_TOMBS > 0)
+            if (slot_state == SLOT_TOMB) {                
+                HASH_TABLE_PREFIX(add_tomb_counter)(idx_to_create, 0xFFFFFFFFu);
+            } else {
+                HASH_TABLE_PREFIX(add_empty_counter)(idx_to_create, 0xFFFFFFFFu);
             }
+
+            HASH_TABLE_PREFIX(add_occupied_counter)(idx_to_create, 1u);
 
             // публикуем key и value
             SLOTS_BUFFER[idx_to_create].key = key;

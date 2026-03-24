@@ -7,7 +7,7 @@ layout(local_size_x = 256) in;
 
 layout(std430, binding=0) readonly buffer VoxelsWriteData { uint count_voxel_writes; uint pad_[3u]; VoxelWrite voxel_writes[]; };
 layout(std430, binding=1) buffer LoadList { uint load_list_counter; uint load_list[]; };
-layout(std430, binding=2) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=2) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
 layout(std430, binding=3) buffer FreeList { uint free_count; uint free_list[]; };
 layout(std430, binding=4) buffer ChunkMetaBuf { ChunkMeta meta[]; };
 

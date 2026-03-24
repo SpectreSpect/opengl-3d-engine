@@ -6,7 +6,7 @@ layout(local_size_x = 256) in;
 // -------------------
 
 // --- hash table ---
-layout(std430, binding=0) coherent buffer ChunkHashTable { uint chunk_hash_table_count_tombs; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
 
 uniform uint u_chunk_hash_table_size;
 

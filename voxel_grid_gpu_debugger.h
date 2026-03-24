@@ -10,6 +10,9 @@
 #include <set>
 #include <filesystem>
 #include <array>
+#include <sstream>
+#include <iomanip>
+#include <string>
 
 #include "buffer_object.h"
 #include "voxel_grid_gpu.h"

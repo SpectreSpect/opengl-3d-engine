@@ -369,9 +369,9 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
 
 void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
     std::vector<ChunkHashTableSlot> chunk_hash_table_slot(voxel_grid->chunk_hash_table_size);
-    voxel_grid->chunk_hash_table_.read_subdata(sizeof(uint32_t) * 2, sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
+    voxel_grid->chunk_hash_table_.read_subdata(sizeof(HashTableCounters), sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
 
-    uint32_t count_tombs_gpu = voxel_grid->chunk_hash_table_.read_scalar<uint32_t>(0u);
+    HashTableCounters counters = voxel_grid->chunk_hash_table_.read_scalar<HashTableCounters>(0u);
 
     uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_occupied_slots = 0u, count_error_states = 0u; 
     for (uint32_t slot_id = 0u; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
@@ -384,24 +384,35 @@ void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
         else count_error_states++;
     }
 
+    auto get_count_string = [&](uint32_t count_cpu) -> std::string {
+        std::ostringstream ss;
+
+        float cpu_percent = static_cast<float>(count_cpu) / voxel_grid->chunk_hash_table_size * 100.0f;
+
+        ss << count_cpu
+        << " (" << std::fixed << std::setprecision(2) << cpu_percent << "%)";
+
+        return ss.str();
+    };
+
     std::cout << "======= CHUNKS HASH TABLE LOG =======" << std::endl;
     std::cout << "Total count hash table slots: " << voxel_grid->chunk_hash_table_size << std::endl;
-    std::cout << "SLOT_EMPTY: " << count_empty_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_empty_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
+
+    std::cout << "**CPU**:" << std::endl;
+    std::cout << "SLOT_EMPTY: " << get_count_string(count_empty_slots) << std::endl;
+    std::cout << "SLOT_TOMB: " << get_count_string(count_tomb_slots) << std::endl;
+    std::cout << "SLOT_OCCUPIED: " << get_count_string(count_occupied_slots) << std::endl;
     std::cout << "SLOT_LOCKED: " << count_lock_slots << "(" 
               << std::fixed << std::setprecision(2) << (float)count_lock_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
-    std::cout << "SLOT_TOMB: " << count_tomb_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_tomb_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
-    std::cout << "SLOT_TOMB_GPU: " << count_tombs_gpu << std::endl;
-    
-    std::cout << "SLOT_OCCUPIED: " << count_occupied_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_occupied_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
+
     std::cout << "ERROR_SLOTS: " << count_error_states << "(" 
               << std::fixed << std::setprecision(2) << (float)count_error_states / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "**GPU**:" << std::endl;
+    std::cout << "SLOT_EMPTY: " << get_count_string(counters.reduce_read_count_empty()) << std::endl;
+    std::cout << "SLOT_TOMB: " << get_count_string(counters.reduce_read_count_tomb()) << std::endl;
+    std::cout << "SLOT_OCCUPIED: " << get_count_string(counters.reduce_read_count_occupied()) << std::endl;
 
     std::cout << std::endl;
 }
