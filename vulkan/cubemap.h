@@ -31,6 +31,8 @@ public:
     VkDevice* device = nullptr;
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 
+    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
     uint32_t size = 0;
     uint32_t mip_levels = 1;
@@ -79,6 +81,13 @@ public:
     int faceSize() const { return static_cast<int>(size); }
     int mipLevels() const { return static_cast<int>(mip_levels); }
 
+    void transition_image_layout(VulkanEngine& engine,
+                                VkImageLayout new_layout,
+                                uint32_t base_mip_level,
+                                uint32_t level_count);
+    void transition_to_general_layout(VulkanEngine& engine);
+    void transition_to_shader_read_only_layout(VulkanEngine& engine);
+
 private:
     struct MinFilterInfo {
         VkFilter min_filter;
@@ -94,11 +103,7 @@ private:
     void create_image_view();
     void create_sampler(MagFilter mag_filter, MinFilter min_filter);
 
-    void transition_image_layout(VulkanEngine& engine,
-                                 VkImageLayout old_layout,
-                                 VkImageLayout new_layout,
-                                 uint32_t base_mip_level,
-                                 uint32_t level_count);
+
 
     void copy_buffer_to_cubemap(VulkanEngine& engine, VkBuffer buffer);
     void generate_mipmaps(VulkanEngine& engine);

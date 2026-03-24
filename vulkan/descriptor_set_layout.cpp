@@ -34,6 +34,18 @@ void DescriptorSetLayout::add_combined_image_sampler(uint32_t binding, VkShaderS
     descriptor_set_bindings.push_back(descriptor_set_binding);
 }
 
+void DescriptorSetLayout::add_image_storage(uint32_t binding, VkShaderStageFlags shader_stage_flags) {
+    VkDescriptorSetLayoutBinding descriptor_set_binding{};
+    descriptor_set_binding.binding = binding;
+    descriptor_set_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptor_set_binding.descriptorCount = 1;
+    descriptor_set_binding.stageFlags = shader_stage_flags;
+    descriptor_set_binding.pImmutableSamplers = nullptr;
+
+    descriptor_set_bindings.push_back(descriptor_set_binding);
+}
+
+
 void DescriptorSetLayout::create(VkDevice& device) {
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

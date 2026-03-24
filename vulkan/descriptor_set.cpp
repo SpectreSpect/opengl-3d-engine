@@ -75,3 +75,45 @@ void DescriptorSet::write_storage_buffer(uint32_t binding, VideoBuffer& buffer) 
 
     vkUpdateDescriptorSets(*buffer.device, 1, &write, 0, nullptr);
 }
+
+void DescriptorSet::write_combined_image_sampler(uint32_t binding, Cubemap& texture) {
+    if (!texture.device)
+        throw std::runtime_error("'device' was nullptr");
+
+    VkDescriptorImageInfo image_info{};
+    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_info.imageView = texture.view;
+    image_info.sampler = texture.sampler;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = descriptor_set;
+    write.dstBinding = binding;
+    write.dstArrayElement = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.descriptorCount = 1;
+    write.pImageInfo = &image_info;
+
+    vkUpdateDescriptorSets(*texture.device, 1, &write, 0, nullptr);
+}
+
+void DescriptorSet::write_storage_image(uint32_t binding, Cubemap& texture) {
+    if (!texture.device)
+        throw std::runtime_error("'device' was nullptr");
+
+    VkDescriptorImageInfo image_info{};
+    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_info.imageView = texture.view;
+    image_info.sampler = texture.sampler;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = descriptor_set;
+    write.dstBinding = binding;
+    write.dstArrayElement = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.descriptorCount = 1;
+    write.pImageInfo = &image_info;
+
+    vkUpdateDescriptorSets(*texture.device, 1, &write, 0, nullptr);
+}

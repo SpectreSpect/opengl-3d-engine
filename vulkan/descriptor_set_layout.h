@@ -15,5 +15,6 @@ public:
     void add_uniform_buffer(uint32_t binding, VkShaderStageFlags shader_stage_flags);
     void add_storage_buffer(uint32_t binding, VkShaderStageFlags shader_stage_flags);
     void add_combined_image_sampler(uint32_t binding, VkShaderStageFlags shader_stage_flags);
+    void add_image_storage(uint32_t binding, VkShaderStageFlags shader_stage_flags);
     void create(VkDevice& device);
 };

@@ -85,6 +85,9 @@
 #include "vulkan/command_pool.h"
 #include "vulkan/command_buffer.h"
 #include "vulkan/compute_pipeline.h"
+#include "vulkan/cubemap.h"
+#include "math_utils.h"
+
 
 struct Vertex {
     glm::vec4 position;
@@ -179,8 +182,10 @@ Mesh create_position_cube_mesh(VulkanEngine& engine) {
     );
 }
 
-struct TempUniform {
-    glm::vec4 input_val;
+struct EquirectToCubemapUniform {
+    uint32_t image_width;
+    uint32_t image_height;
+    uint32_t num_layers;
 };
 
 
@@ -270,40 +275,95 @@ int main() {
 
     Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
 
-    // Texture2D hdr_texture = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-    //                 Texture2D::Wrap::Repeat,
-    //                 Texture2D::MagFilter::Linear,
-    //                 Texture2D::MinFilter::LinearMipmapLinear,
-    //                 true,   // sRGB
-    //                 true    // flipY
-    // );
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
-    
-    Texture2D storage_texture(engine, 10, 10, nullptr);
-    storage_texture.transition_to_general_layout(engine);
+    Texture2D hdr_texture = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
+                    Texture2D::Wrap::Repeat,
+                    Texture2D::MagFilter::Linear,
+                    Texture2D::MinFilter::LinearMipmapLinear,
+                    true,   // sRGB
+                    true    // flipY
+    );
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
 
+    int face_size = 512;
+    
+    // std::array<Texture2D, 6> faces;
+
+    // for (int i = 0; i < faces.size(); i++) {
+    //     faces[i].create(engine, face_size, face_size, nullptr);
+    //     faces[i].transition_to_general_layout(engine);
+    // }
+
+    // std::array<Texture2D, 6> faces;
+
+    // Texture2D equirectangular_map(engine, "assets/hdr/st_peters_square_night_4k.hdr");
+
+    Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
+                Texture2D::Wrap::Repeat,
+                Texture2D::MagFilter::Linear,
+                Texture2D::MinFilter::LinearMipmapLinear,
+                true,   // sRGB
+                true    // flipY
+    );
+    // equirectangular_map.transition_to_general_layout(engine);
+
+    // std::array<std::string, 6> paths = {
+    //     "assets/hdr/st_peters_square_night_4k.hdr",
+    //     "assets/hdr/st_peters_square_night_4k.hdr",
+    //     "assets/hdr/st_peters_square_night_4k.hdr",
+    //     "assets/hdr/st_peters_square_night_4k.hdr",
+    //     "assets/hdr/st_peters_square_night_4k.hdr",
+    //     "assets/hdr/st_peters_square_night_4k.hdr"
+    // };
+
+    // std::array<std::string, 6> paths = {
+    //     "assets/textures/minecraft_dirt/texture.png",
+    //     "assets/textures/minecraft_dirt/texture.png",
+    //     "assets/textures/minecraft_dirt/texture.png",
+    //     "assets/textures/minecraft_dirt/texture.png",
+    //     "assets/textures/minecraft_dirt/texture.png",
+    //     "assets/textures/minecraft_dirt/texture.png"
+    // };
+
+    // Cubemap cubemap(engine, paths);
+    Cubemap cubemap;
+    cubemap.createEmpty(engine, face_size);
+    cubemap.transition_to_general_layout(engine);
+    // cubemap.transition_image_layout();
     
 
     CommandPool command_pool(engine.device, engine.physicalDevice);
     CommandBuffer command_buffer(command_pool);
 
-    ShaderModule compute_shader(engine.device, "shaders/test_compute.comp.spv");
+    ShaderModule equirect_to_cubemap_cs(engine.device, "shaders/equirect_to_cubemap.comp.spv");
 
-    VideoBuffer temp_uniform_buffer(engine, sizeof(TempUniform));
-    VideoBuffer temp_storage_buffer(engine, sizeof(glm::dvec4));
+    VideoBuffer equirect_to_cubemap_uniform_buffer(engine, sizeof(EquirectToCubemapUniform));
+    // VideoBuffer temp_storage_buffer(engine, sizeof(glm::dvec4));
+
+    EquirectToCubemapUniform equirect_to_cubemap_uniform{};
+    equirect_to_cubemap_uniform.image_width = face_size;
+    equirect_to_cubemap_uniform.image_height = face_size;
+    equirect_to_cubemap_uniform.num_layers = 6;
+    equirect_to_cubemap_uniform_buffer.update_data(&equirect_to_cubemap_uniform, sizeof(EquirectToCubemapUniform));
+
 
     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
-    builder.add_uniform_buffer(0, temp_uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
-    builder.add_storage_buffer(1, temp_storage_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
-    builder.add_combined_image_sampler(2, storage_texture, VK_SHADER_STAGE_COMPUTE_BIT);
+    builder.add_uniform_buffer(0, equirect_to_cubemap_uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
+    builder.add_combined_image_sampler(1, equirectangular_map, VK_SHADER_STAGE_COMPUTE_BIT);
+    builder.add_image_storage(2, cubemap, VK_SHADER_STAGE_COMPUTE_BIT);
+    
     DescriptorSetBundle descriptor_set_bundle = builder.create(engine.device);
 
-    ComputePipeline compute_pipeline(engine.device, descriptor_set_bundle, compute_shader);
+    ComputePipeline compute_pipeline(engine.device, descriptor_set_bundle, equirect_to_cubemap_cs);
+
+    uint32_t x_groups = math_utils::div_up_u32(equirect_to_cubemap_uniform.image_width, 256);
+    uint32_t y_groups = equirect_to_cubemap_uniform.image_height;
+    uint32_t z_groups = equirect_to_cubemap_uniform.num_layers;
+    
 
     command_buffer.begin();
     command_buffer.bind_pipeline(compute_pipeline);
-    command_buffer.dispatch(1, 1, 1);
-    command_buffer.memory_barrier(temp_storage_buffer);
+    command_buffer.dispatch(x_groups, y_groups, z_groups);
+    // command_buffer.memory_barrier(temp_storage_buffer);
     command_buffer.end();
 
     Fence fence(engine.device);
@@ -312,14 +372,16 @@ int main() {
 
     fence.wait_for_fence();
 
-    glm::dvec4 out{};
-    temp_storage_buffer.read_subdata(0, &out, sizeof(glm::dvec4));
+    // glm::dvec4 out{};
+    // temp_storage_buffer.read_subdata(0, &out, sizeof(glm::dvec4));
 
-    std::cout << "(" << out.x << ", " << out.y << ", " << out.z << ", " << out.w << ")" << std::endl;
+    // std::cout << "(" << out.x << ", " << out.y << ", " << out.z << ", " << out.w << ")" << std::endl;
 
-    storage_texture.transition_to_shader_read_only_layout(engine);
+    // equirectangular_map.transition_to_shader_read_only_layout(engine);
+    cubemap.transition_to_shader_read_only_layout(engine);
 
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, storage_texture);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, faces[0]);
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
 
     // Mesh cube_mesh = create_position_cube_mesh(engine);
     // Cubemap output_cubemap;

@@ -2,6 +2,7 @@
 #include "renderer.h"
 #include "graphics_pipeline.h"
 #include "shader_module.h"
+#include "cubemap.h"
 
 class PBRRenderer : public Renderer {
 public:
@@ -17,7 +18,8 @@ public:
     GraphicsPipeline pipeline;
 
     VideoBuffer uniform_buffer;
-    Texture2D albedo;
+    // Texture2D albedo;
+    // Cubemap env_map;
     DescriptorSetBundle descriptor_set_bundle;
 
     PBRRenderer() = default;

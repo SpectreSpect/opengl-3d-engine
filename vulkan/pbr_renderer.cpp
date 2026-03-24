@@ -20,6 +20,7 @@ PBRRenderer::PBRRenderer(VulkanEngine& engine, ShaderModule& vertex_shader, Shad
     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
     builder.add_uniform_buffer(0, uniform_buffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     builder.add_combined_image_sampler(1, VK_SHADER_STAGE_FRAGMENT_BIT); // albedo
+    builder.add_combined_image_sampler(2, VK_SHADER_STAGE_FRAGMENT_BIT); // env_map
     descriptor_set_bundle = builder.create(engine.device);
 
     pipeline = GraphicsPipeline(engine, descriptor_set_bundle, vertex_layout, vertex_shader, fragment_shader);

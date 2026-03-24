@@ -8,6 +8,10 @@ void DescriptorSetBundle::bind_combined_image_sampler(uint32_t binding, Texture2
     descriptor_set.write_combined_image_sampler(binding, texture);
 }
 
+void DescriptorSetBundle::bind_combined_image_sampler(uint32_t binding, Cubemap& texture) {
+    descriptor_set.write_combined_image_sampler(binding, texture);
+}
+
 void DescriptorSetBundle::bind_storage_buffer(uint32_t binding, VideoBuffer& buffer) {
     descriptor_set.write_storage_buffer(binding, buffer);
 }
@@ -36,6 +40,14 @@ void DescriptorSetBundleBuilder::add_combined_image_sampler(uint32_t binding, Te
     entries[binding] = Entry{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, stage_flags, &texture};
 }
 
+void DescriptorSetBundleBuilder::add_combined_image_sampler(uint32_t binding, Cubemap& texture, VkShaderStageFlags stage_flags) {
+    entries[binding] = Entry{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, stage_flags, &texture};
+}
+
+void DescriptorSetBundleBuilder::add_image_storage(uint32_t binding, Cubemap& texture, VkShaderStageFlags stage_flags) {
+    entries[binding] = Entry{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, stage_flags, &texture};
+}
+
 DescriptorSetBundle DescriptorSetBundleBuilder::create(VkDevice& device) {
     DescriptorSetBundle bundle;
 
@@ -55,7 +67,9 @@ DescriptorSetBundle DescriptorSetBundleBuilder::create(VkDevice& device) {
             case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                 bundle.descriptor_set_layout.add_combined_image_sampler(it->first, it->second.shader_stage_flags);
                 break;
-
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                bundle.descriptor_set_layout.add_image_storage(it->first, it->second.shader_stage_flags);
+                break;
             default:
                 throw std::runtime_error("Unknown descriptor type.");
         }
@@ -82,6 +96,16 @@ DescriptorSetBundle DescriptorSetBundleBuilder::create(VkDevice& device) {
             case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
                 if (auto ptr = std::get_if<Texture2D*>(&it->second.resource))
                     bundle.descriptor_set.write_combined_image_sampler(it->first, **ptr);
+                else if (auto ptr = std::get_if<Cubemap*>(&it->second.resource))
+                    bundle.descriptor_set.write_combined_image_sampler(it->first, **ptr);
+                break;
+            }
+
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
+                // if (auto ptr = std::get_if<Texture2D*>(&it->second.resource))
+                //     bundle.descriptor_set.write_storage_image(it->first, **ptr);
+                if (auto ptr = std::get_if<Cubemap*>(&it->second.resource))
+                    bundle.descriptor_set.write_storage_image(it->first, **ptr);
                 break;
             }
 

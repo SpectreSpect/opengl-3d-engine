@@ -5,6 +5,7 @@
 #include "descriptor_pool.h"
 #include "video_buffer.h"
 #include "texture2d.h"
+#include "cubemap.h"
 
 
 class DescriptorSet {
@@ -15,5 +16,8 @@ public:
     void create(VkDevice& device, DescriptorSetLayout& layout, DescriptorPool& pool);
     void write_uniform_buffer(uint32_t binding, VideoBuffer& buffer);
     void write_combined_image_sampler(uint32_t binding, Texture2D& texture);
+    void write_combined_image_sampler(uint32_t binding, Cubemap& texture);
+    void write_storage_image(uint32_t binding, Cubemap& texture);
     void write_storage_buffer(uint32_t binding, VideoBuffer& buffer);
+    
 };

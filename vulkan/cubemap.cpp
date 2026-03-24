@@ -11,20 +11,23 @@
 #include "vulkan_utils.h"
 #include "../stb_image.h"
 
-Cubemap::Cubemap(VulkanEngine& engine,
-                 const std::array<std::string, 6>& facepaths,
+Cubemap::Cubemap(VulkanEngine &engine,
+                 const std::array<std::string, 6> &facepaths,
                  MagFilter mag_filter,
                  MinFilter min_filter,
                  bool srgb,
-                 bool flipY) {
+                 bool flipY)
+{
     loadFromFaces(engine, facepaths, mag_filter, min_filter, srgb, flipY);
 }
 
-Cubemap::~Cubemap() {
+Cubemap::~Cubemap()
+{
     destroy();
 }
 
-Cubemap::Cubemap(Cubemap&& other) noexcept {
+Cubemap::Cubemap(Cubemap &&other) noexcept
+{
     image = other.image;
     memory = other.memory;
     view = other.view;
@@ -46,8 +49,10 @@ Cubemap::Cubemap(Cubemap&& other) noexcept {
     other.mip_levels = 1;
 }
 
-Cubemap& Cubemap::operator=(Cubemap&& other) noexcept {
-    if (this != &other) {
+Cubemap &Cubemap::operator=(Cubemap &&other) noexcept
+{
+    if (this != &other)
+    {
         destroy();
 
         image = other.image;
@@ -73,23 +78,28 @@ Cubemap& Cubemap::operator=(Cubemap&& other) noexcept {
     return *this;
 }
 
-void Cubemap::destroy() {
-    if (device && sampler != VK_NULL_HANDLE) {
+void Cubemap::destroy()
+{
+    if (device && sampler != VK_NULL_HANDLE)
+    {
         vkDestroySampler(*device, sampler, nullptr);
         sampler = VK_NULL_HANDLE;
     }
 
-    if (device && view != VK_NULL_HANDLE) {
+    if (device && view != VK_NULL_HANDLE)
+    {
         vkDestroyImageView(*device, view, nullptr);
         view = VK_NULL_HANDLE;
     }
 
-    if (device && image != VK_NULL_HANDLE) {
+    if (device && image != VK_NULL_HANDLE)
+    {
         vkDestroyImage(*device, image, nullptr);
         image = VK_NULL_HANDLE;
     }
 
-    if (device && memory != VK_NULL_HANDLE) {
+    if (device && memory != VK_NULL_HANDLE)
+    {
         vkFreeMemory(*device, memory, nullptr);
         memory = VK_NULL_HANDLE;
     }
@@ -101,7 +111,8 @@ void Cubemap::destroy() {
     mip_levels = 1;
 }
 
-VkDescriptorImageInfo Cubemap::descriptor_info() const {
+VkDescriptorImageInfo Cubemap::descriptor_info() const
+{
     VkDescriptorImageInfo info{};
     info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     info.imageView = view;
@@ -109,38 +120,47 @@ VkDescriptorImageInfo Cubemap::descriptor_info() const {
     return info;
 }
 
-uint32_t Cubemap::compute_mip_levels(uint32_t s) {
+uint32_t Cubemap::compute_mip_levels(uint32_t s)
+{
     return 1u + static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(s))));
 }
 
-VkFilter Cubemap::to_vk_mag_filter(MagFilter filter) {
-    switch (filter) {
-        case MagFilter::Nearest: return VK_FILTER_NEAREST;
-        case MagFilter::Linear:  return VK_FILTER_LINEAR;
-        default:                 return VK_FILTER_LINEAR;
+VkFilter Cubemap::to_vk_mag_filter(MagFilter filter)
+{
+    switch (filter)
+    {
+    case MagFilter::Nearest:
+        return VK_FILTER_NEAREST;
+    case MagFilter::Linear:
+        return VK_FILTER_LINEAR;
+    default:
+        return VK_FILTER_LINEAR;
     }
 }
 
-Cubemap::MinFilterInfo Cubemap::to_vk_min_filter(MinFilter filter) {
-    switch (filter) {
-        case MinFilter::Nearest:
-            return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, false};
-        case MinFilter::Linear:
-            return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, false};
-        case MinFilter::NearestMipmapNearest:
-            return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, true};
-        case MinFilter::LinearMipmapNearest:
-            return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, true};
-        case MinFilter::NearestMipmapLinear:
-            return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR, true};
-        case MinFilter::LinearMipmapLinear:
-            return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, true};
-        default:
-            return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, false};
+Cubemap::MinFilterInfo Cubemap::to_vk_min_filter(MinFilter filter)
+{
+    switch (filter)
+    {
+    case MinFilter::Nearest:
+        return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, false};
+    case MinFilter::Linear:
+        return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, false};
+    case MinFilter::NearestMipmapNearest:
+        return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, true};
+    case MinFilter::LinearMipmapNearest:
+        return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, true};
+    case MinFilter::NearestMipmapLinear:
+        return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR, true};
+    case MinFilter::LinearMipmapLinear:
+        return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, true};
+    default:
+        return {VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, false};
     }
 }
 
-VkCommandBuffer Cubemap::begin_single_time_commands(VulkanEngine& engine) {
+VkCommandBuffer Cubemap::begin_single_time_commands(VulkanEngine &engine)
+{
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -150,8 +170,7 @@ VkCommandBuffer Cubemap::begin_single_time_commands(VulkanEngine& engine) {
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     vulkan_utils::vk_check(
         vkAllocateCommandBuffers(engine.device, &alloc_info, &cmd),
-        "vkAllocateCommandBuffers(cubemap)"
-    );
+        "vkAllocateCommandBuffers(cubemap)");
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -159,17 +178,16 @@ VkCommandBuffer Cubemap::begin_single_time_commands(VulkanEngine& engine) {
 
     vulkan_utils::vk_check(
         vkBeginCommandBuffer(cmd, &begin_info),
-        "vkBeginCommandBuffer(cubemap)"
-    );
+        "vkBeginCommandBuffer(cubemap)");
 
     return cmd;
 }
 
-void Cubemap::end_single_time_commands(VulkanEngine& engine, VkCommandBuffer cmd) {
+void Cubemap::end_single_time_commands(VulkanEngine &engine, VkCommandBuffer cmd)
+{
     vulkan_utils::vk_check(
         vkEndCommandBuffer(cmd),
-        "vkEndCommandBuffer(cubemap)"
-    );
+        "vkEndCommandBuffer(cubemap)");
 
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -178,18 +196,17 @@ void Cubemap::end_single_time_commands(VulkanEngine& engine, VkCommandBuffer cmd
 
     vulkan_utils::vk_check(
         vkQueueSubmit(engine.graphicsQueue, 1, &submit_info, VK_NULL_HANDLE),
-        "vkQueueSubmit(cubemap)"
-    );
+        "vkQueueSubmit(cubemap)");
 
     vulkan_utils::vk_check(
         vkQueueWaitIdle(engine.graphicsQueue),
-        "vkQueueWaitIdle(cubemap)"
-    );
+        "vkQueueWaitIdle(cubemap)");
 
     vkFreeCommandBuffers(engine.device, engine.commandPool, 1, &cmd);
 }
 
-void Cubemap::create_image(VulkanEngine& engine, VkFormat image_format, VkImageUsageFlags usage) {
+void Cubemap::create_image(VulkanEngine &engine, VkFormat image_format, VkImageUsageFlags usage)
+{
     device = &engine.device;
     physical_device = engine.physicalDevice;
     format = image_format;
@@ -212,8 +229,7 @@ void Cubemap::create_image(VulkanEngine& engine, VkFormat image_format, VkImageU
 
     vulkan_utils::vk_check(
         vkCreateImage(engine.device, &image_info, nullptr, &image),
-        "vkCreateImage(cubemap)"
-    );
+        "vkCreateImage(cubemap)");
 
     VkMemoryRequirements mem_requirements{};
     vkGetImageMemoryRequirements(engine.device, image, &mem_requirements);
@@ -224,21 +240,19 @@ void Cubemap::create_image(VulkanEngine& engine, VkFormat image_format, VkImageU
     alloc_info.memoryTypeIndex = vulkan_utils::find_memory_type(
         engine.physicalDevice,
         mem_requirements.memoryTypeBits,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-    );
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     vulkan_utils::vk_check(
         vkAllocateMemory(engine.device, &alloc_info, nullptr, &memory),
-        "vkAllocateMemory(cubemap)"
-    );
+        "vkAllocateMemory(cubemap)");
 
     vulkan_utils::vk_check(
         vkBindImageMemory(engine.device, image, memory, 0),
-        "vkBindImageMemory(cubemap)"
-    );
+        "vkBindImageMemory(cubemap)");
 }
 
-void Cubemap::create_image_view() {
+void Cubemap::create_image_view()
+{
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_info.image = image;
@@ -252,11 +266,11 @@ void Cubemap::create_image_view() {
 
     vulkan_utils::vk_check(
         vkCreateImageView(*device, &view_info, nullptr, &view),
-        "vkCreateImageView(cubemap)"
-    );
+        "vkCreateImageView(cubemap)");
 }
 
-void Cubemap::create_sampler(MagFilter mag_filter, MinFilter min_filter) {
+void Cubemap::create_sampler(MagFilter mag_filter, MinFilter min_filter)
+{
     const auto min_info = to_vk_min_filter(min_filter);
 
     VkSamplerCreateInfo sampler_info{};
@@ -279,20 +293,19 @@ void Cubemap::create_sampler(MagFilter mag_filter, MinFilter min_filter) {
 
     vulkan_utils::vk_check(
         vkCreateSampler(*device, &sampler_info, nullptr, &sampler),
-        "vkCreateSampler(cubemap)"
-    );
+        "vkCreateSampler(cubemap)");
 }
 
-void Cubemap::transition_image_layout(VulkanEngine& engine,
-                                      VkImageLayout old_layout,
+void Cubemap::transition_image_layout(VulkanEngine &engine,
                                       VkImageLayout new_layout,
                                       uint32_t base_mip_level,
-                                      uint32_t level_count) {
+                                      uint32_t level_count)
+{
     VkCommandBuffer cmd = begin_single_time_commands(engine);
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = old_layout;
+    barrier.oldLayout = layout;
     barrier.newLayout = new_layout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -306,38 +319,119 @@ void Cubemap::transition_image_layout(VulkanEngine& engine,
     VkPipelineStageFlags src_stage;
     VkPipelineStageFlags dst_stage;
 
-    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    // if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+    //     new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    //     barrier.srcAccessMask = 0;
+    //     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //     dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    // } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+    //            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    //     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    //     src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    //     dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    // } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+    //            new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+    //     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    //     src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    //     dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    // } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL &&
+    //            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    //     barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    //     src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    //     dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    // } else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+    //            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    //     barrier.srcAccessMask = 0;
+    //     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    //     src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //     dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    // } else {
+    //     throw std::runtime_error("Unsupported cubemap layout transition");
+    // }
+
+    if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    }
+    else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+    }
+    else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+    {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    }
+    else if (layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    }
+    else if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+             new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else {
-        throw std::runtime_error("Unsupported cubemap layout transition");
+    }
+    else if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+             new_layout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        // First use as storage image in compute
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+    else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        // Was sampled in fragment shader, now will be written again in compute
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+    else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             new_layout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        // Uploaded/copied into image, now compute will write/read it
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+    else if (layout == VK_IMAGE_LAYOUT_GENERAL &&
+             new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        // Compute wrote the image, now fragment shader will sample it
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        throw std::runtime_error("Unsupported Texture2D layout transition");
     }
 
     vkCmdPipelineBarrier(
@@ -347,21 +441,34 @@ void Cubemap::transition_image_layout(VulkanEngine& engine,
         0,
         0, nullptr,
         0, nullptr,
-        1, &barrier
-    );
+        1, &barrier);
+
+    this->layout = new_layout;
 
     end_single_time_commands(engine, cmd);
 }
 
-void Cubemap::copy_buffer_to_cubemap(VulkanEngine& engine, VkBuffer buffer) {
+void Cubemap::transition_to_general_layout(VulkanEngine &engine)
+{
+    transition_image_layout(engine, VK_IMAGE_LAYOUT_GENERAL, 0, mip_levels);
+}
+
+void Cubemap::transition_to_shader_read_only_layout(VulkanEngine &engine)
+{
+    transition_image_layout(engine, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, mip_levels);
+}
+
+void Cubemap::copy_buffer_to_cubemap(VulkanEngine &engine, VkBuffer buffer)
+{
     VkCommandBuffer cmd = begin_single_time_commands(engine);
 
     std::array<VkBufferImageCopy, 6> regions{};
 
     const VkDeviceSize face_size_bytes = static_cast<VkDeviceSize>(size) * size * 4;
 
-    for (uint32_t face = 0; face < 6; ++face) {
-        auto& region = regions[face];
+    for (uint32_t face = 0; face < 6; ++face)
+    {
+        auto &region = regions[face];
         region.bufferOffset = face_size_bytes * face;
         region.bufferRowLength = 0;
         region.bufferImageHeight = 0;
@@ -379,17 +486,18 @@ void Cubemap::copy_buffer_to_cubemap(VulkanEngine& engine, VkBuffer buffer) {
         image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         static_cast<uint32_t>(regions.size()),
-        regions.data()
-    );
+        regions.data());
 
     end_single_time_commands(engine, cmd);
 }
 
-void Cubemap::generate_mipmaps(VulkanEngine& engine) {
+void Cubemap::generate_mipmaps(VulkanEngine &engine)
+{
     VkFormatProperties format_properties{};
     vkGetPhysicalDeviceFormatProperties(engine.physicalDevice, format, &format_properties);
 
-    if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
+    if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+    {
         throw std::runtime_error("Cubemap format does not support linear blitting for mipmaps");
     }
 
@@ -407,7 +515,8 @@ void Cubemap::generate_mipmaps(VulkanEngine& engine) {
 
     int32_t mip_size = static_cast<int32_t>(size);
 
-    for (uint32_t i = 1; i < mip_levels; ++i) {
+    for (uint32_t i = 1; i < mip_levels; ++i)
+    {
         barrier.subresourceRange.baseMipLevel = i - 1;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -421,13 +530,13 @@ void Cubemap::generate_mipmaps(VulkanEngine& engine) {
             0,
             0, nullptr,
             0, nullptr,
-            1, &barrier
-        );
+            1, &barrier);
 
         std::array<VkImageBlit, 6> blits{};
 
-        for (uint32_t face = 0; face < 6; ++face) {
-            auto& blit = blits[face];
+        for (uint32_t face = 0; face < 6; ++face)
+        {
+            auto &blit = blits[face];
 
             blit.srcOffsets[0] = {0, 0, 0};
             blit.srcOffsets[1] = {mip_size, mip_size, 1};
@@ -440,22 +549,21 @@ void Cubemap::generate_mipmaps(VulkanEngine& engine) {
             blit.dstOffsets[1] = {
                 std::max(1, mip_size / 2),
                 std::max(1, mip_size / 2),
-                1
-            };
+                1};
             blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             blit.dstSubresource.mipLevel = i;
             blit.dstSubresource.baseArrayLayer = face;
             blit.dstSubresource.layerCount = 1;
         }
 
-        for (const auto& blit : blits) {
+        for (const auto &blit : blits)
+        {
             vkCmdBlitImage(
                 cmd,
                 image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &blit,
-                VK_FILTER_LINEAR
-            );
+                VK_FILTER_LINEAR);
         }
 
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -470,10 +578,10 @@ void Cubemap::generate_mipmaps(VulkanEngine& engine) {
             0,
             0, nullptr,
             0, nullptr,
-            1, &barrier
-        );
+            1, &barrier);
 
-        if (mip_size > 1) mip_size /= 2;
+        if (mip_size > 1)
+            mip_size /= 2;
     }
 
     barrier.subresourceRange.baseMipLevel = mip_levels - 1;
@@ -489,20 +597,21 @@ void Cubemap::generate_mipmaps(VulkanEngine& engine) {
         0,
         0, nullptr,
         0, nullptr,
-        1, &barrier
-    );
+        1, &barrier);
 
     end_single_time_commands(engine, cmd);
 }
 
-void Cubemap::createEmpty(VulkanEngine& engine,
+void Cubemap::createEmpty(VulkanEngine &engine,
                           int face_size,
                           VkFormat image_format,
                           MagFilter mag_filter,
-                          MinFilter min_filter) {
+                          MinFilter min_filter)
+{
     destroy();
 
-    if (face_size <= 0) {
+    if (face_size <= 0)
+    {
         throw std::runtime_error("Cubemap face size must be positive");
     }
 
@@ -513,23 +622,28 @@ void Cubemap::createEmpty(VulkanEngine& engine,
 
     VkImageUsageFlags usage =
         VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT |
         VK_IMAGE_USAGE_TRANSFER_DST_BIT |
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     create_image(engine, image_format, usage);
-    transition_image_layout(engine, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, mip_levels);
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    transition_image_layout(engine, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, mip_levels);
     create_image_view();
     create_sampler(mag_filter, min_filter);
 }
 
-bool Cubemap::loadFromFaces(VulkanEngine& engine,
-                            const std::array<std::string, 6>& facepaths,
+bool Cubemap::loadFromFaces(VulkanEngine &engine,
+                            const std::array<std::string, 6> &facepaths,
                             MagFilter mag_filter,
                             MinFilter min_filter,
                             bool srgb,
-                            bool flipY) {
+                            bool flipY)
+{
     destroy();
+
+    this->device = &engine.device;
 
     stbi_set_flip_vertically_on_load(flipY ? 1 : 0);
 
@@ -537,35 +651,45 @@ bool Cubemap::loadFromFaces(VulkanEngine& engine,
     int h = 0;
     int channels = 0;
 
-    std::array<stbi_uc*, 6> pixels{};
-    for (int i = 0; i < 6; ++i) {
+    std::array<stbi_uc *, 6> pixels{};
+    for (int i = 0; i < 6; ++i)
+    {
         int face_w = 0;
         int face_h = 0;
         int face_channels = 0;
 
         pixels[i] = stbi_load(facepaths[i].c_str(), &face_w, &face_h, &face_channels, STBI_rgb_alpha);
-        if (!pixels[i]) {
-            for (int j = 0; j < i; ++j) {
+        if (!pixels[i])
+        {
+            for (int j = 0; j < i; ++j)
+            {
                 stbi_image_free(pixels[j]);
             }
             stbi_set_flip_vertically_on_load(0);
             return false;
         }
 
-        if (i == 0) {
+        if (i == 0)
+        {
             w = face_w;
             h = face_h;
             channels = 4;
-            if (w != h) {
-                for (int j = 0; j <= i; ++j) {
+            if (w != h)
+            {
+                for (int j = 0; j <= i; ++j)
+                {
                     stbi_image_free(pixels[j]);
                 }
                 stbi_set_flip_vertically_on_load(0);
                 return false;
             }
-        } else {
-            if (face_w != w || face_h != h || face_w != face_h) {
-                for (int j = 0; j <= i; ++j) {
+        }
+        else
+        {
+            if (face_w != w || face_h != h || face_w != face_h)
+            {
+                for (int j = 0; j <= i; ++j)
+                {
                     stbi_image_free(pixels[j]);
                 }
                 stbi_set_flip_vertically_on_load(0);
@@ -584,7 +708,8 @@ bool Cubemap::loadFromFaces(VulkanEngine& engine,
     const VkDeviceSize total_size = face_size_bytes * 6;
 
     std::vector<stbi_uc> combined(static_cast<size_t>(total_size));
-    for (int face = 0; face < 6; ++face) {
+    for (int face = 0; face < 6; ++face)
+    {
         std::memcpy(combined.data() + face * face_size_bytes, pixels[face], static_cast<size_t>(face_size_bytes));
         stbi_image_free(pixels[face]);
     }
@@ -592,10 +717,14 @@ bool Cubemap::loadFromFaces(VulkanEngine& engine,
     stbi_set_flip_vertically_on_load(0);
 
     VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT |
         VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-        VK_IMAGE_USAGE_SAMPLED_BIT;
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    if (mip_levels > 1) {
+    if (mip_levels > 1)
+    {
         usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
 
@@ -605,29 +734,31 @@ bool Cubemap::loadFromFaces(VulkanEngine& engine,
         engine,
         total_size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    );
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     staging.update_data(combined.data(), total_size);
 
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
     transition_image_layout(engine,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                             0, mip_levels);
 
     copy_buffer_to_cubemap(engine, staging.buffer);
 
-    if (mip_levels > 1) {
+    if (mip_levels > 1)
+    {
         generate_mipmaps(engine);
-    } else {
+    }
+    else
+    {
+        layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         transition_image_layout(engine,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                 0, 1);
     }
 
-    vkDestroyBuffer(engine.device, staging.buffer, nullptr);
-    vkFreeMemory(engine.device, staging.buffer_memory, nullptr);
+    // vkDestroyBuffer(engine.device, staging.buffer, nullptr);
+    // vkFreeMemory(engine.device, staging.buffer_memory, nullptr);
 
     create_image_view();
     create_sampler(mag_filter, min_filter);
