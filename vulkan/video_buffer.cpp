@@ -1,22 +1,82 @@
 #include "video_buffer.h"
 #include "../vulkan_engine.h"
 
-
-VideoBuffer::VideoBuffer(VkDevice& device, VkPhysicalDevice& physical_device, VkDeviceSize size, 
+VideoBuffer::VideoBuffer(VkDevice& device, VkPhysicalDevice& physical_device, VkDeviceSize size,
                          VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
     create(device, physical_device, size, usage, properties);
 }
 
-VideoBuffer::VideoBuffer(VulkanEngine& engine, VkDeviceSize size, 
+VideoBuffer::VideoBuffer(VulkanEngine& engine, VkDeviceSize size,
                          VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
     create(engine.device, engine.physicalDevice, size, usage, properties);
 }
 
-void VideoBuffer::create(VkDevice& device, VkPhysicalDevice& physical_device, VkDeviceSize size, 
+VideoBuffer::~VideoBuffer() {
+    destroy();
+}
+
+VideoBuffer::VideoBuffer(VideoBuffer&& other) noexcept {
+    buffer = other.buffer;
+    buffer_memory = other.buffer_memory;
+    device = other.device;
+    size_bytes = other.size_bytes;
+
+    other.buffer = VK_NULL_HANDLE;
+    other.buffer_memory = VK_NULL_HANDLE;
+    other.device = nullptr;
+    other.size_bytes = 0;
+}
+
+VideoBuffer& VideoBuffer::operator=(VideoBuffer&& other) noexcept {
+    if (this != &other) {
+        destroy();
+
+        buffer = other.buffer;
+        buffer_memory = other.buffer_memory;
+        device = other.device;
+        size_bytes = other.size_bytes;
+
+        other.buffer = VK_NULL_HANDLE;
+        other.buffer_memory = VK_NULL_HANDLE;
+        other.device = nullptr;
+        other.size_bytes = 0;
+    }
+    return *this;
+}
+
+void VideoBuffer::read_subdata(VkDeviceSize offset_bytes, void* out, VkDeviceSize out_bytes) {
+    if (!device)
+        throw std::runtime_error("device was null");
+
+    void* mapped = nullptr;
+    vkMapMemory(*device, buffer_memory, offset_bytes, out_bytes, 0, &mapped);
+
+    if (!mapped)
+        throw std::runtime_error("failed to map");
+
+    std::memcpy(out, mapped, static_cast<size_t>(out_bytes));
+    vkUnmapMemory(*device, buffer_memory);
+}
+
+void VideoBuffer::destroy() {
+    if (device && buffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(*device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+    }
+    if (device && buffer_memory != VK_NULL_HANDLE) {
+        vkFreeMemory(*device, buffer_memory, nullptr);
+        buffer_memory = VK_NULL_HANDLE;
+    }
+    device = nullptr;
+    size_bytes = 0;
+}
+
+void VideoBuffer::create(VkDevice& device, VkPhysicalDevice& physical_device, VkDeviceSize size,
                          VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+    destroy();
+
+    this->size_bytes = size;
     this->device = &device;
-    buffer = VK_NULL_HANDLE;
-    buffer_memory = VK_NULL_HANDLE;
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -52,12 +112,16 @@ void VideoBuffer::create(VkDevice& device, VkPhysicalDevice& physical_device, Vk
     );
 }
 
-void VideoBuffer::create(VulkanEngine& engine, VkDeviceSize size, 
+void VideoBuffer::create(VulkanEngine& engine, VkDeviceSize size,
                          VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
-    create(engine.device, engine.physicalDevice, usage, properties);
+    create(engine.device, engine.physicalDevice, size, usage, properties);
 }
 
 void VideoBuffer::update_data(void* data, VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags) {
+    if (!device || buffer_memory == VK_NULL_HANDLE) {
+        throw std::runtime_error("VideoBuffer::update_data on uninitialized buffer");
+    }
+
     void* mapped_memory = nullptr;
     vulkan_utils::vk_check(
         vkMapMemory(*device, buffer_memory, offset, size, flags, &mapped_memory),

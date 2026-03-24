@@ -1,7 +1,40 @@
 #include "shader_module.h"
 
 ShaderModule::ShaderModule(VkDevice& device, const std::filesystem::path& path) {
-    create(device, path);
+    create(device, path.string());
+}
+
+ShaderModule::~ShaderModule() {
+    destroy();
+}
+
+ShaderModule::ShaderModule(ShaderModule&& other) noexcept {
+    shader_module = other.shader_module;
+    device = other.device;
+
+    other.shader_module = VK_NULL_HANDLE;
+    other.device = nullptr;
+}
+
+ShaderModule& ShaderModule::operator=(ShaderModule&& other) noexcept {
+    if (this != &other) {
+        destroy();
+
+        shader_module = other.shader_module;
+        device = other.device;
+
+        other.shader_module = VK_NULL_HANDLE;
+        other.device = nullptr;
+    }
+    return *this;
+}
+
+void ShaderModule::destroy() {
+    if (device && shader_module != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(*device, shader_module, nullptr);
+        shader_module = VK_NULL_HANDLE;
+    }
+    device = nullptr;
 }
 
 std::vector<char> ShaderModule::read_file(const std::string& filename) {
@@ -21,12 +54,14 @@ std::vector<char> ShaderModule::read_file(const std::string& filename) {
 }
 
 void ShaderModule::create(VkDevice& device, const std::vector<char>& code) {
+    destroy();
+    this->device = &device;
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
     createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
-    shader_module = VK_NULL_HANDLE;
     vulkan_utils::vk_check(
         vkCreateShaderModule(device, &createInfo, nullptr, &shader_module),
         "vkCreateShaderModule"

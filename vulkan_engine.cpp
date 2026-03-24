@@ -282,6 +282,11 @@ void VulkanEngine::createDepthResources(
     );
 }
 
+// void VulkanEngine::bind_descriptor_set(DescriptorSet& descriptor_set) {
+//     vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+//                             graphics_pipeline.pipeline_layout, 0, 1, &graphics_pipeline.descriptor_set.descriptor_set, 0, nullptr);
+// }
+
 void VulkanEngine::bind_pipeline(GraphicsPipeline& graphics_pipeline) {
     vkCmdBindPipeline(
             currentCommandBuffer,
@@ -290,7 +295,7 @@ void VulkanEngine::bind_pipeline(GraphicsPipeline& graphics_pipeline) {
         );
 
     vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                            graphics_pipeline.pipeline_layout, 0, 1, &graphics_pipeline.descriptorSet, 0, nullptr);
+                            graphics_pipeline.pipeline_layout, 0, 1, &graphics_pipeline.descriptor_set_bundle->descriptor_set.descriptor_set, 0, nullptr);
 }
 
 void VulkanEngine::bind_vertex_buffer(VideoBuffer& vertex_buffer) {
@@ -339,6 +344,8 @@ void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
         return;
     }
 
+    
+
     vk_check(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX),
              "vkWaitForFences");
 
@@ -366,6 +373,8 @@ void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
 
     vk_check(vkResetCommandBuffer(currentCommandBuffer, 0), "vkResetCommandBuffer");
 
+    
+
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -388,6 +397,8 @@ void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
     rpInfo.renderArea.extent = swapchainExtent;
     rpInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     rpInfo.pClearValues = clearValues.data();
+
+    set_viewport_and_scissor({(unsigned int)fbW, (unsigned int)fbH});
 
     vkCmdBeginRenderPass(currentCommandBuffer, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -946,3 +957,26 @@ void VulkanEngine::createImageViews() {
                  "vkCreateImageView");
     }
 }
+
+
+void VulkanEngine::set_viewport_and_scissor(VkExtent2D extent) {
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(currentCommandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+    vkCmdSetScissor(currentCommandBuffer, 0, 1, &scissor);
+}
+
+// VkQueue VulkanEngine::get_compute_queue() {
+//     VkQueue computeQueue;
+//     vkGetDeviceQueue(device, computeQueueFamilyIndex, 0, &computeQueue);
+//     return computeQueue;
+// }

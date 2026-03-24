@@ -1,12 +1,38 @@
 #include "graphics_pipeline.h"
 #include "../vulkan_engine.h"
 
-GraphicsPipeline::GraphicsPipeline(VulkanEngine& engine, uint32_t uniform_buffer_size, ShaderModule& vert_module, ShaderModule& frag_module) {
-    create(engine, uniform_buffer_size, vert_module, frag_module);
+GraphicsPipeline::GraphicsPipeline(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle,
+                                   VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module) {
+    create(engine,  descriptor_set_bundle, vertex_layout, vert_module, frag_module);
 }
 
-void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_device, VkRenderPass& render_pass, VkExtent2D& swapchain_extent, uint32_t uniform_buffer_size,
-                              VkShaderModule& vert_module, VkShaderModule& frag_module){
+void GraphicsPipeline::create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent, DescriptorSetBundle& descriptor_set_bundle,
+                              VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module) {
+    create(engine.device,
+           engine.physicalDevice,
+           render_pass.render_pass,
+           extent,
+           descriptor_set_bundle,
+           vertex_layout,
+           vert_module,
+           frag_module);
+}
+
+void GraphicsPipeline::create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent, DescriptorSetBundle& descriptor_set_bundle,
+                              VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module) {
+    create(engine,
+           render_pass,
+           extent,
+           descriptor_set_bundle,
+           vertex_layout,
+           vert_module.shader_module,
+           frag_module.shader_module);
+}
+void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_device, VkRenderPass& render_pass, 
+                              VkExtent2D& swapchain_extent,
+                              DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module){
+        this->descriptor_set_bundle = &descriptor_set_bundle;
+
     VkPipelineShaderStageCreateInfo vertStage{};
     vertStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -21,37 +47,30 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertStage, fragStage };
 
-    VulkanVertexLayout vertex_layout;
-    LayoutInitializer layout_initializer = vertex_layout.get_initializer();
-    layout_initializer.add(AttrFormat::FLOAT4);
-    layout_initializer.add(AttrFormat::FLOAT4);
-    layout_initializer.add(AttrFormat::FLOAT4);
     VkPipelineVertexInputStateCreateInfo vertexInput = vertex_layout.get_vertex_intput();
-    
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(swapchain_extent.width);
-    viewport.height = static_cast<float>(swapchain_extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapchain_extent;
-
+    // No baked-in viewport/scissor anymore
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportState.viewportCount = 1;
-    viewportState.pViewports = &viewport;
+    viewportState.pViewports = nullptr;
     viewportState.scissorCount = 1;
-    viewportState.pScissors = &scissor;
+    viewportState.pScissors = nullptr;
+
+    VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
 
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -90,86 +109,10 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    uboLayoutBinding.pImmutableSamplers = nullptr;
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
-
-    // VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    VulkanEngine::vk_check(
-        vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout),
-        "vkCreateDescriptorSetLayout"
-    );
-
-    uniform_buffer = VideoBuffer(device, physical_device, uniform_buffer_size);
-
-    // VkBuffer uniformBuffer = uniform_buffer.buffer;
-
-    // createBuffer(
-    //     engine.device,
-    //     engine.physicalDevice,
-    //     sizeof(UniformBufferObject),
-    //     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-    //     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-    //     uniformBuffer,
-    //     uniformBufferMemory
-    // );
-
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = 1;
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = 1;
-
-    // VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-    VulkanEngine::vk_check(
-        vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool),
-        "vkCreateDescriptorPool"
-    );
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = descriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &descriptorSetLayout;
-
-    // VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-    VulkanEngine::vk_check(
-        vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet),
-        "vkAllocateDescriptorSets"
-    );
-
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = uniform_buffer.buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = uniform_buffer_size;
-
-    VkWriteDescriptorSet descriptorWrite{};
-    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = descriptorSet;
-    descriptorWrite.dstBinding = 0;
-    descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pBufferInfo = &bufferInfo;
-
-    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
-
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &descriptor_set_bundle.descriptor_set_layout.layout;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -189,6 +132,7 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipeline_layout;
     pipelineInfo.renderPass = render_pass;
     pipelineInfo.subpass = 0;
@@ -200,10 +144,13 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
     );
 }
 
-void GraphicsPipeline::create(VulkanEngine& engine, uint32_t uniform_buffer_size, VkShaderModule& vert_module, VkShaderModule& frag_module) {
-    create(engine.device, engine.physicalDevice, engine.renderPass, engine.swapchainExtent, uniform_buffer_size, vert_module, frag_module);
+void GraphicsPipeline::create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, 
+                              VkShaderModule& vert_module, VkShaderModule& frag_module) {
+    create(engine.device, engine.physicalDevice, engine.renderPass, engine.swapchainExtent,
+        descriptor_set_bundle, vertex_layout, vert_module, frag_module);
 }
 
-void GraphicsPipeline::create(VulkanEngine& engine, uint32_t uniform_buffer_size, ShaderModule& vert_module, ShaderModule& frag_module) {
-    create(engine, uniform_buffer_size, vert_module.shader_module, frag_module.shader_module);
+void GraphicsPipeline::create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, 
+                              ShaderModule& vert_module, ShaderModule& frag_module) {
+    create(engine, descriptor_set_bundle, vertex_layout, vert_module.shader_module, frag_module.shader_module);
 }

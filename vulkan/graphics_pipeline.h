@@ -4,26 +4,46 @@
 #include "video_buffer.h"
 #include "shader_module.h"
 #include "video_buffer.h"
+#include "descriptor_set_layout.h"
+#include "descriptor_pool.h"
+#include "descriptor_set.h"
+#include "descriptor_set_bundle.h"
+#include "render_pass.h"
 
 class VulkanEngine;
 
 class GraphicsPipeline : public Pipeline {
 public:
-    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkPipeline pipeline = VK_NULL_HANDLE;
     
     
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    // VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    // VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+    // VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-    VideoBuffer uniform_buffer;
+    
+    
+    // DescriptorSetLayout descriptor_set_layout;
+    // DescriptorPool descriptor_pool;
+    // DescriptorSet descriptor_set;
+
+    // VideoBuffer uniform_buffer;
 
     GraphicsPipeline() = default;
-    GraphicsPipeline(VulkanEngine& engine, uint32_t uniform_buffer_size, ShaderModule& vert_module, ShaderModule& frag_module);
+    GraphicsPipeline(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module);
+    void create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent, DescriptorSetBundle& descriptor_set_bundle,
+            VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module);
+
+    void create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent,
+                DescriptorSetBundle& descriptor_set_bundle,
+                VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module);
 
     void create(VkDevice& device, VkPhysicalDevice& physical_device, VkRenderPass& render_pass, 
-                VkExtent2D& swapchain_extent, uint32_t uniform_buffer_size, VkShaderModule& vert_module, VkShaderModule& frag_module);
-    void create(VulkanEngine& engine, uint32_t uniform_buffer_size, VkShaderModule& vert_module, VkShaderModule& frag_module);
-    void create(VulkanEngine& engine, uint32_t uniform_buffer_size, ShaderModule& vert_module, ShaderModule& frag_module);
+                VkExtent2D& swapchain_extent, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, 
+                VkShaderModule& vert_module, VkShaderModule& frag_module);
+    void create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module);
+    void create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module);
+    
+    VkPipelineBindPoint get_bind_point() const override {
+        return VK_PIPELINE_BIND_POINT_GRAPHICS;
+    };
 };

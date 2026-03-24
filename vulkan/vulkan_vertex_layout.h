@@ -1,10 +1,12 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <stdexcept>
 
 class LayoutInitializer;
 
 enum AttrFormat {
+    FLOAT2 = VK_FORMAT_R32G32_SFLOAT,
     FLOAT4 = VK_FORMAT_R32G32B32A32_SFLOAT
 };
 
@@ -45,11 +47,25 @@ public:
 
         vertex_layout->attribute_descs.push_back(attribute_desc);
 
+        // uint32_t size = 0;
+        // if (format == VK_FORMAT_R32G32B32A32_SFLOAT)
+        //     size = 16;
+        // else if (format == VK_FORMAT_R32G32_SFLOAT)
+        //     size = 8;
+        // else
+        //     throw std::runtime_error("This type hasn't been added yet");
+        
         uint32_t size = 0;
-        if (format == VK_FORMAT_R32G32B32A32_SFLOAT)
-            size = 16;
-        else
-            throw "This type hasn't been added yet";
+        switch (format) {
+            case VK_FORMAT_R32G32B32A32_SFLOAT:
+                size = 16;
+                break;
+            case VK_FORMAT_R32G32_SFLOAT:
+                size = 8;
+                break;
+            default: 
+                throw std::runtime_error("This type hasn't been added yet");
+        }
 
         current_location++;
         current_offset += size;
@@ -58,10 +74,17 @@ public:
 
     void add(AttrFormat format) {
         VkFormat vk_format;
-        if (format == AttrFormat::FLOAT4)
-            vk_format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        else
-            throw "This type hasn't been added yet";
+
+        switch (format) {
+            case AttrFormat::FLOAT4:
+                vk_format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                break;
+            case AttrFormat::FLOAT2:
+                vk_format = VK_FORMAT_R32G32_SFLOAT;
+                break;
+            default:
+                throw std::runtime_error("This type hasn't been added yet");
+        }
         
         add(vk_format);
     }

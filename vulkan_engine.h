@@ -56,10 +56,13 @@ public:
     static void createDepthResources(VkDevice device, VkPhysicalDevice physicalDevice, VkExtent2D extent, VkImage& depthImage, 
                                      VkDeviceMemory& depthImageMemory, VkImageView& depthImageView, VkFormat& depthFormat);
     
+    // void bind_descriptor_set(DescriptorSet& descriptor_set);
     void bind_pipeline(GraphicsPipeline& graphics_pipeline);
     void bind_vertex_buffer(VideoBuffer& vertex_buffer);
     void bind_index_buffer(VideoBuffer& index_buffer);
     void draw_indexed(uint32_t num_indices);
+    void set_viewport_and_scissor(VkExtent2D extent);
+    VkQueue get_compute_queue(); 
 
     // void draw(Drawable& drawable, Camera& camera);
 
@@ -135,4 +138,5 @@ private:
     bool checkDeviceExtensionSupport(VkPhysicalDevice dev) const;
 
     std::vector<const char*> getRequiredInstanceExtensions() const;
+    
 };

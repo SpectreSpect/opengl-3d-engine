@@ -95,6 +95,19 @@ add_executable(app
   vulkan/vulkan_vertex_layout.cpp
   vulkan/graphics_pipeline.cpp
   vulkan/pbr_renderer.cpp
+  vulkan/texture.cpp
+  vulkan/descriptor_set_layout.cpp
+  vulkan/descriptor_pool.cpp
+  vulkan/descriptor_set.cpp
+  vulkan/descriptor_set_bundle.cpp
+  vulkan/render_pass.cpp
+  vulkan/render_target_2d.cpp
+  vulkan/pbr/equirect_to_cubemap_pass.cpp
+  vulkan/cubemap.cpp
+  vulkan/command_pool.cpp
+  vulkan/command_buffer.cpp
+  vulkan/compute_pipeline.cpp
+  vulkan/fence.cpp
 )
 
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
