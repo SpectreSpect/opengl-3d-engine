@@ -77,7 +77,7 @@
 #include "mesh.h"
 #include "pbr_uniform.h"
 #include "imgui_layer.h"
-#include "vulkan/texture.h"
+#include "vulkan/texture2d.h"
 #include "vulkan/render_target_2d.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/cubemap.h"
@@ -270,15 +270,19 @@ int main() {
 
     Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
 
-    Texture hdr_texture = Texture(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-                    Texture::Wrap::Repeat,
-                    Texture::MagFilter::Linear,
-                    Texture::MinFilter::LinearMipmapLinear,
-                    true,   // sRGB
-                    true    // flipY
-    );
+    // Texture2D hdr_texture = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
+    //                 Texture2D::Wrap::Repeat,
+    //                 Texture2D::MagFilter::Linear,
+    //                 Texture2D::MinFilter::LinearMipmapLinear,
+    //                 true,   // sRGB
+    //                 true    // flipY
+    // );
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
+    
+    Texture2D storage_texture(engine, 10, 10, nullptr);
+    storage_texture.transition_to_general_layout(engine);
 
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, hdr_texture);
+    
 
     CommandPool command_pool(engine.device, engine.physicalDevice);
     CommandBuffer command_buffer(command_pool);
@@ -291,6 +295,7 @@ int main() {
     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
     builder.add_uniform_buffer(0, temp_uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
     builder.add_storage_buffer(1, temp_storage_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
+    builder.add_combined_image_sampler(2, storage_texture, VK_SHADER_STAGE_COMPUTE_BIT);
     DescriptorSetBundle descriptor_set_bundle = builder.create(engine.device);
 
     ComputePipeline compute_pipeline(engine.device, descriptor_set_bundle, compute_shader);
@@ -312,7 +317,9 @@ int main() {
 
     std::cout << "(" << out.x << ", " << out.y << ", " << out.z << ", " << out.w << ")" << std::endl;
 
+    storage_texture.transition_to_shader_read_only_layout(engine);
 
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, storage_texture);
 
     // Mesh cube_mesh = create_position_cube_mesh(engine);
     // Cubemap output_cubemap;

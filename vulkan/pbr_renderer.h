@@ -17,7 +17,7 @@ public:
     GraphicsPipeline pipeline;
 
     VideoBuffer uniform_buffer;
-    Texture albedo;
+    Texture2D albedo;
     DescriptorSetBundle descriptor_set_bundle;
 
     PBRRenderer() = default;

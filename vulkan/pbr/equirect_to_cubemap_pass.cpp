@@ -64,7 +64,7 @@ bool has_stencil_component(VkFormat format) {
            format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-void update_hdr_descriptor(VkDevice device, VkDescriptorSet descriptor_set, const Texture& hdr_texture) {
+void update_hdr_descriptor(VkDevice device, VkDescriptorSet descriptor_set, const Texture2D& hdr_texture) {
     VkDescriptorImageInfo image_info = hdr_texture.descriptor_info();
 
     VkWriteDescriptorSet write{};
@@ -265,7 +265,7 @@ void EquirectToCubemapPass::create(VulkanEngine& engine, uint32_t size) {
 
 void EquirectToCubemapPass::render(
     Mesh& cube_mesh,
-    Texture& hdr_texture,
+    Texture2D& hdr_texture,
     Cubemap& output_cubemap
 ) {
     if (engine->commandPool == VK_NULL_HANDLE) throw std::runtime_error("commandPool null");

@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "../../vulkan_engine.h"
-#include "../texture.h"
+#include "../texture2d.h"
 #include "../cubemap.h"
 #include "../graphics_pipeline.h"
 #include "../descriptor_set_bundle.h"
@@ -21,7 +21,7 @@ public:
     EquirectToCubemapPass() = default;
 
     void create(VulkanEngine& engine, uint32_t size);
-    void render(Mesh& cube_mesh, Texture& hdr_texture, Cubemap& output_cubemap);
+    void render(Mesh& cube_mesh, Texture2D& hdr_texture, Cubemap& output_cubemap);
     void destroy();
 
 private:

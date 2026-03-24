@@ -34,7 +34,7 @@ void DescriptorSet::write_uniform_buffer(uint32_t binding, VideoBuffer& buffer) 
     vkUpdateDescriptorSets(*buffer.device, 1, &write, 0, nullptr);
 }
 
-void DescriptorSet::write_combined_image_sampler(uint32_t binding, Texture& texture) {
+void DescriptorSet::write_combined_image_sampler(uint32_t binding, Texture2D& texture) {
     if (!texture.device)
         throw std::runtime_error("'device' was nullptr");
 

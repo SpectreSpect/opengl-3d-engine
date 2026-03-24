@@ -95,7 +95,7 @@ add_executable(app
   vulkan/vulkan_vertex_layout.cpp
   vulkan/graphics_pipeline.cpp
   vulkan/pbr_renderer.cpp
-  vulkan/texture.cpp
+  vulkan/texture2d.cpp
   vulkan/descriptor_set_layout.cpp
   vulkan/descriptor_pool.cpp
   vulkan/descriptor_set.cpp

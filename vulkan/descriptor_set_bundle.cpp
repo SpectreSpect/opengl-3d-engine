@@ -4,7 +4,7 @@ void DescriptorSetBundle::bind_uniform_buffer(uint32_t binding, VideoBuffer& buf
     descriptor_set.write_uniform_buffer(binding, buffer);
 }
 
-void DescriptorSetBundle::bind_combined_image_sampler(uint32_t binding, Texture& texture) {
+void DescriptorSetBundle::bind_combined_image_sampler(uint32_t binding, Texture2D& texture) {
     descriptor_set.write_combined_image_sampler(binding, texture);
 }
 
@@ -32,7 +32,7 @@ void DescriptorSetBundleBuilder::add_storage_buffer(uint32_t binding, VideoBuffe
     entries[binding] = Entry{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, stage_flags, &video_buffer};
 }
 
-void DescriptorSetBundleBuilder::add_combined_image_sampler(uint32_t binding, Texture& texture, VkShaderStageFlags stage_flags) {
+void DescriptorSetBundleBuilder::add_combined_image_sampler(uint32_t binding, Texture2D& texture, VkShaderStageFlags stage_flags) {
     entries[binding] = Entry{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, stage_flags, &texture};
 }
 
@@ -80,7 +80,7 @@ DescriptorSetBundle DescriptorSetBundleBuilder::create(VkDevice& device) {
             }
 
             case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
-                if (auto ptr = std::get_if<Texture*>(&it->second.resource))
+                if (auto ptr = std::get_if<Texture2D*>(&it->second.resource))
                     bundle.descriptor_set.write_combined_image_sampler(it->first, **ptr);
                 break;
             }

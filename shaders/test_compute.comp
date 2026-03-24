@@ -17,6 +17,8 @@ layout(set = 0, binding = 1) coherent buffer OutputStorageBuffer {
     dvec4 out_val;
 } output_ssbo;
 
+layout(set = 0, binding = 2, rgba8) uniform writeonly image2D outImage;
+
 
 bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
 {
@@ -93,36 +95,45 @@ void main() {
     
     if (source_point_id != 0) return;
 
-    double test_H[6][6] = double[6][6](
-        double[6](5.00506440208984372e+02LF, -5.00000000000000000e-01LF, -5.00006439208984375e+02LF, 0.0LF, -5.00006439208984375e+02LF, 5.00000000000000000e-01LF),
-        double[6](-5.00000000000000000e-01LF, 1.00000099999999992e+00LF, -5.00000000000000000e-01LF, 5.00000000000000000e-01LF, 0.0LF, -5.00000000000000000e-01LF),
-        double[6](-5.00006439208984375e+02LF, -5.00000000000000000e-01LF, 5.00506440208984372e+02LF, -5.00000000000000000e-01LF, 5.00006439208984375e+02LF, 0.0LF),
-        double[6](0.0LF, 5.00000000000000000e-01LF, -5.00000000000000000e-01LF, 5.00001000000000029e-01LF, 0.0LF, 0.0LF),
-        double[6](-5.00006439208984375e+02LF, 0.0LF, 5.00006439208984375e+02LF, 0.0LF, 5.00006440208984372e+02LF, 0.0LF),
-        double[6](5.00000000000000000e-01LF, -5.00000000000000000e-01LF, 0.0LF, 0.0LF, 0.0LF, 5.00001000000000029e-01LF)
-    );
+    vec4 color = vec4(1, 0, 0, 1);
+    for (int x = 0; x < 10; x++)
+        for (int y = 0; y < 10; y++) {
+            float x_val = x / 10.0f;
+            float y_val = y / 10.0f;
 
-    double test_g[6] = double[6](
-        4.99506439208984375e+02LF,
-        0.0LF,
-        -4.99506439208984375e+02LF,
-        -5.00000000000000000e-01LF,
-        -5.00006439208984375e+02LF,
-        -5.00000000000000000e-01LF
-    );
+            imageStore(outImage, ivec2(x, y), vec4(x, y, 0, 1));
+        }
 
-    double test_delta_out[6] = {0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF};
+    // double test_H[6][6] = double[6][6](
+    //     double[6](5.00506440208984372e+02LF, -5.00000000000000000e-01LF, -5.00006439208984375e+02LF, 0.0LF, -5.00006439208984375e+02LF, 5.00000000000000000e-01LF),
+    //     double[6](-5.00000000000000000e-01LF, 1.00000099999999992e+00LF, -5.00000000000000000e-01LF, 5.00000000000000000e-01LF, 0.0LF, -5.00000000000000000e-01LF),
+    //     double[6](-5.00006439208984375e+02LF, -5.00000000000000000e-01LF, 5.00506440208984372e+02LF, -5.00000000000000000e-01LF, 5.00006439208984375e+02LF, 0.0LF),
+    //     double[6](0.0LF, 5.00000000000000000e-01LF, -5.00000000000000000e-01LF, 5.00001000000000029e-01LF, 0.0LF, 0.0LF),
+    //     double[6](-5.00006439208984375e+02LF, 0.0LF, 5.00006439208984375e+02LF, 0.0LF, 5.00006440208984372e+02LF, 0.0LF),
+    //     double[6](5.00000000000000000e-01LF, -5.00000000000000000e-01LF, 0.0LF, 0.0LF, 0.0LF, 5.00001000000000029e-01LF)
+    // );
 
-    bool ok = solve_6x6(test_H, test_g, test_delta_out);
+    // double test_g[6] = double[6](
+    //     4.99506439208984375e+02LF,
+    //     0.0LF,
+    //     -4.99506439208984375e+02LF,
+    //     -5.00000000000000000e-01LF,
+    //     -5.00006439208984375e+02LF,
+    //     -5.00000000000000000e-01LF
+    // );
+
+    // double test_delta_out[6] = {0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF};
+
+    // bool ok = solve_6x6(test_H, test_g, test_delta_out);
     
     // // ----------------C++ output----------------
     // // bool ok = 1
     // // double delta[6] = {4.9227622343639727e-07, -3.2940920091484633e-09, -5.0213826444111244e-07, -0.99999849884717473, -0.99999900358553995, -0.99999849557332432};
     // // ------------------------------------------
 
-    output_ssbo.out_val.x = test_delta_out[3];
-    output_ssbo.out_val.y = test_delta_out[4];
-    output_ssbo.out_val.z = test_delta_out[5];
+    // output_ssbo.out_val.x = test_delta_out[3];
+    // output_ssbo.out_val.y = test_delta_out[4];
+    // output_ssbo.out_val.z = test_delta_out[5];
 
     // output_ssbo.out_val.x = 1;
     // output_ssbo.out_val.y = 2;

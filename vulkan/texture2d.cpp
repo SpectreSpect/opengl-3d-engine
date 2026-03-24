@@ -1,4 +1,4 @@
-#include "texture.h"
+#include "texture2d.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,24 +16,24 @@
 // Put STB_IMAGE_IMPLEMENTATION in exactly one .cpp in your whole project.
 
 
-Texture::Texture(VulkanEngine& engine,
+Texture2D::Texture2D(VulkanEngine& engine,
                  int width, int height, const void* initial_data,
                  Wrap wrap, MagFilter mag_filter, MinFilter min_filter, bool srgb) {
     create(engine, width, height, initial_data, wrap, mag_filter, min_filter, srgb);
 }
 
-Texture::Texture(VulkanEngine& engine,
+Texture2D::Texture2D(VulkanEngine& engine,
                  const std::string& filepath,
                  Wrap wrap, MagFilter mag_filter, MinFilter min_filter,
                  bool srgb, bool flipY) {
     loadFromFile(engine, filepath, wrap, mag_filter, min_filter, srgb, flipY);
 }
 
-Texture::~Texture() {
+Texture2D::~Texture2D() {
     destroy();
 }
 
-void Texture::destroy() {
+void Texture2D::destroy() {
     if (device && sampler != VK_NULL_HANDLE) {
         vkDestroySampler(*device, sampler, nullptr);
         sampler = VK_NULL_HANDLE;
@@ -59,7 +59,7 @@ void Texture::destroy() {
     mip_levels = 1;
 }
 
-VkDescriptorImageInfo Texture::descriptor_info() const {
+VkDescriptorImageInfo Texture2D::descriptor_info() const {
     VkDescriptorImageInfo info{};
     info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     info.imageView = view;
@@ -67,7 +67,7 @@ VkDescriptorImageInfo Texture::descriptor_info() const {
     return info;
 }
 
-VkSamplerAddressMode Texture::to_vk_wrap(Wrap wrap) {
+VkSamplerAddressMode Texture2D::to_vk_wrap(Wrap wrap) {
     switch (wrap) {
         case Wrap::ClampToEdge:    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         case Wrap::Repeat:         return VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -76,7 +76,7 @@ VkSamplerAddressMode Texture::to_vk_wrap(Wrap wrap) {
     }
 }
 
-VkFilter Texture::to_vk_mag_filter(MagFilter filter) {
+VkFilter Texture2D::to_vk_mag_filter(MagFilter filter) {
     switch (filter) {
         case MagFilter::Nearest: return VK_FILTER_NEAREST;
         case MagFilter::Linear:  return VK_FILTER_LINEAR;
@@ -84,7 +84,7 @@ VkFilter Texture::to_vk_mag_filter(MagFilter filter) {
     }
 }
 
-Texture::MinFilterInfo Texture::to_vk_min_filter(MinFilter filter) {
+Texture2D::MinFilterInfo Texture2D::to_vk_min_filter(MinFilter filter) {
     switch (filter) {
         case MinFilter::Nearest:
             return {VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, false};
@@ -103,11 +103,11 @@ Texture::MinFilterInfo Texture::to_vk_min_filter(MinFilter filter) {
     }
 }
 
-uint32_t Texture::compute_mip_levels(uint32_t w, uint32_t h) {
+uint32_t Texture2D::compute_mip_levels(uint32_t w, uint32_t h) {
     return 1u + static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(std::max(w, h)))));
 }
 
-VkCommandBuffer Texture::begin_single_time_commands(VulkanEngine& engine) {
+VkCommandBuffer Texture2D::begin_single_time_commands(VulkanEngine& engine) {
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -117,7 +117,7 @@ VkCommandBuffer Texture::begin_single_time_commands(VulkanEngine& engine) {
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     vulkan_utils::vk_check(
         vkAllocateCommandBuffers(engine.device, &alloc_info, &cmd),
-        "vkAllocateCommandBuffers(texture)"
+        "vkAllocateCommandBuffers(Texture2D)"
     );
 
     VkCommandBufferBeginInfo begin_info{};
@@ -126,16 +126,16 @@ VkCommandBuffer Texture::begin_single_time_commands(VulkanEngine& engine) {
 
     vulkan_utils::vk_check(
         vkBeginCommandBuffer(cmd, &begin_info),
-        "vkBeginCommandBuffer(texture)"
+        "vkBeginCommandBuffer(Texture2D)"
     );
 
     return cmd;
 }
 
-void Texture::end_single_time_commands(VulkanEngine& engine, VkCommandBuffer cmd) {
+void Texture2D::end_single_time_commands(VulkanEngine& engine, VkCommandBuffer cmd) {
     vulkan_utils::vk_check(
         vkEndCommandBuffer(cmd),
-        "vkEndCommandBuffer(texture)"
+        "vkEndCommandBuffer(Texture2D)"
     );
 
     VkSubmitInfo submit_info{};
@@ -145,18 +145,18 @@ void Texture::end_single_time_commands(VulkanEngine& engine, VkCommandBuffer cmd
 
     vulkan_utils::vk_check(
         vkQueueSubmit(engine.graphicsQueue, 1, &submit_info, VK_NULL_HANDLE),
-        "vkQueueSubmit(texture)"
+        "vkQueueSubmit(Texture2D)"
     );
 
     vulkan_utils::vk_check(
         vkQueueWaitIdle(engine.graphicsQueue),
-        "vkQueueWaitIdle(texture)"
+        "vkQueueWaitIdle(Texture2D)"
     );
 
     vkFreeCommandBuffers(engine.device, engine.commandPool, 1, &cmd);
 }
 
-void Texture::create_image(VulkanEngine& engine, VkFormat image_format, VkImageUsageFlags usage) {
+void Texture2D::create_image(VulkanEngine& engine, VkFormat image_format, VkImageUsageFlags usage) {
     format = image_format;
     device = &engine.device;
     physical_device = engine.physicalDevice;
@@ -178,7 +178,7 @@ void Texture::create_image(VulkanEngine& engine, VkFormat image_format, VkImageU
 
     vulkan_utils::vk_check(
         vkCreateImage(engine.device, &image_info, nullptr, &image),
-        "vkCreateImage(texture)"
+        "vkCreateImage(Texture2D)"
     );
 
     VkMemoryRequirements mem_requirements{};
@@ -195,16 +195,16 @@ void Texture::create_image(VulkanEngine& engine, VkFormat image_format, VkImageU
 
     vulkan_utils::vk_check(
         vkAllocateMemory(engine.device, &alloc_info, nullptr, &memory),
-        "vkAllocateMemory(texture)"
+        "vkAllocateMemory(Texture2D)"
     );
 
     vulkan_utils::vk_check(
         vkBindImageMemory(engine.device, image, memory, 0),
-        "vkBindImageMemory(texture)"
+        "vkBindImageMemory(Texture2D)"
     );
 }
 
-void Texture::create_image_view() {
+void Texture2D::create_image_view() {
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_info.image = image;
@@ -218,11 +218,11 @@ void Texture::create_image_view() {
 
     vulkan_utils::vk_check(
         vkCreateImageView(*device, &view_info, nullptr, &view),
-        "vkCreateImageView(texture)"
+        "vkCreateImageView(Texture2D)"
     );
 }
 
-void Texture::create_sampler(Wrap wrap, MagFilter mag_filter, MinFilter min_filter) {
+void Texture2D::create_sampler(Wrap wrap, MagFilter mag_filter, MinFilter min_filter) {
     const auto min_info = to_vk_min_filter(min_filter);
 
     VkSamplerCreateInfo sampler_info{};
@@ -245,20 +245,20 @@ void Texture::create_sampler(Wrap wrap, MagFilter mag_filter, MinFilter min_filt
 
     vulkan_utils::vk_check(
         vkCreateSampler(*device, &sampler_info, nullptr, &sampler),
-        "vkCreateSampler(texture)"
+        "vkCreateSampler(Texture2D)"
     );
 }
 
-void Texture::transition_image_layout(VulkanEngine& engine,
-                                      VkImageLayout old_layout,
+void Texture2D::transition_image_layout(VulkanEngine& engine,
                                       VkImageLayout new_layout,
                                       uint32_t base_mip_level,
                                       uint32_t level_count) {
+
     VkCommandBuffer cmd = begin_single_time_commands(engine);
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = old_layout;
+    barrier.oldLayout = layout;
     barrier.newLayout = new_layout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -272,38 +272,75 @@ void Texture::transition_image_layout(VulkanEngine& engine,
     VkPipelineStageFlags src_stage;
     VkPipelineStageFlags dst_stage;
 
-    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+    if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
         new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+
+    } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+
+    } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+            new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+
+    } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL &&
+            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED &&
-               new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+
+    } else if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+    } else if (layout == VK_IMAGE_LAYOUT_UNDEFINED &&
+            new_layout == VK_IMAGE_LAYOUT_GENERAL) {
+        // First use as storage image in compute
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+    } else if (layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+            new_layout == VK_IMAGE_LAYOUT_GENERAL) {
+        // Was sampled in fragment shader, now will be written again in compute
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+    } else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+            new_layout == VK_IMAGE_LAYOUT_GENERAL) {
+        // Uploaded/copied into image, now compute will write/read it
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+    } else if (layout == VK_IMAGE_LAYOUT_GENERAL &&
+            new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        // Compute wrote the image, now fragment shader will sample it
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
     } else {
-        throw std::runtime_error("Unsupported texture layout transition");
+        throw std::runtime_error("Unsupported Texture2D layout transition");
     }
 
     vkCmdPipelineBarrier(
@@ -316,10 +353,20 @@ void Texture::transition_image_layout(VulkanEngine& engine,
         1, &barrier
     );
 
+    this->layout = new_layout;
+
     end_single_time_commands(engine, cmd);
 }
 
-void Texture::copy_buffer_to_image(VulkanEngine& engine, VkBuffer buffer) {
+void Texture2D::transition_to_general_layout(VulkanEngine& engine) {
+    transition_image_layout(engine, VK_IMAGE_LAYOUT_GENERAL, 0, mip_levels);
+}
+
+void Texture2D::transition_to_shader_read_only_layout(VulkanEngine& engine) {
+    transition_image_layout(engine, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, mip_levels);
+}
+
+void Texture2D::copy_buffer_to_image(VulkanEngine& engine, VkBuffer buffer) {
     VkCommandBuffer cmd = begin_single_time_commands(engine);
 
     VkBufferImageCopy region{};
@@ -345,12 +392,12 @@ void Texture::copy_buffer_to_image(VulkanEngine& engine, VkBuffer buffer) {
     end_single_time_commands(engine, cmd);
 }
 
-void Texture::generate_mipmaps(VulkanEngine& engine) {
+void Texture2D::generate_mipmaps(VulkanEngine& engine) {
     VkFormatProperties format_properties{};
     vkGetPhysicalDeviceFormatProperties(engine.physicalDevice, format, &format_properties);
 
     if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
-        throw std::runtime_error("Texture format does not support linear blitting for mipmaps");
+        throw std::runtime_error("Texture2D format does not support linear blitting for mipmaps");
     }
 
     VkCommandBuffer cmd = begin_single_time_commands(engine);
@@ -450,13 +497,13 @@ void Texture::generate_mipmaps(VulkanEngine& engine) {
     end_single_time_commands(engine, cmd);
 }
 
-void Texture::create(VulkanEngine& engine,
+void Texture2D::create(VulkanEngine& engine,
                      int w, int h, const void* initial_data,
                      Wrap wrap, MagFilter mag_filter, MinFilter min_filter, bool srgb) {
     destroy();
 
     if (w <= 0 || h <= 0) {
-        throw std::runtime_error("Texture dimensions must be positive");
+        throw std::runtime_error("Texture2D dimensions must be positive");
     }
 
     width = static_cast<uint32_t>(w);
@@ -475,6 +522,7 @@ void Texture::create(VulkanEngine& engine,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_SAMPLED_BIT |
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
         VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if (mip_levels > 1) {
@@ -495,8 +543,8 @@ void Texture::create(VulkanEngine& engine,
 
         staging.update_data(const_cast<void*>(initial_data), image_size);
 
+        layout = VK_IMAGE_LAYOUT_UNDEFINED;
         transition_image_layout(engine,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 0, mip_levels);
 
@@ -505,8 +553,8 @@ void Texture::create(VulkanEngine& engine,
         if (mip_levels > 1) {
             generate_mipmaps(engine);
         } else {
+            layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             transition_image_layout(engine,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                     0, 1);
         }
@@ -514,8 +562,8 @@ void Texture::create(VulkanEngine& engine,
         // vkDestroyBuffer(engine.device, staging.buffer, nullptr);
         // vkFreeMemory(engine.device, staging.buffer_memory, nullptr);
     } else {
+        layout = VK_IMAGE_LAYOUT_UNDEFINED;
         transition_image_layout(engine,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                 0, 1);
     }
@@ -524,7 +572,7 @@ void Texture::create(VulkanEngine& engine,
     create_sampler(wrap, mag_filter, min_filter);
 }
 
-bool Texture::loadFromFile(VulkanEngine& engine,
+bool Texture2D::loadFromFile(VulkanEngine& engine,
                            const std::string& filepath,
                            Wrap wrap, MagFilter mag_filter, MinFilter min_filter,
                            bool srgb, bool flipY) {
