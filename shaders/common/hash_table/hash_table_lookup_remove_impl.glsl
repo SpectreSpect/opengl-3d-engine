@@ -57,6 +57,10 @@ bool HASH_TABLE_PREFIX(remove_slot_from_hash_table)(SLOT_KEY_TYPE key) {
 
             #ifdef KEY_COMP_FUNC
                 if (KEY_COMP_FUNC(SLOTS_BUFFER[idx].key, key)) {
+                    // atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB);
+                    // atomicAdd(COUNT_TOMBS, 1u);
+                    // return true;
+
                     uint prev = atomicCompSwap(SLOTS_BUFFER[idx].state, SLOT_OCCUPIED, SLOT_TOMB);
                     if (prev == SLOT_OCCUPIED) { // Удаляем слот
                         atomicAdd(COUNT_TOMBS, 1u);
@@ -72,6 +76,10 @@ bool HASH_TABLE_PREFIX(remove_slot_from_hash_table)(SLOT_KEY_TYPE key) {
                         return true;
                     } else if (prev == SLOT_TOMB) return true;
                     else continue;
+
+                    // atomicExchange(SLOTS_BUFFER[idx].state, SLOT_TOMB);
+                    // atomicAdd(COUNT_TOMBS, 1u);
+                    // return true;
                 }
             #endif
         }

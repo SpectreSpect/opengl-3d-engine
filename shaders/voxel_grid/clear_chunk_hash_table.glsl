@@ -19,5 +19,5 @@ void main() {
     if (slot_id >= u_chunk_hash_table_size) return;
 
     chunk_hash_table_slots[slot_id].key = uvec2(0u, 0u);
-    chunk_hash_table_slots[slot_id].value = SLOT_EMPTY;
+    chunk_hash_table_slots[slot_id].state = SLOT_EMPTY;
 }

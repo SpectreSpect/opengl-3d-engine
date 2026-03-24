@@ -116,6 +116,7 @@ static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
 static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
 static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
 static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
+static constexpr uint32_t SLOT_OCCUPIED = 0xFFFFFFFCu;
 
 static constexpr uint32_t OVERWRITE_BIT = 1u;
 

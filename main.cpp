@@ -72,15 +72,15 @@ int main() {
         30'000, // count_active_chunks
         3'000'000, // max_quads
         4, // chunk_hash_table_size_factor
-        4096, // count_evict_buckets
-        15'000, // min_free_chunks
+        32, // count_evict_buckets
+        14'500, // min_free_chunks
         0.2f, // tomb_fraction_to_rebuild
         chunk_size.x * voxel_size.x * 1, // eviction_bucket_shell_thickness
         10, // vb_page_size_order_of_two
         10, // ib_page_size_order_of_two
         1.0, // buddy_allocator_nodes_factor
         chunk_size.x * voxel_size.x * 30, // render_distance
-        10, // generation_distance
+        15, // generation_distance
         chunk_size.x * chunk_size.x * 2'000, // max_write_count
         shader_manager
     );
@@ -113,13 +113,13 @@ int main() {
         window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
-        // voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
+        voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
             
         voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
         window->draw(voxel_grid_gpu.get(), &camera);
         // window->draw(&torus, &camera);
 
-        // voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
+        voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
         ///////////////////////////////////////////////////////////////////////////////////////////////////
 
         torus.rotation.x += rotation_speed * delta_time;

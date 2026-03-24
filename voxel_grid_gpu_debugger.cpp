@@ -373,14 +373,15 @@ void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
 
     uint32_t count_tombs_gpu = voxel_grid->chunk_hash_table_.read_scalar<uint32_t>(0u);
 
-    uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_alloc_slots = 0u;
+    uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_occupied_slots = 0u, count_error_states = 0u; 
     for (uint32_t slot_id = 0u; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
-        uint32_t v = chunk_hash_table_slot[slot_id].value;
+        uint32_t state = chunk_hash_table_slot[slot_id].state;
 
-        if (v == SLOT_EMPTY) count_empty_slots++;
-        else if (v == SLOT_LOCKED) count_lock_slots++;
-        else if (v == SLOT_TOMB) count_tomb_slots++;
-        else count_alloc_slots++;
+        if (state == SLOT_EMPTY) count_empty_slots++;
+        else if (state == SLOT_LOCKED) count_lock_slots++;
+        else if (state == SLOT_TOMB) count_tomb_slots++;
+        else if (state == SLOT_OCCUPIED) count_occupied_slots++;
+        else count_error_states++;
     }
 
     std::cout << "======= CHUNKS HASH TABLE LOG =======" << std::endl;
@@ -396,8 +397,11 @@ void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
     
     std::cout << "SLOT_TOMB_GPU: " << count_tombs_gpu << std::endl;
     
-    std::cout << "SLOT_ALLOC: " << count_alloc_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_alloc_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    std::cout << "SLOT_OCCUPIED: " << count_occupied_slots << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_occupied_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    
+    std::cout << "ERROR_SLOTS: " << count_error_states << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_error_states / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
 
     std::cout << std::endl;
 }
