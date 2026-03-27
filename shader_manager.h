@@ -13,8 +13,6 @@ namespace fs = std::filesystem;
 
 class ShaderManager {
 public:
-    std::vector<std::filesystem::path> include_directories;
-
     // General
     ComputeShader dispatch_adapter_cs;
     ComputeShader clear_buffer_cs;
@@ -27,12 +25,17 @@ public:
     ComputeShader fix_last_cs;
     ComputeShader copy_offsets_to_cursor_cs;
     ComputeShader fill_triangle_indices_cs;
-    ComputeShader voxelize_cs;
+    ComputeShader voxelize_triangles_cs;
     ComputeShader roi_reduce_indices_cs;
     ComputeShader roi_reduce_pairs_cs;
     ComputeShader build_active_chunks_cs;
     ComputeShader roi_finalize_cs;
     ComputeShader build_voxel_writes_cs;
+
+    ComputeShader mark_and_count_active_chunks_cs;
+    ComputeShader alloc_active_chunk_triangles_cs;
+    ComputeShader copy_counters_from_counter_hash_table_cs;
+    ComputeShader reset_voxelize_pipeline_cs;
 
     //voxel_grid
     ComputeShader clear_chunks_cs;
@@ -69,13 +72,19 @@ public:
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
-    ShaderManager(const std::filesystem::path& root_path, std::vector<std::filesystem::path> include_directories = std::vector<std::filesystem::path>());
+    ShaderManager(
+        const std::filesystem::path& root_path,
+        const std::vector<std::filesystem::path>* include_directories = nullptr,
+        const std::filesystem::path* debug_root_path = nullptr
+    );
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
     ShaderManager(ShaderManager&&) noexcept = default;
     ShaderManager& operator=(ShaderManager&&) noexcept = default;
 
-    void add_include_directory(std::filesystem::path directory);
-
-    void init_shaders(const std::filesystem::path& root_path);
+    void init_shaders(
+        const std::filesystem::path& root_path, 
+        const std::vector<std::filesystem::path>* include_directories,
+        const std::filesystem::path* debug_root_path
+    );
 };

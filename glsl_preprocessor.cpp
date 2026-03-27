@@ -4,15 +4,20 @@
 #include <sstream>
 #include <algorithm>
 
-std::string GlslPreprocessor::load(const std::filesystem::path& file_path, const std::vector<std::filesystem::path>& additional_include_directories) {
+std::string GlslPreprocessor::load(
+    const std::filesystem::path& file_path, 
+    const std::vector<std::filesystem::path>* additional_include_directories) 
+{
     std::vector<std::filesystem::path> include_stack;
     std::unordered_set<std::filesystem::path> pragma_once_included;
 
-    include_directories.insert(
-        include_directories.begin(),
-        additional_include_directories.begin(),
-        additional_include_directories.end()  
-    );
+    if (additional_include_directories != nullptr) {
+        include_directories.insert(
+            include_directories.begin(),
+            additional_include_directories->begin(),
+            additional_include_directories->end()  
+        );
+    }
 
     return load_file_recursive(
         std::filesystem::absolute(file_path),
@@ -28,8 +33,8 @@ void GlslPreprocessor::add_include_directory(const std::filesystem::path& dir) {
 std::string GlslPreprocessor::load_file_recursive(
     const std::filesystem::path& file_path,
     std::vector<std::filesystem::path>& include_stack,
-    std::unordered_set<std::filesystem::path>& pragma_once_included
-) {
+    std::unordered_set<std::filesystem::path>& pragma_once_included)
+{
     const std::filesystem::path normalized = std::filesystem::weakly_canonical(file_path);
 
     for (const auto& p : include_stack) {

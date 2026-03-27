@@ -10,7 +10,7 @@ class GlslPreprocessor {
 public:
     std::string load(
         const std::filesystem::path& file_path, 
-        const std::vector<std::filesystem::path>& additional_include_directories = std::vector<std::filesystem::path>()
+        const std::vector<std::filesystem::path>* additional_include_directories = nullptr
     );
 
     void add_include_directory(const std::filesystem::path& dir);

@@ -1,56 +1,49 @@
 #include "voxel_grid_gpu.h"
 
-VoxelGridGPU::VoxelGridGPU(
-    glm::ivec3 chunk_size, 
-    glm::vec3 voxel_size, 
-    uint32_t count_active_chunks, 
-    uint32_t max_quads,
-    float chunk_hash_table_size_factor, 
-    uint32_t count_evict_buckets,
-    uint32_t min_free_chunks,
-    float tomb_fraction_to_rebuild,
-    float eviction_bucket_shell_thickness,
-    uint32_t vb_page_size_order_of_two,
-    uint32_t ib_page_size_order_of_two,
-    float buddy_allocator_nodes_factor,
-    float render_distance,
-    uint32_t generation_distance,
-    uint32_t max_write_count,
-    ShaderManager& shader_manager)
+VoxelGridGPU::VoxelGridGPU(const VoxelGridDesc& desc, ShaderHelper* shader_helper, ShaderManager* shader_manager)
+    :   chunk_size(desc.chunk_size),
+        voxel_size(desc.voxel_size),
+        count_active_chunks(desc.count_active_chunks),
+        count_evict_buckets(desc.count_evict_buckets),
+        min_free_chunks(desc.min_free_chunks),
+        tomb_fraction_to_rebuild(desc.tomb_fraction_to_rebuild),
+        eviction_bucket_shell_thickness(desc.eviction_bucket_shell_thickness),
+        render_distance(desc.render_distance),
+        generation_distance(desc.generation_distance),
+        shader_manager(shader_manager),
+        shader_helper(shader_helper)
  {
-    assert(chunk_hash_table_size_factor >= 1.0f);
-
-    this->chunk_size = chunk_size;
-    this->voxel_size = voxel_size;
-    this->count_active_chunks = count_active_chunks;
-    this->count_evict_buckets = count_evict_buckets;
-    this->min_free_chunks = min_free_chunks;
-    this->tomb_fraction_to_rebuild = tomb_fraction_to_rebuild;
-    this->eviction_bucket_shell_thickness = eviction_bucket_shell_thickness;
-    this->render_distance = render_distance;
-    this->generation_distance = generation_distance;
-    this->shader_manager = &shader_manager;
+    if (desc.chunk_hash_table_size_factor < 1.0f) {
+        std::string message = "VoxelGridGPU: chunk_hash_table_size_factor must be >= 1.0.";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
 
     vox_per_chunk = (uint32_t)(chunk_size.x * chunk_size.y * chunk_size.z);
 
-    uint64_t raw = (uint64_t)std::ceil((double)chunk_hash_table_size_factor * (double)count_active_chunks);
+    uint64_t raw = (uint64_t)std::ceil((double)desc.chunk_hash_table_size_factor * (double)count_active_chunks);
     uint32_t base = (raw > UINT32_MAX) ? UINT32_MAX : (uint32_t)raw;
     this->chunk_hash_table_size = math_utils::next_pow2_u32(base);
-    assert((chunk_hash_table_size & (chunk_hash_table_size - 1)) == 0);
 
-    init_programs(shader_manager);
+    if ((chunk_hash_table_size & (chunk_hash_table_size - 1)) != 0) {
+        std::string message = "VoxelGridGPU: chunk_hash_table_size must be 2^n.";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
 
-    dispatch_args = BufferObject::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, shader_manager);
-    dispatch_args_additional = BufferObject::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, shader_manager);
+    init_programs(*shader_manager);
+
+    dispatch_args = BufferObject::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, *shader_manager);
+    dispatch_args_additional = BufferObject::from_fill(sizeof(uint32_t) * 3u, GL_DYNAMIC_DRAW, 1u, *shader_manager);
     
     chunk_meta_ = BufferObject(sizeof(ChunkMetaGPU) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
     free_list_ = BufferObject(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
     indirect_cmds_ = BufferObject(sizeof(uint32_t) + sizeof(DrawElementsIndirectCommand) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
 
-    mesh_buffers_status_ = BufferObject::from_fill(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW, 0u, shader_manager);
+    mesh_buffers_status_ = BufferObject::from_fill(sizeof(uint32_t) * 2, GL_DYNAMIC_DRAW, 0u, *shader_manager);
 
     enqueued_ = BufferObject(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
-    dirty_list_ = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW, 0u, shader_manager);
+    dirty_list_ = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW, 0u, *shader_manager);
     failed_dirty_list_ = BufferObject(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
 
     dirty_quad_count_ = BufferObject(sizeof(uint32_t) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
@@ -60,18 +53,18 @@ VoxelGridGPU::VoxelGridGPU(
     bucket_head.id = INVALID_ID;
     bucket_head.count = 0;
     
-    bucket_heads_ = BufferObject::from_fill(sizeof(BucketHead) * count_evict_buckets, GL_DYNAMIC_DRAW, bucket_head, shader_manager);
-    bucket_next_  = BufferObject::from_fill(sizeof(uint32_t) * count_active_chunks, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
-    verify_debug_stack_ = BufferObject::from_fill(sizeof(uint32_t) * 2 + sizeof(DebugStackElement) * 10'000, GL_DYNAMIC_DRAW, INVALID_ID, shader_manager);
-    verify_debug_stack_.update_subdata_fill(0, 0u, sizeof(uint32_t) * 2, shader_manager);
+    bucket_heads_ = BufferObject::from_fill(sizeof(BucketHead) * count_evict_buckets, GL_DYNAMIC_DRAW, bucket_head, *shader_manager);
+    bucket_next_  = BufferObject::from_fill(sizeof(uint32_t) * count_active_chunks, GL_DYNAMIC_DRAW, INVALID_ID, *shader_manager);
+    verify_debug_stack_ = BufferObject::from_fill(sizeof(uint32_t) * 2 + sizeof(DebugStackElement) * 10'000, GL_DYNAMIC_DRAW, INVALID_ID, *shader_manager);
+    verify_debug_stack_.update_subdata_fill(0, 0u, sizeof(uint32_t) * 2, *shader_manager);
 
-    evicted_chunks_list_ = BufferObject::from_fill(sizeof(uint32_t) * (count_active_chunks + 1), GL_DYNAMIC_DRAW, 0u, shader_manager);
-    voxel_write_list_ = BufferObject::from_fill(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * max_write_count, GL_DYNAMIC_DRAW, 0u, shader_manager);
-    local_voxel_write_list_ = BufferObject::from_fill(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * max_write_count, GL_DYNAMIC_DRAW, 0u, shader_manager);
+    evicted_chunks_list_ = BufferObject::from_fill(sizeof(uint32_t) * (count_active_chunks + 1), GL_DYNAMIC_DRAW, 0u, *shader_manager);
+    voxel_write_list_ = BufferObject::from_fill(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * desc.max_write_count, GL_DYNAMIC_DRAW, 0u, *shader_manager);
+    local_voxel_write_list_ = BufferObject::from_fill(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * desc.max_write_count, GL_DYNAMIC_DRAW, 0u, *shader_manager);
 
-    vb_page_size_ = 1 << vb_page_size_order_of_two;
-    count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 4u), vb_page_size_));
-    count_vb_nodes_ = ceil(count_vb_pages_ * buddy_allocator_nodes_factor);
+    vb_page_size_ = 1 << desc.vb_page_size_order_of_two;
+    count_vb_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((desc.max_quads * 4u), vb_page_size_));
+    count_vb_nodes_ = ceil(count_vb_pages_ * desc.buddy_allocator_nodes_factor);
     vb_order_ = math_utils::log2_floor_u32(count_vb_pages_);
     max_mesh_vertices_ = count_vb_pages_ * vb_page_size_;
     
@@ -86,12 +79,12 @@ VoxelGridGPU::VoxelGridGPU(
     vb_heads_ = BufferObject(sizeof(uint32_t) * (size_t)(vb_order_ + 1), GL_DYNAMIC_DRAW);
     vb_nodes_ = BufferObject(sizeof(AllocNode) * (size_t)(count_vb_nodes_), GL_DYNAMIC_DRAW);
     vb_free_nodes_list_ = BufferObject(sizeof(uint32_t) * (size_t)(1u + count_vb_nodes_), GL_DYNAMIC_DRAW);
-    vb_returned_nodes_list = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1u + count_vb_nodes_), GL_DYNAMIC_DRAW, 0u, shader_manager);
+    vb_returned_nodes_list = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1u + count_vb_nodes_), GL_DYNAMIC_DRAW, 0u, *shader_manager);
     vb_state_ = BufferObject(sizeof(uint32_t) * (size_t)count_vb_pages_, GL_DYNAMIC_DRAW);
 
-    ib_page_size_ = 1 << ib_page_size_order_of_two;
-    count_ib_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((max_quads * 6u), ib_page_size_));
-    count_ib_nodes_ = ceil(count_ib_pages_ * buddy_allocator_nodes_factor);
+    ib_page_size_ = 1 << desc.ib_page_size_order_of_two;
+    count_ib_pages_ = math_utils::next_pow2_u32(math_utils::div_up_u32((desc.max_quads * 6u), ib_page_size_));
+    count_ib_nodes_ = ceil(count_ib_pages_ * desc.buddy_allocator_nodes_factor);
     ib_order_ = math_utils::log2_floor_u32(count_ib_pages_);
     max_mesh_indices_ = count_ib_pages_ * ib_page_size_;
 
@@ -106,7 +99,7 @@ VoxelGridGPU::VoxelGridGPU(
     ib_heads_ = BufferObject(sizeof(uint32_t) * (size_t)(ib_order_ + 1), GL_DYNAMIC_DRAW);
     ib_nodes_ = BufferObject(sizeof(AllocNode) * (size_t)(count_ib_nodes_), GL_DYNAMIC_DRAW);
     ib_free_nodes_list_ = BufferObject(sizeof(uint32_t) * (size_t)(1u + count_ib_nodes_), GL_DYNAMIC_DRAW);
-    ib_returned_nodes_list = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1u + count_ib_nodes_), GL_DYNAMIC_DRAW, 0u, shader_manager);
+    ib_returned_nodes_list = BufferObject::from_fill(sizeof(uint32_t) * (size_t)(1u + count_ib_nodes_), GL_DYNAMIC_DRAW, 0u, *shader_manager);
     ib_state_ = BufferObject(sizeof(uint32_t) * (size_t)count_ib_pages_, GL_DYNAMIC_DRAW);
 
     chunk_mesh_alloc_ = BufferObject(sizeof(ChunkMeshAlloc) * (size_t)count_active_chunks, GL_DYNAMIC_DRAW);
@@ -118,12 +111,10 @@ VoxelGridGPU::VoxelGridGPU(
 
     VoxelDataGPU voxel_prifab(0u, 0u, 0u, glm::ivec3(255));
     uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
-    voxels_ = BufferObject::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, shader_manager);
+    voxels_ = BufferObject::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, *shader_manager);
 
     // alignof(ChunkHashTableSlot) == 8!!!
     chunk_hash_table_ = BufferObject(sizeof(HashTableCounters) + sizeof(ChunkHashTableSlot) * chunk_hash_table_size, GL_DYNAMIC_DRAW);
-
-    
 
     world_init_gpu();
     init_draw_buffers();
@@ -307,14 +298,14 @@ void VoxelGridGPU::stream_chunks_sphere(const glm::vec3& cam_world_pos, int radi
     merge_voxel_write_lists(local_voxel_write_list_, voxel_write_list_);
 
     reset_voxel_write_list_counter(local_voxel_write_list_);
-
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_, 0));
+    
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_, 0));
     mark_write_chunks_to_generate(dispatch_args);
 
-    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&load_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&load_list_, 0u));
     generate_terrain(dispatch_args, seed);
 
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_, 0u));
     write_voxels_to_grid();
 
     reset_voxel_write_list_counter(voxel_write_list_);
@@ -350,7 +341,7 @@ void VoxelGridGPU::add_voxel_write_list_counters_together(const BufferObject& vo
 }
 
 void VoxelGridGPU::merge_voxel_write_lists(const BufferObject& voxel_write_list_src, BufferObject& voxel_write_list_dsc) {
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_src, 0));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&voxel_write_list_src, 0));
     insert_elements_to_voxel_write_list(dispatch_args, voxel_write_list_src, voxel_write_list_dsc);
     add_voxel_write_list_counters_together(voxel_write_list_src, voxel_write_list_dsc);
 }
@@ -373,7 +364,6 @@ Voxel VoxelGridGPU::get_voxel(glm::ivec3 position) const {
 
 void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_clear_chunks_ = ComputeProgram(&shader_manager.clear_chunks_cs);
-
     prog_dispatch_adapter_ = ComputeProgram(&shader_manager.dispatch_adapter_cs);
     prog_world_init_ = ComputeProgram(&shader_manager.world_init_cs);
     prog_apply_writes_ = ComputeProgram(&shader_manager.apply_writes_to_world_cs);
@@ -404,7 +394,6 @@ void VoxelGridGPU::init_programs(ShaderManager& shader_manager) {
     prog_mark_write_chunks_to_generate_ = ComputeProgram(&shader_manager.mark_write_chunks_to_generate_cs);
     prog_insert_elements_to_voxel_write_list_ = ComputeProgram(&shader_manager.insert_elements_to_voxel_write_list_cs);
     prog_add_voxel_write_list_counters_together_ = ComputeProgram(&shader_manager.add_voxel_write_list_counters_together_cs);
-
     prog_vf_voxel_mesh_diffusion_spec_ = VfProgram(&shader_manager.voxel_mesh_vs, &shader_manager.voxel_mesh_fs);
 }
 
@@ -532,35 +521,6 @@ void VoxelGridGPU::rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_of
 
     clear_chunk_hash_table(dispatch_args);
     fill_chunk_hash_table(dispatch_args_additional, pack_bits, pack_offset);
-}
-
-void VoxelGridGPU::prepare_dispatch_args(BufferObject& dispatch_args, const DispatchArg& arg_x, const DispatchArg& arg_y, const DispatchArg& arg_z)
-{
-    if (arg_x.arg_buffer != nullptr) arg_x.arg_buffer->bind_base_as_ssbo(0);
-    if (arg_y.arg_buffer != nullptr) arg_y.arg_buffer->bind_base_as_ssbo(1);
-    if (arg_z.arg_buffer != nullptr) arg_z.arg_buffer->bind_base_as_ssbo(2);
-
-    dispatch_args.bind_base_as_ssbo(3);
-
-    prog_dispatch_adapter_.use();
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_0"), arg_x.offset_bytes);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_1"), arg_y.offset_bytes);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_offset_bytes_2"), arg_z.offset_bytes);
-
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_0"), arg_x.direct_value);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_1"), arg_y.direct_value);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_direct_value_2"), arg_z.direct_value);
-
-    uint32_t x_workgroup_size = arg_x.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 256u : arg_x.workgroup_size;
-    uint32_t y_workgroup_size = arg_y.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 1u : arg_y.workgroup_size;
-    uint32_t z_workgroup_size = arg_z.workgroup_size == DispatchArg::USE_DEFAULT_WORKGROUP_SIZE ? 1u : arg_z.workgroup_size;
-
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_x_workgroup_size"), x_workgroup_size);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_y_workgroup_size"), y_workgroup_size);
-    glUniform1ui(glGetUniformLocation(prog_dispatch_adapter_.id, "u_z_workgroup_size"), z_workgroup_size);
-
-    prog_dispatch_adapter_.dispatch_compute(1u, 1u, 1u);
-    glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void VoxelGridGPU::reset_heads() {
@@ -900,25 +860,25 @@ void VoxelGridGPU::reset_dirty_count() {
 }
 
 void VoxelGridGPU::build_mesh_from_dirty(uint32_t pack_bits, int pack_offset) {
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     mesh_reset(dispatch_args);
 
-    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
     mesh_count(dispatch_args, pack_bits, pack_offset);
 
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     mesh_alloc(dispatch_args);
 
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     verify_mesh_allocation(dispatch_args);
 
     prepare_return_free_alloc_nodes(dispatch_args);
     return_free_alloc_nodes(dispatch_args);
 
-    prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, ValueDispatchArg(vox_per_chunk), BufferDispatchArg(&dirty_list_, 0u));
     mesh_emit(dispatch_args, pack_bits, pack_offset);
 
-    prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&dirty_list_, 0u));
     mesh_finalize(dispatch_args);
 
     reset_dirty_count();

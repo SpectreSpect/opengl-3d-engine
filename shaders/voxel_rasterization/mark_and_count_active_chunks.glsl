@@ -5,12 +5,13 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) buffer CounterHashTable { HashTableCounters counter_hash_table_counters; ChunkHashTableSlot counter_hash_table_slots[]; };
-layout(std430, binding=1) buffer TriangleIndicesList { uint triangle_counter; uint triangle_indices_list[]; };
+layout(std430, binding=0) coherent buffer CounterHashTable { HashTableCounters counter_hash_table_counters; CounterHashTableSlot counter_hash_table_slots[]; };
+layout(std430, binding=1) buffer ActiveChunkKeysList { uint active_chunk_keys_counter; uvec2 active_chunk_keys_list[]; };
 layout(std430, binding=2) buffer VBO { vec4 vbo_data[]; };
 layout(std430, binding=3) buffer EBO { uint ebo_data[]; };
 
 uniform uint u_count_mesh_triangles;
+
 uniform uint u_counter_hash_table_size;
 
 uniform uint u_vertex_stride_bytes;
@@ -26,11 +27,11 @@ uniform mat4 u_transform;
 
 // ----- include -----
 #include "../utils.glsl"
-// #include "counter_hash_table/lookup_remove.glsl"
+#include "counter_hash_table/get_or_create.glsl"
 // -------------------
 
 vec4 voxel_index_to_position(uint voxel_id) {
-    uint position_offset_bytes = voxel_id * u_vertex_stride_bytes + u_vertex_position_offset_bytes;;
+    uint position_offset_bytes = voxel_id * u_vertex_stride_bytes + u_vertex_position_offset_bytes;
     return vbo_data[position_offset_bytes / 16u];
 }
 
@@ -54,15 +55,20 @@ void main() {
     ivec3 min_p = min(p0, min(p1, p2));
     ivec3 max_p = max(p0, max(p1, p2));
 
-    // for (int x = min_p.x; x <= max_p.x; x++)
-    // for (int y = min_p.y; y <= max_p.y; y++)
-    // for (int z = min_p.z; z <= max_p.z; z++) {
-    //     uvec2 key = pack_key_uvec2(ivec3(x, y, z), u_pack_offset, u_pack_bits);
-        
-    //     uint slot_id = counter_hash_table_lookup_hash_table_slot_id(key, true);
-    //     if (slot_id == INVALID_ID) continue;
+    for (int x = min_p.x; x <= max_p.x; x++)
+    for (int y = min_p.y; y <= max_p.y; y++)
+    for (int z = min_p.z; z <= max_p.z; z++) {
+        uvec2 key = pack_key_uvec2(ivec3(x, y, z), u_pack_offset, u_pack_bits);
 
-    //     uint base = atomicAdd(counter_hash_table_slots[slot_id].value.triangle_emmit_counter, 1u);
-    //     triangle_indices_list[base] = triangle_id;
-    // }
+        uint slot_id;
+        bool created;
+        if (!counter_hash_table_get_or_create_slot(key, slot_id, created)) continue;
+
+        if (created) {
+            uint active_chunk_key_idx = atomicAdd(active_chunk_keys_counter, 1u);
+            active_chunk_keys_list[active_chunk_key_idx] = key;
+        }
+
+        atomicAdd(counter_hash_table_slots[slot_id].value.count_triangles, 1u);
+    }
 }

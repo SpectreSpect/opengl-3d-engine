@@ -42,18 +42,21 @@ BufferObject create_voxel_write_rect(glm::ivec3 origin, glm::uvec3 rect_dim, glm
 }
 
 int main() {
-    Engine3D engine = Engine3D();
-    std::shared_ptr<Window> window = std::make_shared<Window>(&engine, 1280, 720, "3D visualization");
-    engine.set_window(window.get());
-    ui::init(window->window);
+    Engine3D engine;
+    Window window(&engine, 1280, 720, "3D visualization");
+    engine.set_window(&window);
+    ui::init(window.window);
     
-    window->disable_cursor();
+    window.disable_cursor();
 
     std::vector<std::filesystem::path> shaders_inlude_directories = {}; // Искать относительно executable_dir()
-    ShaderManager shader_manager = ShaderManager(executable_dir(), shaders_inlude_directories);
+    std::filesystem::path debug_shaders_root_path = executable_dir() / "debug_shaders";
+    ShaderManager shader_manager = ShaderManager(executable_dir(), &shaders_inlude_directories, &debug_shaders_root_path);
+
+    ShaderHelper shader_helper(&shader_manager);
 
     Camera camera;
-    window->set_camera(&camera);
+    window.set_camera(&camera);
 
     FPSCameraController camera_controller = FPSCameraController(&camera);
     camera_controller.speed = 100;
@@ -66,28 +69,38 @@ int main() {
 
     glm::vec3 voxel_size(1.0f);
     glm::ivec3 chunk_size(16);
-    std::shared_ptr<VoxelGridGPU> voxel_grid_gpu = std::make_shared<VoxelGridGPU>(
-        chunk_size, // chunk_size
-        voxel_size, // voxel_size
-        10'000, // count_active_chunks
-        3'000'000, // max_quads
-        4, // chunk_hash_table_size_factor
-        32, // count_evict_buckets
-        4'500, // min_free_chunks
-        0.2f, // tomb_fraction_to_rebuild
-        chunk_size.x * voxel_size.x * 1, // eviction_bucket_shell_thickness
-        10, // vb_page_size_order_of_two
-        10, // ib_page_size_order_of_two
-        1.0, // buddy_allocator_nodes_factor
-        chunk_size.x * voxel_size.x * 30, // render_distance
-        10, // generation_distance
-        chunk_size.x * chunk_size.x * 2'000, // max_write_count
-        shader_manager
-    );
+    VoxelGridGPU::VoxelGridDesc voxel_grid_desc;
+    voxel_grid_desc.chunk_size = chunk_size;
+    voxel_grid_desc.voxel_size = voxel_size;
+    voxel_grid_desc.count_active_chunks = 10'000;
+    voxel_grid_desc.max_quads = 3'000'000;
+    voxel_grid_desc.chunk_hash_table_size_factor = 4.0f;
+    voxel_grid_desc.count_evict_buckets = 32;
+    voxel_grid_desc.min_free_chunks = 4'500;
+    voxel_grid_desc.tomb_fraction_to_rebuild = 0.2f;
+    voxel_grid_desc.eviction_bucket_shell_thickness = chunk_size.x * voxel_size.x * 1;
+    voxel_grid_desc.vb_page_size_order_of_two = 10;
+    voxel_grid_desc.ib_page_size_order_of_two = 10;
+    voxel_grid_desc.buddy_allocator_nodes_factor = 1.0;
+    voxel_grid_desc.render_distance = chunk_size.x * voxel_size.x * 30;
+    voxel_grid_desc.generation_distance = 10;
+    voxel_grid_desc.max_write_count = chunk_size.x * chunk_size.y * chunk_size.z * 2'000;
 
+    VoxelGridGPU voxel_grid_gpu(voxel_grid_desc, &shader_helper, &shader_manager);
+    VoxelGridGPUDebugger voxel_grid_debugger(&voxel_grid_gpu, &shader_helper, &window);
 
-    VoxelGridGPUDebugger voxel_grid_debugger(voxel_grid_gpu, window);
-    // VoxelRasterizatorGPU voxel_rasterizator(voxel_grid_gpu.get(), chunk_size, voxel_size, shader_manager);
+    VoxelRasterizatorGPU::VoxelRasterizatorDesc voxel_rasterizator_desc;
+    voxel_rasterizator_desc.chunk_size = chunk_size;
+    voxel_rasterizator_desc.voxel_size = voxel_size;
+    voxel_rasterizator_desc.counter_hash_table_size = 10'000;
+    voxel_rasterizator_desc.count_voxel_writes = 0;
+    VoxelRasterizatorGPU voxel_rasterizator(voxel_rasterizator_desc, &voxel_grid_gpu, &shader_manager, &shader_helper);
+    // voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
+
+    VoxelWriteGPU voxel_write_prifab;
+    voxel_write_prifab.voxel_data = VoxelDataGPU(1, 1, 0, glm::ivec3(66, 135, 245));
+    voxel_write_prifab.set_flags = OVERWRITE_BIT;
+    // voxel_rasterizator.rasterize(torus, voxel_write_prifab, &voxel_grid_gpu.local_voxel_write_list_);
 
     float rotation_speed = glm::pi<float>() / 2.0f;
 
@@ -98,7 +111,7 @@ int main() {
 
     glm::vec3 torus_offset = glm::vec3(0);
     glm::ivec3 chunk_pos(0);
-    while(window->is_open()) {
+    while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - lastFrame;
         timer += delta_time;
@@ -106,18 +119,18 @@ int main() {
         lastFrame = currentFrame;   
 
         ui::begin_frame();
-        ui::update_mouse_mode(window.get());
+        ui::update_mouse_mode(&window);
 
-        camera_controller.update(window.get(), delta_time);
+        camera_controller.update(&window, delta_time);
 
-        window->clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
+        window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
         // voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
             
-        voxel_grid_gpu->stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
-        window->draw(voxel_grid_gpu.get(), &camera);
-        // window->draw(&torus, &camera);
+        voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
+        window.draw(&voxel_grid_gpu, &camera);
+        // window.draw(&torus, &camera);
 
         // voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
         ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,7 +155,7 @@ int main() {
 
         ui::end_frame();
 
-        window->swap_buffers();
+        window.swap_buffers();
         engine.poll_events();
     }
     

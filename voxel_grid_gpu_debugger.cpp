@@ -1,7 +1,8 @@
 #include "voxel_grid_gpu_debugger.h"
 
-VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window) 
-: voxel_grid(voxel_grid), window(window) {
+VoxelGridGPUDebugger::VoxelGridGPUDebugger(VoxelGridGPU* voxel_grid_in, ShaderHelper* shader_helper_in, Window* window_in) 
+: voxel_grid(voxel_grid_in), shader_helper(shader_helper_in), window(window_in) {
+
     std::fill(std::begin(voxel_grid_draw_streaming), std::end(voxel_grid_draw_streaming), voxel_grid_draw_streaming[0]);
     std::fill(std::begin(voxel_grid_generation_streaming), std::end(voxel_grid_generation_streaming), voxel_grid_generation_streaming[0]);
     
@@ -55,17 +56,17 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
     };
 
     std::function<void()> mark_write_chunks_to_generate_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0));
         voxel_grid->mark_write_chunks_to_generate(voxel_grid->dispatch_args);
     };
 
     std::function<void()> generate_terrain_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, ValueDispatchArg(voxel_grid->vox_per_chunk), BufferDispatchArg(&voxel_grid->load_list_, 0u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, ValueDispatchArg(voxel_grid->vox_per_chunk), BufferDispatchArg(&voxel_grid->load_list_, 0u));
         voxel_grid->generate_terrain(voxel_grid->dispatch_args, 45345345);
     };
 
     std::function<void()> write_voxels_to_grid_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0u));
         voxel_grid->write_voxels_to_grid();
     };
     
@@ -812,13 +813,13 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
     ImGui::Separator();
 
     if (ImGui::Button("mesh_reset()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
         voxel_grid->mesh_reset(voxel_grid->dispatch_args);
     }
 
     if (ImGui::Button("mesh_count()")) {
         uint32_t vox_per_chunk = (uint32_t)(voxel_grid->chunk_size.x * voxel_grid->chunk_size.y * voxel_grid->chunk_size.z);
-        voxel_grid->prepare_dispatch_args(
+        shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
             BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
@@ -827,12 +828,12 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
     }
 
     if (ImGui::Button("mesh_alloc()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
         voxel_grid->mesh_alloc(voxel_grid->dispatch_args);
     }
 
     if (ImGui::Button("verify_mesh_allocation()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
         voxel_grid->verify_mesh_allocation(voxel_grid->mesh_buffers_status_);
     }
 
@@ -843,7 +844,7 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
 
     if (ImGui::Button("mesh_emit()")) {
         uint32_t vox_per_chunk = (uint32_t)(voxel_grid->chunk_size.x * voxel_grid->chunk_size.y * voxel_grid->chunk_size.z);
-        voxel_grid->prepare_dispatch_args(
+        shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
             BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
@@ -852,7 +853,7 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
     }
 
     if (ImGui::Button("mesh_finalize()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
         voxel_grid->mesh_finalize(voxel_grid->dispatch_args);
     }
 
@@ -974,7 +975,7 @@ void VoxelGridGPUDebugger::display_stream_chunks_pipeline_window() {
     ImGui::Begin("Steam chunks pipeline");
     
     if (ImGui::Button("Run all pipeline")) {
-        voxel_grid->stream_chunks_sphere(window->camera->position, 15, 45345345u);
+        voxel_grid->stream_chunks_sphere(window->camera->position, -1, 45345345u);
     }
 
     ImGui::Separator();

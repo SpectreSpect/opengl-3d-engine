@@ -1,11 +1,12 @@
 #include "fragment_shader.h"
 
 FragmentShader::FragmentShader(
-    const std::filesystem::path& path, 
-    const std::vector<std::filesystem::path>& include_directories
-) {
-    std::string src = load_text_file(path);
-    this->id = compile_shader(GL_FRAGMENT_SHADER, src.c_str(), &path);
+    const std::filesystem::path& path,
+    const std::vector<std::filesystem::path>* include_directories,
+    const std::filesystem::path* debug_path)
+    : Shader(GL_FRAGMENT_SHADER, path, include_directories, debug_path)
+{
+
 }
 
 FragmentShader::FragmentShader(FragmentShader&& o) noexcept {

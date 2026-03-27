@@ -44,6 +44,21 @@ struct ChunkHashTableSlot {
 static_assert(sizeof(ChunkHashTableSlot) == 16);
 static_assert(alignof(ChunkHashTableSlot) == 8);
 
+struct CounterAllocMeta {
+    uint32_t count_triangles;
+    uint32_t triangle_indices_base;
+    uint32_t triangle_emmit_counter;
+};
+
+struct CounterHashTableSlot {
+    alignas(8) uint64_t key;
+    CounterAllocMeta value;
+    uint32_t state;
+};
+static_assert(sizeof(CounterHashTableSlot) == 24);
+static_assert(alignof(CounterHashTableSlot) == 8);
+
+
 static constexpr uint32_t COUNT_TABLE_COUNTERS = 16u;
 
 struct HashTableCounters {
@@ -71,6 +86,7 @@ struct alignas(16) VoxelWriteGPU {
     uint32_t set_flags;
     uint32_t pad1;
 };
+
 static_assert(sizeof(VoxelWriteGPU) == 32);
 static_assert(alignof(VoxelWriteGPU) == 16);
 

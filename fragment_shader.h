@@ -15,8 +15,9 @@ class FragmentShader : public Shader {
 public:
     FragmentShader() = default;
     FragmentShader(
-        const std::filesystem::path& path, 
-        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+        const std::filesystem::path& path,
+        const std::vector<std::filesystem::path>* include_directories = nullptr,
+        const std::filesystem::path* debug_path = nullptr
     );
     
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "hash_table/hash_table_decl.glsl"
 #include "../voxel_grid/chunk_hash_table/decl.glsl"
+#include "../voxel_rasterization/counter_hash_table/decl.glsl"
 
 #define DIRTY_FLAG_BIT 1u
 #define NEED_GENERATION_FLAG_BIT 2u
