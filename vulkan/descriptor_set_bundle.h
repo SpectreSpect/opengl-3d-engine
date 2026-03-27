@@ -3,11 +3,12 @@
 #include "descriptor_pool.h"
 #include "descriptor_set_layout.h"
 #include "descriptor_set.h"
-#include "texture2d.h"
 #include "cubemap.h"
 #include <unordered_map>
 #include <variant>
 #include <stdexcept>
+
+class Texture2D;
 
 class DescriptorSetBundle {
 public:

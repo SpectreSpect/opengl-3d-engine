@@ -77,7 +77,8 @@
 #include "mesh.h"
 #include "pbr_uniform.h"
 #include "imgui_layer.h"
-#include "vulkan/texture2d.h"
+// #include "vulkan/texture2d.h"
+#include "vulkan/image/texture2d.h"
 #include "vulkan/render_target_2d.h"
 #include "vulkan/render_pass.h"
 #include "vulkan/cubemap.h"
@@ -87,6 +88,8 @@
 #include "vulkan/cubemap.h"
 #include "math_utils.h"
 #include "vulkan/pbr/equirect_to_cubemap_pass.h"
+
+#include "vulkan/resource_loader.h"
 
 
 struct Vertex {
@@ -255,19 +258,30 @@ int main() {
 
     EquirectToCubemapPass equirect_to_cubemap_pass(engine);
 
-    Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-                Texture2D::Wrap::Repeat,
-                Texture2D::MagFilter::Linear,
-                Texture2D::MinFilter::LinearMipmapLinear,
-                true,   // sRGB
-                true    // flipY
-    );
+    ResourceLoader resource_loader;
+    resource_loader.create(engine, 35000000);
 
-    Cubemap cubemap;
-    cubemap.createEmpty(engine, 512);
+    Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    // Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
+    //             Texture2D::Wrap::Repeat,
+    //             Texture2D::MagFilter::Linear,
+    //             Texture2D::MinFilter::LinearMipmapLinear,
+    //             true,   // sRGB
+    //             true    // flipY
+    // );
+
+    // VK_IMAGE_USAGE_SAMPLED_BIT |
+    // VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+
+    // Cubemap cubemap;
+    // cubemap.createEmpty(engine, 512);
     
-    equirect_to_cubemap_pass.generate(equirectangular_map, cubemap);
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
+    // equirect_to_cubemap_pass.generate(equirectangular_map, cubemap);
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
+    
 
 
     float last_frame = 0.0f;

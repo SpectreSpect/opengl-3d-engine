@@ -1,4 +1,5 @@
 #include "descriptor_set_bundle.h"
+#include "image/texture2d.h"
 
 void DescriptorSetBundle::bind_uniform_buffer(uint32_t binding, VideoBuffer& buffer) {
     descriptor_set.write_uniform_buffer(binding, buffer);

@@ -4,8 +4,9 @@
 #include "descriptor_set_layout.h"
 #include "descriptor_pool.h"
 #include "video_buffer.h"
-#include "texture2d.h"
 #include "cubemap.h"
+
+class Texture2D;
 
 
 class DescriptorSet {

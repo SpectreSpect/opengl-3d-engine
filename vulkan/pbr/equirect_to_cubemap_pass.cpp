@@ -17,18 +17,6 @@ EquirectToCubemapPass::EquirectToCubemapPass(VulkanEngine& engine) {
 
 void EquirectToCubemapPass::create(VulkanEngine& engine) {
     this->engine = &engine;
-    // Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-    //             Texture2D::Wrap::Repeat,
-    //             Texture2D::MagFilter::Linear,
-    //             Texture2D::MinFilter::LinearMipmapLinear,
-    //             true,   // sRGB
-    //             true    // flipY
-    // );
-
-    // Cubemap cubemap;
-    // cubemap.createEmpty(engine, cubemap_face_size);
-    // cubemap.transition_to_general_layout(engine);
-
     command_pool.create(engine.device, engine.physicalDevice);
     command_buffer.create(command_pool);
 
@@ -46,24 +34,6 @@ void EquirectToCubemapPass::create(VulkanEngine& engine) {
     pipeline.create(engine.device, descriptor_set_bundle, equirect_to_cubemap_cs);
 
     fence = Fence(engine.device);
-
-    // uint32_t x_groups = math_utils::div_up_u32(equirect_to_cubemap_uniform.image_width, 256);
-    // uint32_t y_groups = equirect_to_cubemap_uniform.image_height;
-    // uint32_t z_groups = equirect_to_cubemap_uniform.num_layers;
-    
-    // command_buffer.begin();
-    // command_buffer.bind_pipeline(compute_pipeline);
-    // command_buffer.dispatch(x_groups, y_groups, z_groups);
-    // // command_buffer.memory_barrier(temp_storage_buffer);
-    // command_buffer.end();
-
-    // Fence fence(engine.device);
-
-    // command_buffer.submit(fence);
-
-    // fence.wait_for_fence();
-
-    // cubemap.transition_to_shader_read_only_layout(engine);
 }
 
 void EquirectToCubemapPass::generate(Texture2D& equirectangular_map, Cubemap& output_cubemap) {

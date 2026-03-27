@@ -250,9 +250,9 @@ void Texture2D::create_sampler(Wrap wrap, MagFilter mag_filter, MinFilter min_fi
 }
 
 void Texture2D::transition_image_layout(VulkanEngine& engine,
-                                      VkImageLayout new_layout,
-                                      uint32_t base_mip_level,
-                                      uint32_t level_count) {
+                                        VkImageLayout new_layout,
+                                        uint32_t base_mip_level,
+                                        uint32_t level_count) {
 
     VkCommandBuffer cmd = begin_single_time_commands(engine);
 

@@ -13,17 +13,6 @@ layout(set = 0, binding = 2) uniform samplerCube envMap;
 void main() { 
     vec3 dir = normalize(outPosition.xyz);
     vec4 c = texture(envMap, dir);
-
-
-    // float uExposure = 0.2;
-    vec3 hdrColor = texture(albedoTex, outUV.xy).xyz;
-
-    // // exposure tone mapping
-    // vec3 mapped = vec3(1.0) - exp(-hdrColor * uExposure);
-
-    // // gamma correction
-    // mapped = pow(mapped, vec3(1.0 / 2.2));
-
-    outFragColor = vec4(hdrColor, 1.0);
-    // outFragColor = c;
+    // outFragColor = texture(albedoTex, outUV.xy);
+    outFragColor = c;
 }

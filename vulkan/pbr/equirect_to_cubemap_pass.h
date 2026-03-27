@@ -5,7 +5,7 @@
 #include "../../vulkan_engine.h"
 #include "../compute_pipeline.h"
 #include "../fence.h"
-#include "../texture2d.h"
+#include "../image/texture2d.h"
 #include "../cubemap.h"
 #include "../graphics_pipeline.h"
 #include "../descriptor_set_bundle.h"
@@ -41,16 +41,4 @@ private:
     CommandPool command_pool;
     CommandBuffer command_buffer;
     uint32_t cubemap_face_size;
-
-    // bool render_target_initialized = false;
-
-    // GraphicsPipeline pipeline;
-    // DescriptorSetBundle descriptor_set_bundle;
-    // RenderTarget2D render_target;
-    // RenderPass render_pass;
-
-    // ShaderModule vertex_shader;
-    // ShaderModule fragment_shader;
-
-    // VideoBuffer uniform_buffer;
 };

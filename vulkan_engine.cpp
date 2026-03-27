@@ -670,6 +670,7 @@ void VulkanEngine::create_sync_objects() {
              "vkCreateFence");
 }
 
+
 void VulkanEngine::cleanup() {
     for (VkImageView view : swapchainImageViews) {
         if (view != VK_NULL_HANDLE) {

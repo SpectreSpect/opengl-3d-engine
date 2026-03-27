@@ -117,7 +117,7 @@ void VideoBuffer::create(VulkanEngine& engine, VkDeviceSize size,
     create(engine.device, engine.physicalDevice, size, usage, properties);
 }
 
-void VideoBuffer::update_data(void* data, VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags) {
+void VideoBuffer::update_data(const void* data, VkDeviceSize size, VkDeviceSize offset, VkMemoryMapFlags flags) {
     if (!device || buffer_memory == VK_NULL_HANDLE) {
         throw std::runtime_error("VideoBuffer::update_data on uninitialized buffer");
     }

@@ -95,7 +95,7 @@ add_executable(app
   vulkan/vulkan_vertex_layout.cpp
   vulkan/graphics_pipeline.cpp
   vulkan/pbr_renderer.cpp
-  vulkan/texture2d.cpp
+  vulkan/image/texture2d.cpp
   vulkan/descriptor_set_layout.cpp
   vulkan/descriptor_pool.cpp
   vulkan/descriptor_set.cpp
@@ -108,6 +108,10 @@ add_executable(app
   vulkan/command_buffer.cpp
   vulkan/compute_pipeline.cpp
   vulkan/fence.cpp
+  vulkan/resource_loader.cpp
+  vulkan/image/image_resource.cpp
+  vulkan/image/image_view.cpp
+  vulkan/image/sampler.cpp
 )
 
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
