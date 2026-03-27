@@ -20,7 +20,24 @@ public:
     Texture2D& operator=(Texture2D&& other) noexcept;
 
     Texture2D() = default;
-    void create(VulkanEngine& engine, uint32_t width, uint32_t height, VkImageUsageFlags usage, VkFormat format);
-    // void upload_data(const void* data, size_t size_bytes, VkCommandBuffer cmd);
-    void upload_data(const void* data, size_t size_bytes, CommandBuffer& command_buffer, VideoBuffer& staging_buffer);
+
+    static uint32_t calc_mip_levels(uint32_t width, uint32_t height);
+
+    void create(
+        VulkanEngine& engine,
+        uint32_t width,
+        uint32_t height,
+        uint32_t mip_levels,
+        VkImageUsageFlags usage,
+        VkFormat format
+    );
+
+    void upload_data(
+        const void* data,
+        size_t size_bytes,
+        CommandBuffer& command_buffer,
+        VideoBuffer& staging_buffer
+    );
+
+    void generate_mipmaps(CommandBuffer& command_buffer);
 };

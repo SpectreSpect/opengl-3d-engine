@@ -89,38 +89,17 @@ void SkyboxPass::create(VulkanEngine& engine, float exposure) {
     // fence = Fence(engine.device);
 }
 
+void SkyboxPass::render(Camera& camera, Cubemap& environment_map) {
+    float aspect = float(engine->swapchainExtent.width) / float(engine->swapchainExtent.height);
+    render(camera.get_projection_matrix(aspect), camera.get_view_matrix(), environment_map);
+}
+
 void SkyboxPass::render(glm::mat4 projection_matrix, glm::mat4 view_matrix, Cubemap& environment_map) {
     if (!engine)
         throw "engine was null";
 
-    // RenderState render_state = {};
-
-    // float aspect = float(engine->swapchainExtent.width) / float(engine->swapchainExtent.height);
-    // render_state.proj = camera.get_projection_matrix(aspect);
-    // render_state.vp = render_state.proj * camera.get_view_matrix();
-    // render_state.engine = engine;
-    // render_state.transform = glm::mat4(1.0f);
-    // render_state.renderer = this;
-    // render_state.camera = &camera;
-    // render_state.vp = render_state.proj * camera.get_view_matrix();
-
-    // drawable.draw(render_state);
-
 
     SkyboxUniform ubo{};
-
-    // glm::mat4 model = mesh.get_model_matrix();
-    // glm::mat4 world = state.transform * model;
-    // glm::mat4 mvp = state.vp * world;
-
-
-    // if (state.camera) {
-    //     program->set_mat4("uView", state.camera->get_view_matrix());
-    //     program->set_mat4("uProj", state.proj);
-    // }
-
-    // cubemap->bind(0);
-    // program->set_int("uSkybox", 0);
 
     ubo.proj = projection_matrix;
     ubo.view = view_matrix;

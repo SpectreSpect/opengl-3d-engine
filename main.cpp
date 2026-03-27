@@ -92,6 +92,9 @@
 
 #include "vulkan/resource_loader.h"
 #include "skybox/skybox_pass.h"
+#include "vulkan/pbr/brdf_lut_generator.h"
+#include "vulkan/pbr/irradiance_map_generator.h"
+#include "vulkan/pbr/prefilter_map_generator.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -107,126 +110,49 @@ struct CubePosVertex {
     glm::vec4 position;
 };
 
-Mesh create_position_cube_mesh(VulkanEngine& engine) {
-    std::vector<CubePosVertex> vertices = {
-        // +Z
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f) },
-
-        // -Z
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f) },
-
-        // +X
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f) },
-
-        // -X
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f) },
-
-        // +Y
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f) },
-
-        // -Y
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f) },
-    };
-
-    std::vector<uint32_t> indices = {
-         0,  1,  2,   2,  3,  0,   // +Z
-         4,  5,  6,   6,  7,  4,   // -Z
-         8,  9, 10,  10, 11,  8,   // +X
-        12, 13, 14,  14, 15, 12,   // -X
-        16, 17, 18,  18, 19, 16,   // +Y
-        20, 21, 22,  22, 23, 20    // -Y
-    };
-
-    return Mesh(
-        engine,
-        vertices.data(),
-        sizeof(CubePosVertex) * vertices.size(),
-        indices.data(),
-        sizeof(uint32_t) * indices.size()
-    );
-}
-
 struct EquirectToCubemapUniform {
     uint32_t image_width;
     uint32_t image_height;
     uint32_t num_layers;
 };
 
-
-int main() {
-    VulkanEngine engine = VulkanEngine();
-    VulkanWindow window = VulkanWindow(&engine, 1280, 720, "3D visualization");
-    engine.set_vulkan_window(&window);
-    ui::init(window.window);
-
-    Camera camera = Camera();
-    window.set_camera(&camera);
-
-    FPSCameraController camera_controller = FPSCameraController(&camera);
-    camera_controller.speed = 20;
-
-    ShaderModule vert_module = ShaderModule(engine.device, "shaders/pbr.vert.spv");
-    ShaderModule frag_module = ShaderModule(engine.device, "shaders/pbr.frag.spv");
-
-    ShaderModule equirect_to_cubemap_vs = ShaderModule(engine.device, "shaders/equirect_to_cubemap.vert.spv");
-    ShaderModule equirect_to_cubemap_fs = ShaderModule(engine.device, "shaders/equirect_to_cubemap.frag.spv");
-
-    PBRRenderer renderer = PBRRenderer(engine, vert_module, frag_module);
-    
+Mesh create_cube_mesh(VulkanEngine& engine, glm::vec4 color) {
     std::vector<Vertex> vertices = {
         // +Z (front)
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
 
         // -Z (back)
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 1.0f) },
 
         // +X (right)
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4( 0.0f,  0.0f, -1.0f, 1.0f) },
 
         // -X (left)
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4(-1.0f,  0.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4( 0.0f,  0.0f,  1.0f, 1.0f) },
 
         // +Y (top)
-        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f,  0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f,  0.5f, -0.5f, 1.0f), glm::vec4( 0.0f,  1.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
 
         // -Y (bottom)
-        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
-        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f, -0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 0.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4( 0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), color, glm::vec2(1.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
+        { glm::vec4(-0.5f, -0.5f,  0.5f, 1.0f), glm::vec4( 0.0f, -1.0f,  0.0f, 0.0f), color, glm::vec2(0.0f, 1.0f), glm::vec4( 1.0f,  0.0f,  0.0f, 1.0f) },
     };
 
     std::vector<uint32_t> indices = {
@@ -255,21 +181,161 @@ int main() {
         22, 23, 20
     };
 
-    Mesh mesh = Mesh(engine, vertices.data(), sizeof(Vertex) * vertices.size(), indices.data(), sizeof(uint32_t) * indices.size());
+    Mesh mesh(engine,
+              vertices.data(),
+              sizeof(Vertex) * vertices.size(),
+              indices.data(),
+              sizeof(uint32_t) * indices.size());
+
+    return mesh;
+}
+
+Mesh create_sphere_mesh(VulkanEngine& engine, glm::vec4 color) {
+    constexpr float radius = 0.5f;
+    constexpr uint32_t stacks = 32;
+    constexpr uint32_t sectors = 64;
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    vertices.reserve((stacks + 1) * (sectors + 1));
+    indices.reserve(stacks * sectors * 6);
+
+    const float pi = 3.14159265358979323846f;
+    const float two_pi = 2.0f * pi;
+
+    for (uint32_t i = 0; i <= stacks; ++i) {
+        float v = static_cast<float>(i) / static_cast<float>(stacks);
+        float phi = v * pi;
+
+        float sin_phi = std::sin(phi);
+        float cos_phi = std::cos(phi);
+
+        for (uint32_t j = 0; j <= sectors; ++j) {
+            float u = static_cast<float>(j) / static_cast<float>(sectors);
+            float theta = u * two_pi;
+
+            float sin_theta = std::sin(theta);
+            float cos_theta = std::cos(theta);
+
+            glm::vec3 normal(
+                sin_phi * cos_theta,
+                cos_phi,
+                sin_phi * sin_theta
+            );
+
+            glm::vec3 position = radius * normal;
+
+            glm::vec3 tangent;
+            if (sin_phi > 1e-6f) {
+                tangent = glm::normalize(glm::vec3(
+                    -sin_theta,
+                    0.0f,
+                    cos_theta
+                ));
+            } else {
+                tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+            }
+
+            vertices.push_back({
+                glm::vec4(position, 1.0f),
+                glm::vec4(glm::normalize(normal), 0.0f),
+                color,
+                glm::vec2(u, v),
+                glm::vec4(tangent, 1.0f)
+            });
+        }
+    }
+
+    for (uint32_t i = 0; i < stacks; ++i) {
+        for (uint32_t j = 0; j < sectors; ++j) {
+            uint32_t k1 = i * (sectors + 1) + j;
+            uint32_t k2 = k1 + sectors + 1;
+
+            if (i != 0) {
+                indices.push_back(k1);
+                indices.push_back(k2);
+                indices.push_back(k1 + 1);
+            }
+
+            if (i != stacks - 1) {
+                indices.push_back(k1 + 1);
+                indices.push_back(k2);
+                indices.push_back(k2 + 1);
+            }
+        }
+    }
+
+    Mesh mesh(
+        engine,
+        vertices.data(),
+        sizeof(Vertex) * vertices.size(),
+        indices.data(),
+        sizeof(uint32_t) * indices.size()
+    );
+
+    return mesh;
+}
+
+
+int main() {
+    VulkanEngine engine = VulkanEngine();
+    VulkanWindow window = VulkanWindow(&engine, 1280, 720, "3D visualization");
+    engine.set_vulkan_window(&window);
+    ui::init(window.window);
+
+    Camera camera = Camera();
+    window.set_camera(&camera);
+
+    FPSCameraController camera_controller = FPSCameraController(&camera);
+    camera_controller.speed = 20;
+
+    ShaderModule vert_module = ShaderModule(engine.device, "shaders/pbr.vert.spv");
+    ShaderModule frag_module = ShaderModule(engine.device, "shaders/pbr.frag.spv");
+
+    ShaderModule equirect_to_cubemap_vs = ShaderModule(engine.device, "shaders/equirect_to_cubemap.vert.spv");
+    ShaderModule equirect_to_cubemap_fs = ShaderModule(engine.device, "shaders/equirect_to_cubemap.frag.spv");
+
+    PBRRenderer renderer = PBRRenderer(engine, vert_module, frag_module, 0.3f);
+
+    Mesh mesh = create_sphere_mesh(engine, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
 
     EquirectToCubemapPass equirect_to_cubemap_pass(engine);
+    BrdfLutGenerater brdf_lut_generator(engine);
+    IrradianceMapGenerator irradiance_map_generator(engine);
+    PrefilterMapGenerator prefilter_map_generator(engine);
 
     ResourceLoader resource_loader;
     resource_loader.create(engine, 154217728);
 
-    Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT);
-
+    Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/st_peters_square_night_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
+    // Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/citrus_orchard_puresky_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
+    // Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/studio_kominka_02_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
     
-    Cubemap cubemap = equirect_to_cubemap_pass.generate(equirectangular_map, 1920);
+    Texture2D brdf_lut = brdf_lut_generator.generate(256, 256);
+    
+    Cubemap environment_map = equirect_to_cubemap_pass.generate(equirectangular_map, 1920);
+    Cubemap irradiance_map = irradiance_map_generator.generate(environment_map, 256);
+    Cubemap prefilter_map = prefilter_map_generator.generate(environment_map, 256);
+    
+    
 
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, environment_map);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(3, irradiance_map);
 
+
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, irradiance_map);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, prefilter_map);
+    // renderer.descriptor_set_bundle.bind_combined_image_sampler(3, brdf_lut);
+
+
+    // builder.add_combined_image_sampler(1, VK_SHADER_STAGE_FRAGMENT_BIT); // irradianceMap
+    // builder.add_combined_image_sampler(2, VK_SHADER_STAGE_FRAGMENT_BIT); // prefilterMap
+    // builder.add_combined_image_sampler(3, VK_SHADER_STAGE_FRAGMENT_BIT); // uBrdfLUT
+    // builder.add_storage_buffer(4, VK_SHADER_STAGE_FRAGMENT_BIT); // LightSources
+    // builder.add_storage_buffer(5, VK_SHADER_STAGE_FRAGMENT_BIT); // NumLightsInClusters
+    // builder.add_storage_buffer(6, VK_SHADER_STAGE_FRAGMENT_BIT); // LightsInClusters
 
     SkyboxPass skybox_pass;
     skybox_pass.create(engine);
@@ -284,10 +350,8 @@ int main() {
 
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
 
-        float aspect = float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height);
-        skybox_pass.render(camera.get_projection_matrix(aspect), camera.get_view_matrix(), cubemap);
-
-        renderer.render(mesh, camera);
+        skybox_pass.render(camera, environment_map);        
+        renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut);
 
         engine.end_frame();
         engine.poll_events();

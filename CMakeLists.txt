@@ -114,6 +114,9 @@ add_executable(app
   vulkan/image/image_view.cpp
   vulkan/image/sampler.cpp
   skybox/skybox_pass.cpp
+  vulkan/pbr/brdf_lut_generator.cpp
+  vulkan/pbr/irradiance_map_generator.cpp
+  vulkan/pbr/prefilter_map_generator.cpp
 )
 
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)

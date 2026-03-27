@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 class Texture2D;
+class ImageView;
 
 class DescriptorSetBundle {
 public:
@@ -20,7 +21,9 @@ public:
     void bind_combined_image_sampler(uint32_t binding, Texture2D& texture);
     void bind_combined_image_sampler(uint32_t binding, Cubemap& texture);
     void bind_storage_buffer(uint32_t binding, VideoBuffer& buffer);
-    void bind_image_storage(uint32_t binding, Cubemap& buffer);
+    void bind_image_storage(uint32_t binding, Cubemap& texture);
+    void bind_image_storage(uint32_t binding, Texture2D& texture);
+    void bind_image_storage(uint32_t binding, ImageView& image_view);
 
     DescriptorSetBundle() = default;
 };
@@ -37,15 +40,55 @@ public:
 
     DescriptorSetBundleBuilder() = default;
 
-    void add_uniform_buffer(uint32_t binding, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_storage_buffer(uint32_t binding, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_combined_image_sampler(uint32_t binding, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_image_storage(uint32_t binding, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    void add_uniform_buffer(
+        uint32_t binding,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
 
-    void add_uniform_buffer(uint32_t binding, VideoBuffer& video_buffer, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_storage_buffer(uint32_t binding, VideoBuffer& video_buffer, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_combined_image_sampler(uint32_t binding, Texture2D& texture, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_combined_image_sampler(uint32_t binding, Cubemap& texture, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    void add_image_storage(uint32_t binding, Cubemap& texture, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    void add_storage_buffer(
+        uint32_t binding,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_combined_image_sampler(
+        uint32_t binding,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_image_storage(
+        uint32_t binding,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_uniform_buffer(
+        uint32_t binding,
+        VideoBuffer& video_buffer,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_storage_buffer(
+        uint32_t binding,
+        VideoBuffer& video_buffer,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_combined_image_sampler(
+        uint32_t binding,
+        Texture2D& texture,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_combined_image_sampler(
+        uint32_t binding,
+        Cubemap& texture,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
+    void add_image_storage(
+        uint32_t binding,
+        Cubemap& texture,
+        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
+
     DescriptorSetBundle create(VkDevice& device);
 };

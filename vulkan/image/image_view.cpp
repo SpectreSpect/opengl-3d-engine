@@ -41,6 +41,38 @@ ImageView::CreateDesc ImageView::cubemap_desc(ImageResource* image) {
     return desc;
 }
 
+ImageView::CreateDesc ImageView::cubemap_mip_desc(ImageResource* image, uint32_t mip_level) {
+    if (!image)
+        throw std::runtime_error("ImageView::cubemap_mip_desc: image was nullptr");
+
+    if (image->array_layers < 6)
+        throw std::runtime_error("ImageView::cubemap_mip_desc: image did not have 6 layers");
+
+    if ((image->flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) == 0)
+        throw std::runtime_error("ImageView::cubemap_mip_desc: image was not cube compatible");
+
+    if (mip_level >= image->mip_levels)
+        throw std::runtime_error("ImageView::cubemap_mip_desc: mip_level was out of range");
+
+    CreateDesc desc{};
+    desc.image = image;
+    desc.view_type = VK_IMAGE_VIEW_TYPE_CUBE;
+    desc.format = image->format;
+    desc.components = {
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY
+    };
+    desc.subresource_range.aspectMask = image->aspect;
+    desc.subresource_range.baseMipLevel = mip_level;
+    desc.subresource_range.levelCount = 1;
+    desc.subresource_range.baseArrayLayer = 0;
+    desc.subresource_range.layerCount = 6;
+    desc.flags = 0;
+    return desc;
+}
+
 void ImageView::create(VulkanEngine& engine, const CreateDesc& desc) {
     if (!desc.image)
         throw std::runtime_error("ImageView::create: desc.image was nullptr");

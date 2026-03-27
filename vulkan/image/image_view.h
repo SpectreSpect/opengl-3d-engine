@@ -27,6 +27,7 @@ public:
 
     static CreateDesc texture2d_desc(ImageResource* image);
     static CreateDesc cubemap_desc(ImageResource* image);
+    static CreateDesc cubemap_mip_desc(ImageResource* image, uint32_t mip_level);
 
     void create(VulkanEngine& engine, const CreateDesc& desc);
     void destroy(VkDevice device);

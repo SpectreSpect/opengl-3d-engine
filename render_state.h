@@ -11,7 +11,9 @@ class VulkanEngine;
 struct RenderState {
     glm::mat4 proj;
     glm::mat4 vp;       // projection * view
+    glm::mat4 view;       // projection * view
     glm::mat4 transform;    // accumulated parent->world transform
+    uint32_t prefilte_map_mip_levels;
     ShaderModule* vertex_shader;
     ShaderModule* fragment_shader;
     Camera* camera;

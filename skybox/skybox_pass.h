@@ -7,6 +7,7 @@
 #include "../vulkan/command_pool.h"
 #include "../vulkan/graphics_pipeline.h"
 #include "../mesh.h"
+#include "../camera.h"
 
 class SkyboxPass {
 public:
@@ -20,6 +21,7 @@ public:
 
     SkyboxPass() = default;
     void create(VulkanEngine& engine, float exposure = 0.3f);
+    void render(Camera& camera, Cubemap& environment_map);
     void render(glm::mat4 projection_matrix, glm::mat4 view_matrix, Cubemap& environment_map);
 private:
     VulkanEngine* engine;

@@ -20,9 +20,17 @@ public:
     Cubemap(Cubemap&& other) noexcept;
     Cubemap& operator=(Cubemap&& other) noexcept;
 
-
     Cubemap() = default;
-    void create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags usage, VkFormat format);
-    // void upload_data(const void* data, size_t size_bytes, VkCommandBuffer cmd);
-    // void upload_data(const void* data, size_t size_bytes, CommandBuffer& command_buffer, VideoBuffer& staging_buffer);
+
+    static uint32_t calc_mip_levels(uint32_t face_size);
+
+    void create(
+        VulkanEngine& engine,
+        uint32_t face_size,
+        uint32_t mip_levels,
+        VkImageUsageFlags usage,
+        VkFormat format
+    );
+
+    void generate_mipmaps(CommandBuffer& command_buffer);
 };

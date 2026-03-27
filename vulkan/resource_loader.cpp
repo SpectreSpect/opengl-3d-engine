@@ -10,7 +10,7 @@ void ResourceLoader::create(VulkanEngine& engine, VkDeviceSize staging_buffer_si
     fence.create(engine.device);
 }
 
-Texture2D ResourceLoader::load_hdr_texture2d(const std::string& filepath, VkImageUsageFlags usage) {
+Texture2D ResourceLoader::load_hdr_texture2d(const std::string& filepath, uint32_t mip_levels, VkImageUsageFlags usage) {
     if (!engine)
         throw std::runtime_error("engine was null");
     
@@ -28,7 +28,7 @@ Texture2D ResourceLoader::load_hdr_texture2d(const std::string& filepath, VkImag
     Texture2D texture;
 
     try {
-        texture.create(*engine, w, h, usage, VK_FORMAT_R32G32B32A32_SFLOAT);
+        texture.create(*engine, w, h, mip_levels, usage, VK_FORMAT_R32G32B32A32_SFLOAT);
 
         const VkDeviceSize image_size = static_cast<VkDeviceSize>(w) * h * 4 * sizeof(float);
 

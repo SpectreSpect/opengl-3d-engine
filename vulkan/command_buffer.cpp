@@ -23,6 +23,14 @@ void CommandBuffer::create(CommandPool& command_pool) {
 }
 
 void CommandBuffer::begin() {
+    if (!device)
+        throw std::runtime_error("device was nullptr");
+
+    vulkan_utils::vk_check(
+        vkResetCommandBuffer(buffer, 0),
+        "vkResetCommandBuffer"
+    );
+    
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -65,6 +73,14 @@ void CommandBuffer::memory_barrier(VideoBuffer& video_buffer) {
 void CommandBuffer::submit(Fence& fence) {
     if (!command_pool)
         throw std::runtime_error("command pool was null");
+    
+    if (!device)
+        throw std::runtime_error("device was nullptr");
+
+    vulkan_utils::vk_check(
+        vkResetFences(*device, 1, &fence.fence),
+        "vkResetFences"
+    );
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

@@ -1,7 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <vector>
-
+#include <cstdint>
 
 class VulkanEngine;
 class CommandBuffer;
@@ -51,19 +51,35 @@ public:
         VkFormat format,
         uint32_t width,
         uint32_t height,
+        uint32_t mip_levels,
         VkImageUsageFlags usage
     );
 
     static ImageCreateDesc cubemap_desc(
         VkFormat format,
         uint32_t face_size,
+        uint32_t mip_levels,
         VkImageUsageFlags usage
     );
 
+    static uint32_t calc_mip_levels(uint32_t width, uint32_t height);
+
     void create(VulkanEngine& engine, const ImageCreateDesc& desc);
     void destroy(VkDevice device);
-    void transition_layout(CommandBuffer& command_buffer, VkImageLayout new_layout, VkPipelineStageFlags src_stage, 
-                           VkPipelineStageFlags dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access);
+
+    void transition_layout(
+        CommandBuffer& command_buffer,
+        VkImageLayout new_layout,
+        VkPipelineStageFlags src_stage,
+        VkPipelineStageFlags dst_stage,
+        VkAccessFlags src_access,
+        VkAccessFlags dst_access
+    );
+
     void transition_undefined_to_compute_write(CommandBuffer& command_buffer);
     void transition_compute_write_to_fragment_read(CommandBuffer& command_buffer);
+
+    // Assumes mip 0 already contains valid data.
+    // Assumes the image was created with TRANSFER_SRC and TRANSFER_DST usage.
+    void generate_mipmaps(VulkanEngine& engine, CommandBuffer& command_buffer);
 };
