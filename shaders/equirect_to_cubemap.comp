@@ -56,12 +56,12 @@ void main() {
     if (y_id >= ubo.image_height) return;
     if (z_id >= ubo.num_layers) return;
 
-    // vec3 dir = cubemap_texel_to_direction(x_id, y_id, uint(z_id), uint(ubo.image_width));
-    // vec2 uv = direction_to_equirect_uv(dir);
+    vec3 dir = cubemap_texel_to_direction(x_id, y_id, uint(z_id), uint(ubo.image_width));
+    vec2 uv = direction_to_equirect_uv(dir);
     
-    // vec4 out_color = vec4(texture(uEquirectangularMap, uv).xyz, 1.0f);
-    // imageStore(outEnvMap, ivec3(x_id, y_id, z_id), out_color);
+    vec4 out_color = vec4(texture(uEquirectangularMap, uv).xyz, 1.0f);
+    imageStore(outEnvMap, ivec3(x_id, y_id, z_id), out_color);
 
 
-    imageStore(outEnvMap, ivec3(x_id, y_id, z_id), vec4(1.0, 0.0, 0.0, 1.0));
+    // imageStore(outEnvMap, ivec3(x_id, y_id, z_id), vec4(1.0, 0.0, 0.0, 1.0));
 }

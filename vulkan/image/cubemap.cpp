@@ -12,7 +12,7 @@ void Cubemap::create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags
     const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
 
     image_resource.create(engine, ImageResource::cubemap_desc(image_format, face_size, usage));
-    image_view.create(engine, ImageView::texture2d_desc(&image_resource));
+    image_view.create(engine, ImageView::cubemap_desc(&image_resource));
     sampler.create(engine, Sampler::linear_repeat_desc());
 }
 

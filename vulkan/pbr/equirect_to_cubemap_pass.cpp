@@ -41,22 +41,13 @@ Cubemap EquirectToCubemapPass::generate(Texture2D& equirectangular_map, uint32_t
     if (!this->engine)
         throw std::runtime_error("engine was null");
     
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 
-    // VK_IMAGE_USAGE_SAMPLED_BIT |
-    // VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
-
-
-    // output_cubemap.destroy();
-    // output_cubemap.transition_to_general_layout(*this->engine);
-
-    // VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-
-    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                              VK_IMAGE_USAGE_STORAGE_BIT |
-                              VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    // VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+    //                           VK_IMAGE_USAGE_STORAGE_BIT |
+    //                           VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+    //                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+    //                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
         
 
@@ -98,11 +89,6 @@ Cubemap EquirectToCubemapPass::generate(Texture2D& equirectangular_map, uint32_t
         VK_ACCESS_SHADER_WRITE_BIT,
         VK_ACCESS_SHADER_READ_BIT
     );
-
-    // barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    // barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    // src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    // dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
     // command_buffer.memory_barrier(temp_storage_buffer);
     command_buffer.end();
