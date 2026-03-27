@@ -2,13 +2,13 @@
 #include "../command_buffer.h"
 
 
-void Texture2D::create(VulkanEngine& engine, uint32_t width, uint32_t height, VkImageUsageFlags usage, bool srgb) {
+void Texture2D::create(VulkanEngine& engine, uint32_t width, uint32_t height, VkImageUsageFlags usage, VkFormat format) {
     this->engine = &engine;
-    this->is_srgb = srgb;
+    // this->is_srgb = srgb;
 
-    const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+    // const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
 
-    image_resource.create(engine, ImageResource::texture2d_desc(image_format, width, height, usage));
+    image_resource.create(engine, ImageResource::texture2d_desc(format, width, height, usage));
     image_view.create(engine, ImageView::texture2d_desc(&image_resource));
     sampler.create(engine, Sampler::linear_repeat_desc());
 }

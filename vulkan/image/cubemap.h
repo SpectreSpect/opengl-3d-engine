@@ -22,7 +22,7 @@ public:
 
 
     Cubemap() = default;
-    void create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags usage, bool srgb = false);
+    void create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags usage, VkFormat format);
     // void upload_data(const void* data, size_t size_bytes, VkCommandBuffer cmd);
     // void upload_data(const void* data, size_t size_bytes, CommandBuffer& command_buffer, VideoBuffer& staging_buffer);
 };

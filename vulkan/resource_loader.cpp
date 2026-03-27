@@ -10,7 +10,7 @@ void ResourceLoader::create(VulkanEngine& engine, VkDeviceSize staging_buffer_si
     fence.create(engine.device);
 }
 
-Texture2D ResourceLoader::load_texture2d(const std::string& filepath, VkImageUsageFlags usage, bool srgb) {
+Texture2D ResourceLoader::load_hdr_texture2d(const std::string& filepath, VkImageUsageFlags usage) {
     if (!engine)
         throw std::runtime_error("engine was null");
     
@@ -20,7 +20,7 @@ Texture2D ResourceLoader::load_texture2d(const std::string& filepath, VkImageUsa
     int h = 0;
     int channels = 0;
 
-    stbi_uc* pixels = stbi_load(filepath.c_str(), &w, &h, &channels, STBI_rgb_alpha);
+    float* pixels = stbi_loadf(filepath.c_str(), &w, &h, &channels, STBI_rgb_alpha);
     if (!pixels) {
         throw std::runtime_error("failed to load texture");
     }
@@ -28,9 +28,9 @@ Texture2D ResourceLoader::load_texture2d(const std::string& filepath, VkImageUsa
     Texture2D texture;
 
     try {
-        texture.create(*engine, w, h, usage, srgb);
+        texture.create(*engine, w, h, usage, VK_FORMAT_R32G32B32A32_SFLOAT);
 
-        const VkDeviceSize image_size = static_cast<VkDeviceSize>(w) * h * 4;
+        const VkDeviceSize image_size = static_cast<VkDeviceSize>(w) * h * 4 * sizeof(float);
 
         if (image_size > staging_buffer.size_bytes)
             throw std::runtime_error("staging buffer is too small for the image data");

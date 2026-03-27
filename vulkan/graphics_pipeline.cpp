@@ -2,12 +2,12 @@
 #include "../vulkan_engine.h"
 
 GraphicsPipeline::GraphicsPipeline(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle,
-                                   VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module) {
-    create(engine,  descriptor_set_bundle, vertex_layout, vert_module, frag_module);
+                                   VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module, bool depth_test) {
+    create(engine,  descriptor_set_bundle, vertex_layout, vert_module, frag_module, depth_test);
 }
 
 void GraphicsPipeline::create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent, DescriptorSetBundle& descriptor_set_bundle,
-                              VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module) {
+                              VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module, bool depth_test) {
     create(engine.device,
            engine.physicalDevice,
            render_pass.render_pass,
@@ -15,22 +15,22 @@ void GraphicsPipeline::create(VulkanEngine& engine, RenderPass& render_pass, VkE
            descriptor_set_bundle,
            vertex_layout,
            vert_module,
-           frag_module);
+           frag_module, depth_test);
 }
 
 void GraphicsPipeline::create(VulkanEngine& engine, RenderPass& render_pass, VkExtent2D& extent, DescriptorSetBundle& descriptor_set_bundle,
-                              VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module) {
+                              VulkanVertexLayout& vertex_layout, ShaderModule& vert_module, ShaderModule& frag_module, bool depth_test) {
     create(engine,
            render_pass,
            extent,
            descriptor_set_bundle,
            vertex_layout,
            vert_module.shader_module,
-           frag_module.shader_module);
+           frag_module.shader_module, depth_test);
 }
 void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_device, VkRenderPass& render_pass, 
                               VkExtent2D& swapchain_extent,
-                              DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module){
+                              DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, VkShaderModule& vert_module, VkShaderModule& frag_module, bool depth_test){
         this->descriptor_set_bundle = &descriptor_set_bundle;
 
     VkPipelineShaderStageCreateInfo vertStage{};
@@ -91,7 +91,7 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
@@ -145,12 +145,12 @@ void GraphicsPipeline::create(VkDevice& device, VkPhysicalDevice& physical_devic
 }
 
 void GraphicsPipeline::create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, 
-                              VkShaderModule& vert_module, VkShaderModule& frag_module) {
+                              VkShaderModule& vert_module, VkShaderModule& frag_module, bool depth_test) {
     create(engine.device, engine.physicalDevice, engine.renderPass, engine.swapchainExtent,
-        descriptor_set_bundle, vertex_layout, vert_module, frag_module);
+        descriptor_set_bundle, vertex_layout, vert_module, frag_module, depth_test);
 }
 
 void GraphicsPipeline::create(VulkanEngine& engine, DescriptorSetBundle& descriptor_set_bundle, VulkanVertexLayout& vertex_layout, 
-                              ShaderModule& vert_module, ShaderModule& frag_module) {
-    create(engine, descriptor_set_bundle, vertex_layout, vert_module.shader_module, frag_module.shader_module);
+                              ShaderModule& vert_module, ShaderModule& frag_module, bool depth_test) {
+    create(engine, descriptor_set_bundle, vertex_layout, vert_module.shader_module, frag_module.shader_module, depth_test);
 }

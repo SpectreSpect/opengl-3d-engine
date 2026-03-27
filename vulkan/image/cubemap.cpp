@@ -2,16 +2,17 @@
 #include "../command_buffer.h"
 
 
-void Cubemap::create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags usage, bool srgb) {
+void Cubemap::create(VulkanEngine& engine, uint32_t face_size, VkImageUsageFlags usage, VkFormat format) {
     if (face_size <= 0)
         throw std::runtime_error("face size must be greater than 0");
     
     this->engine = &engine;
     this->face_size = face_size;
 
-    const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+    // const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
 
-    image_resource.create(engine, ImageResource::cubemap_desc(image_format, face_size, usage));
+
+    image_resource.create(engine, ImageResource::cubemap_desc(format, face_size, usage));
     image_view.create(engine, ImageView::cubemap_desc(&image_resource));
     sampler.create(engine, Sampler::linear_repeat_desc());
 }

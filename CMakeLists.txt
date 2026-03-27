@@ -113,6 +113,7 @@ add_executable(app
   vulkan/image/image_resource.cpp
   vulkan/image/image_view.cpp
   vulkan/image/sampler.cpp
+  skybox/skybox_pass.cpp
 )
 
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)

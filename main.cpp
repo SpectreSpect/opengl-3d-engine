@@ -91,7 +91,7 @@
 #include "vulkan/pbr/equirect_to_cubemap_pass.h"
 
 #include "vulkan/resource_loader.h"
-
+#include "skybox/skybox_pass.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -259,38 +259,20 @@ int main() {
 
     EquirectToCubemapPass equirect_to_cubemap_pass(engine);
 
-    
-
     ResourceLoader resource_loader;
-    resource_loader.create(engine, 35000000);
+    resource_loader.create(engine, 154217728);
 
-    // Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT, true);
-    Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/citrus_orchard_puresky_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT, true);
+    Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    // equirect_to_cubemap_pass.command_buffer.begin();
     
-
-    // Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
-    //             Texture2D::Wrap::Repeat,
-    //             Texture2D::MagFilter::Linear,
-    //             Texture2D::MinFilter::LinearMipmapLinear,
-    //             true,   // sRGB
-    //             true    // flipY
-    // );
-
-    // VK_IMAGE_USAGE_SAMPLED_BIT |
-    // VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
-
-    // Cubemap cubemap;
-    // cubemap.createEmpty(engine, 512);
-    
-    Cubemap cubemap = equirect_to_cubemap_pass.generate(equirectangular_map, 512);
-
-    // Cubemap cubemap;
+    Cubemap cubemap = equirect_to_cubemap_pass.generate(equirectangular_map, 1920);
 
     renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
     renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
+
+
+    SkyboxPass skybox_pass;
+    skybox_pass.create(engine);
 
     float last_frame = 0.0f;
     while(window.is_open()) {
@@ -301,6 +283,9 @@ int main() {
         camera_controller.update(&window, delta_time);
 
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
+
+        float aspect = float(engine.swapchainExtent.width) / float(engine.swapchainExtent.height);
+        skybox_pass.render(camera.get_projection_matrix(aspect), camera.get_view_matrix(), cubemap);
 
         renderer.render(mesh, camera);
 

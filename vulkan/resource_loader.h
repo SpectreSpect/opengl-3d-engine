@@ -15,5 +15,5 @@ public:
     ResourceLoader() = default;
     void create(VulkanEngine& engine, VkDeviceSize staging_buffer_size);
 
-    Texture2D load_texture2d(const std::string& filepath, VkImageUsageFlags usage, bool srgb = false);
+    Texture2D load_hdr_texture2d(const std::string& filepath, VkImageUsageFlags usage);
 };

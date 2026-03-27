@@ -52,7 +52,7 @@ Cubemap EquirectToCubemapPass::generate(Texture2D& equirectangular_map, uint32_t
         
 
     Cubemap cubemap;
-    cubemap.create(*engine, face_size, usage, equirectangular_map.is_srgb);
+    cubemap.create(*engine, face_size, usage, VK_FORMAT_R32G32B32A32_SFLOAT);
 
     EquirectToCubemapUniform equirect_to_cubemap_uniform{};
     equirect_to_cubemap_uniform.image_width = face_size;
