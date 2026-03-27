@@ -81,11 +81,12 @@
 #include "vulkan/image/texture2d.h"
 #include "vulkan/render_target_2d.h"
 #include "vulkan/render_pass.h"
-#include "vulkan/cubemap.h"
+#include "vulkan/image/cubemap.h"
 #include "vulkan/command_pool.h"
 #include "vulkan/command_buffer.h"
 #include "vulkan/compute_pipeline.h"
-#include "vulkan/cubemap.h"
+// #include "vulkan/cubemap.h"
+#include "vulkan/image/cubemap.h"
 #include "math_utils.h"
 #include "vulkan/pbr/equirect_to_cubemap_pass.h"
 
@@ -258,10 +259,16 @@ int main() {
 
     EquirectToCubemapPass equirect_to_cubemap_pass(engine);
 
+    
+
     ResourceLoader resource_loader;
     resource_loader.create(engine, 35000000);
 
-    Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT);
+    // Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/st_peters_square_night_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT, true);
+    Texture2D equirectangular_map = resource_loader.load_texture2d("assets/hdr/citrus_orchard_puresky_4k.hdr", VK_IMAGE_USAGE_SAMPLED_BIT, true);
+
+    // equirect_to_cubemap_pass.command_buffer.begin();
+    
 
     // Texture2D equirectangular_map = Texture2D(engine, "assets/hdr/st_peters_square_night_4k.hdr",
     //             Texture2D::Wrap::Repeat,
@@ -278,11 +285,12 @@ int main() {
     // Cubemap cubemap;
     // cubemap.createEmpty(engine, 512);
     
-    // equirect_to_cubemap_pass.generate(equirectangular_map, cubemap);
-    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
-    
+    Cubemap cubemap = equirect_to_cubemap_pass.generate(equirectangular_map, 512);
 
+    // Cubemap cubemap;
+
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
+    renderer.descriptor_set_bundle.bind_combined_image_sampler(2, cubemap);
 
     float last_frame = 0.0f;
     while(window.is_open()) {

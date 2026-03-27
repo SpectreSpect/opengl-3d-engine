@@ -4,6 +4,7 @@
 
 void Texture2D::create(VulkanEngine& engine, uint32_t width, uint32_t height, VkImageUsageFlags usage, bool srgb) {
     this->engine = &engine;
+    this->is_srgb = srgb;
 
     const VkFormat image_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
 
@@ -72,6 +73,7 @@ void Texture2D::upload_data(const void* data, size_t size_bytes, CommandBuffer& 
         0,
         VK_ACCESS_TRANSFER_WRITE_BIT
     );
+    
 
     // 3. Copy buffer -> image
     VkBufferImageCopy region{};

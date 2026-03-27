@@ -3,7 +3,7 @@
 #include "descriptor_pool.h"
 #include "descriptor_set_layout.h"
 #include "descriptor_set.h"
-#include "cubemap.h"
+#include "image/cubemap.h"
 #include <unordered_map>
 #include <variant>
 #include <stdexcept>

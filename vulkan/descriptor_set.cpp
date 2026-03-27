@@ -78,13 +78,13 @@ void DescriptorSet::write_storage_buffer(uint32_t binding, VideoBuffer& buffer) 
 }
 
 void DescriptorSet::write_combined_image_sampler(uint32_t binding, Cubemap& texture) {
-    if (!texture.device)
-        throw std::runtime_error("'device' was nullptr");
+    if (!texture.engine)
+        throw std::runtime_error("'engine' was nullptr");
 
     VkDescriptorImageInfo image_info{};
     image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    image_info.imageView = texture.view;
-    image_info.sampler = texture.sampler;
+    image_info.imageView = texture.image_view.view;
+    image_info.sampler = texture.sampler.sampler;
 
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -95,17 +95,17 @@ void DescriptorSet::write_combined_image_sampler(uint32_t binding, Cubemap& text
     write.descriptorCount = 1;
     write.pImageInfo = &image_info;
 
-    vkUpdateDescriptorSets(*texture.device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(texture.engine->device, 1, &write, 0, nullptr);
 }
 
 void DescriptorSet::write_storage_image(uint32_t binding, Cubemap& texture) {
-    if (!texture.device)
-        throw std::runtime_error("'device' was nullptr");
+    if (!texture.engine)
+        throw std::runtime_error("'engine' was nullptr");
 
     VkDescriptorImageInfo image_info{};
     image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    image_info.imageView = texture.view;
-    image_info.sampler = texture.sampler;
+    image_info.imageView = texture.image_view.view;
+    image_info.sampler = texture.sampler.sampler;
 
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -116,5 +116,5 @@ void DescriptorSet::write_storage_image(uint32_t binding, Cubemap& texture) {
     write.descriptorCount = 1;
     write.pImageInfo = &image_info;
 
-    vkUpdateDescriptorSets(*texture.device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(texture.engine->device, 1, &write, 0, nullptr);
 }

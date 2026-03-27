@@ -4,7 +4,7 @@
 #include "descriptor_set_layout.h"
 #include "descriptor_pool.h"
 #include "video_buffer.h"
-#include "cubemap.h"
+#include "image/cubemap.h"
 
 class Texture2D;
 

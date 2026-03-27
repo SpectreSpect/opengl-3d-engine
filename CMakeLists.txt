@@ -103,7 +103,8 @@ add_executable(app
   vulkan/render_pass.cpp
   vulkan/render_target_2d.cpp
   vulkan/pbr/equirect_to_cubemap_pass.cpp
-  vulkan/cubemap.cpp
+  # vulkan/cubemap.cpp
+  vulkan/image/cubemap.cpp
   vulkan/command_pool.cpp
   vulkan/command_buffer.cpp
   vulkan/compute_pipeline.cpp

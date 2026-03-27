@@ -6,7 +6,7 @@
 #include "../compute_pipeline.h"
 #include "../fence.h"
 #include "../image/texture2d.h"
-#include "../cubemap.h"
+#include "../image/cubemap.h"
 #include "../graphics_pipeline.h"
 #include "../descriptor_set_bundle.h"
 #include "../render_target_2d.h"
@@ -28,8 +28,11 @@ public:
     EquirectToCubemapPass() = default;
     EquirectToCubemapPass(VulkanEngine& engine);
     void create(VulkanEngine& engine);
-    void generate(Texture2D& equirectangular_map, Cubemap& output_cubemap);
+    Cubemap generate(Texture2D& equirectangular_map, uint32_t face_size);
     void destroy();
+
+    CommandPool command_pool;
+    CommandBuffer command_buffer;
 
 private:
     VulkanEngine* engine = nullptr;
@@ -38,7 +41,6 @@ private:
     Fence fence;
     VideoBuffer equirect_to_cubemap_uniform_buffer;
     ShaderModule equirect_to_cubemap_cs;
-    CommandPool command_pool;
-    CommandBuffer command_buffer;
+    
     uint32_t cubemap_face_size;
 };

@@ -2,7 +2,7 @@
 #include "renderer.h"
 #include "graphics_pipeline.h"
 #include "shader_module.h"
-#include "cubemap.h"
+#include "image/cubemap.h"
 
 class PBRRenderer : public Renderer {
 public:

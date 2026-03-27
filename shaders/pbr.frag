@@ -16,7 +16,7 @@ void main() {
 
 
     // float uExposure = 0.2;
-    vec3 hdrColor = texture(albedoTex, outUV.xy).xyz;
+    // vec3 hdrColor = texture(albedoTex, outUV.xy).xyz;
 
     // // exposure tone mapping
     // vec3 mapped = vec3(1.0) - exp(-hdrColor * uExposure);
@@ -24,6 +24,9 @@ void main() {
     // // gamma correction
     // mapped = pow(mapped, vec3(1.0 / 2.2));
 
-    outFragColor = vec4(hdrColor, 1.0);
-    // outFragColor = c;
+    // if (hdrColor.x < 1.0 || hdrColor.y < 1.0 || hdrColor.z < 1.0)
+    //     hdrColor = vec3(0, 0, 0);
+
+    // outFragColor = vec4(hdrColor, 1.0);
+    outFragColor = c;
 }

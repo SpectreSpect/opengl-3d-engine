@@ -12,6 +12,7 @@ public:
     ImageResource image_resource;
     ImageView image_view;
     Sampler sampler;
+    bool is_srgb = false;
 
     Texture2D(const Texture2D&) = delete;
     Texture2D& operator=(const Texture2D&) = delete;

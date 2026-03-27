@@ -23,8 +23,6 @@ void EquirectToCubemapPass::create(VulkanEngine& engine) {
     equirect_to_cubemap_cs.create(engine.device, "shaders/equirect_to_cubemap.comp.spv");
     equirect_to_cubemap_uniform_buffer.create(engine, sizeof(EquirectToCubemapUniform));
 
-
-
     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
     builder.add_uniform_buffer(0, equirect_to_cubemap_uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
     builder.add_combined_image_sampler(1, VK_SHADER_STAGE_COMPUTE_BIT);
@@ -36,14 +34,34 @@ void EquirectToCubemapPass::create(VulkanEngine& engine) {
     fence = Fence(engine.device);
 }
 
-void EquirectToCubemapPass::generate(Texture2D& equirectangular_map, Cubemap& output_cubemap) {
+Cubemap EquirectToCubemapPass::generate(Texture2D& equirectangular_map, uint32_t face_size) {
+    if (face_size <= 0)
+        throw std::runtime_error("face size must be greater than 0");
+
     if (!this->engine)
         throw std::runtime_error("engine was null");
+    
+
+    // VK_IMAGE_USAGE_SAMPLED_BIT |
+    // VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+    // VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+
 
     // output_cubemap.destroy();
-    output_cubemap.transition_to_general_layout(*this->engine);
+    // output_cubemap.transition_to_general_layout(*this->engine);
 
-    uint32_t face_size = output_cubemap.faceSize();
+    // VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                              VK_IMAGE_USAGE_STORAGE_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        
+
+    Cubemap cubemap;
+    cubemap.create(*engine, face_size, usage, equirectangular_map.is_srgb);
 
     EquirectToCubemapUniform equirect_to_cubemap_uniform{};
     equirect_to_cubemap_uniform.image_width = face_size;
@@ -52,15 +70,40 @@ void EquirectToCubemapPass::generate(Texture2D& equirectangular_map, Cubemap& ou
     equirect_to_cubemap_uniform_buffer.update_data(&equirect_to_cubemap_uniform, sizeof(EquirectToCubemapUniform));
 
     descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
-    descriptor_set_bundle.bind_image_storage(2, output_cubemap);
+    descriptor_set_bundle.bind_image_storage(2, cubemap);
 
     uint32_t x_groups = vulkan_utils::div_up_u32(equirect_to_cubemap_uniform.image_width, 256);
     uint32_t y_groups = equirect_to_cubemap_uniform.image_height;
     uint32_t z_groups = equirect_to_cubemap_uniform.num_layers;
     
     command_buffer.begin();
+
+    cubemap.image_resource.transition_layout(
+        command_buffer,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        VK_ACCESS_SHADER_WRITE_BIT
+    );
+
     command_buffer.bind_pipeline(pipeline);
     command_buffer.dispatch(x_groups, y_groups, z_groups);
+
+    cubemap.image_resource.transition_layout(
+        command_buffer,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        VK_ACCESS_SHADER_READ_BIT
+    );
+
+    // barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    // barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    // src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    // dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
     // command_buffer.memory_barrier(temp_storage_buffer);
     command_buffer.end();
 
@@ -68,5 +111,5 @@ void EquirectToCubemapPass::generate(Texture2D& equirectangular_map, Cubemap& ou
 
     fence.wait_for_fence();
 
-    output_cubemap.transition_to_shader_read_only_layout(*this->engine);
+    return cubemap;
 }
