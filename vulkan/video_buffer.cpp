@@ -130,3 +130,33 @@ void VideoBuffer::update_data(const void* data, VkDeviceSize size, VkDeviceSize 
     std::memcpy(mapped_memory, data, size);
     vkUnmapMemory(*device, buffer_memory);
 }
+
+void VideoBuffer::clear() {
+    if (!device || buffer_memory == VK_NULL_HANDLE) {
+        throw std::runtime_error("VideoBuffer::clear on uninitialized buffer");
+    }
+
+    void* mapped_memory = nullptr;
+    vulkan_utils::vk_check(
+        vkMapMemory(*device, buffer_memory, 0, size_bytes, 0, &mapped_memory),
+        "vkMapMemory(clear)"
+    );
+
+    std::memset(mapped_memory, 0, static_cast<size_t>(size_bytes));
+
+    // Only needed if memory is not HOST_COHERENT.
+    // if (!(memory_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+    VkMappedMemoryRange range{};
+    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    range.memory = buffer_memory;
+    range.offset = 0;
+    range.size = size_bytes;
+
+    vulkan_utils::vk_check(
+        vkFlushMappedMemoryRanges(*device, 1, &range),
+        "vkFlushMappedMemoryRanges(clear)"
+    );
+    // }
+
+    vkUnmapMemory(*device, buffer_memory);
+}

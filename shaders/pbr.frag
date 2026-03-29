@@ -1,6 +1,6 @@
 #version 450
 
-#define USE_CLUSTERED_LIGHTS 0
+#define USE_CLUSTERED_LIGHTS 1
 
 layout(location = 0) in vec3 vFragPos;
 layout(location = 1) in vec3 vNormal;

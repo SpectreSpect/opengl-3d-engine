@@ -117,6 +117,7 @@ add_executable(app
   vulkan/pbr/brdf_lut_generator.cpp
   vulkan/pbr/irradiance_map_generator.cpp
   vulkan/pbr/prefilter_map_generator.cpp
+  vulkan/lighting_system/lighting_system.cpp
 )
 
 find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)

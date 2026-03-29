@@ -95,6 +95,7 @@
 #include "vulkan/pbr/brdf_lut_generator.h"
 #include "vulkan/pbr/irradiance_map_generator.h"
 #include "vulkan/pbr/prefilter_map_generator.h"
+#include "vulkan/lighting_system/lighting_system.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -317,28 +318,25 @@ int main() {
     Cubemap environment_map = equirect_to_cubemap_pass.generate(equirectangular_map, 1920);
     Cubemap irradiance_map = irradiance_map_generator.generate(environment_map, 256);
     Cubemap prefilter_map = prefilter_map_generator.generate(environment_map, 256);
-    
-    
-
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, equirectangular_map);
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, environment_map);
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(3, irradiance_map);
-
-
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(1, irradiance_map);
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(2, prefilter_map);
-    // renderer.descriptor_set_bundle.bind_combined_image_sampler(3, brdf_lut);
-
-
-    // builder.add_combined_image_sampler(1, VK_SHADER_STAGE_FRAGMENT_BIT); // irradianceMap
-    // builder.add_combined_image_sampler(2, VK_SHADER_STAGE_FRAGMENT_BIT); // prefilterMap
-    // builder.add_combined_image_sampler(3, VK_SHADER_STAGE_FRAGMENT_BIT); // uBrdfLUT
-    // builder.add_storage_buffer(4, VK_SHADER_STAGE_FRAGMENT_BIT); // LightSources
-    // builder.add_storage_buffer(5, VK_SHADER_STAGE_FRAGMENT_BIT); // NumLightsInClusters
-    // builder.add_storage_buffer(6, VK_SHADER_STAGE_FRAGMENT_BIT); // LightsInClusters
 
     SkyboxPass skybox_pass;
     skybox_pass.create(engine);
+
+
+    LightingSystem lighting_system;
+    lighting_system.init(engine);
+
+    LightSource light_source{};
+
+    light_source.position = glm::vec4(0, 2, 0, 10);
+    light_source.color = glm::vec4(1, 0, 0, 1);
+
+    lighting_system.set_light_source(0, light_source);
+    // lighting_system.update_light_sources();
+
+    // lighting_system.cluster_aabbs_ssbo.clear();
+
+    // lighting_system.update_light_indices_for_clusters(camera);
 
     float last_frame = 0.0f;
     while(window.is_open()) {
@@ -347,6 +345,7 @@ int main() {
         last_frame = currentFrame;  
 
         camera_controller.update(&window, delta_time);
+        // lighting_system.update(camera);
 
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
 
