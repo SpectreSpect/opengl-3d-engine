@@ -40,4 +40,6 @@ private:
     Fence fence;
     VideoBuffer uniform_buffer;
     ShaderModule generate_prefilter_map_cs;
+    uint32_t compute_queue_family_id = 0;
+    VkQueue compute_queue = VK_NULL_HANDLE;
 };

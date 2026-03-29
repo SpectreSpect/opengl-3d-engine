@@ -15,7 +15,11 @@ PrefilterMapGenerator::PrefilterMapGenerator(VulkanEngine& engine) {
 
 void PrefilterMapGenerator::create(VulkanEngine& engine) {
     this->engine = &engine;
-    command_pool.create(engine.device, engine.physicalDevice);
+
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
 
     generate_prefilter_map_cs.create(engine.device, "shaders/generate_prefilter_map.comp.spv");
@@ -61,7 +65,11 @@ Cubemap PrefilterMapGenerator::generate(Cubemap& environment_map, uint32_t face_
         VK_ACCESS_SHADER_WRITE_BIT
     );
     command_buffer.end();
-    command_buffer.submit(fence);
+    CommandBuffer::SubmitDesc submit_desc{};
+    submit_desc.queue = compute_queue;
+    submit_desc.fence = &fence;
+
+    command_buffer.submit(submit_desc);
     fence.wait_for_fence();
 
     for (uint32_t mip = 0; mip < mip_levels; ++mip) {
@@ -95,8 +103,7 @@ Cubemap PrefilterMapGenerator::generate(Cubemap& environment_map, uint32_t face_
         command_buffer.dispatch(x_groups, y_groups, z_groups);
         command_buffer.end();
 
-        command_buffer.submit(fence);
-        fence.wait_for_fence();
+        command_buffer.submit_and_wait(compute_queue, fence);
 
         mip_view.destroy(engine->device);
     }
@@ -111,8 +118,8 @@ Cubemap PrefilterMapGenerator::generate(Cubemap& environment_map, uint32_t face_
         VK_ACCESS_SHADER_READ_BIT
     );
     command_buffer.end();
-    command_buffer.submit(fence);
-    fence.wait_for_fence();
+
+    command_buffer.submit_and_wait(compute_queue, fence);
 
     return prefilter_map;
 }

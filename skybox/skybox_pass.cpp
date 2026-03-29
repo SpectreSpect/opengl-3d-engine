@@ -4,7 +4,10 @@ void SkyboxPass::create(VulkanEngine& engine, float exposure) {
     this->exposure = exposure;
     this->engine = &engine;
 
-    command_pool.create(engine.device, engine.physicalDevice);
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
 
     skybox_vs.create(engine.device, "shaders/skybox.vert.spv");

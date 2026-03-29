@@ -363,7 +363,6 @@ int main() {
 
         camera_controller.update(&window, delta_time);
 
-
         red_light_source.position.y = sin(timer * 2 + 0.234f) * 2;
         green_light_source.position.x = sin(timer * 2 + 1.3423f) * 2;
         blue_light_source.position.z = cos(timer * 2) * 2;

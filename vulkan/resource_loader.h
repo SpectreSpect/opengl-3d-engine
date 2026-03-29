@@ -11,6 +11,9 @@ public:
     CommandBuffer command_buffer;
     VideoBuffer staging_buffer;
     Fence fence;
+    
+    uint32_t compute_queue_family_id;
+    VkQueue compute_queue;
 
     ResourceLoader() = default;
     void create(VulkanEngine& engine, VkDeviceSize staging_buffer_size);

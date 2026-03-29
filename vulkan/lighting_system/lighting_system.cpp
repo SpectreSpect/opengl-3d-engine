@@ -31,7 +31,10 @@ void LightingSystem::init(VulkanEngine& engine) {
     light_indices_for_clusters_program = new ShaderModule(engine.device, "shaders/light_incides_for_clusters.comp.spv");
 
 
-    command_pool.create(engine.device, engine.physicalDevice);
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
 
     lighting_system_uniform_buffer.create(engine, sizeof(LightingSystemUniform));
@@ -133,8 +136,7 @@ void LightingSystem::update_light_indices_for_clusters(const Camera& camera) {
 
     command_buffer.end();
 
-    command_buffer.submit(fence);
-    fence.wait_for_fence();
+    command_buffer.submit_and_wait(compute_queue, fence);
 }
 
 void LightingSystem::set_cluster_aabbs(std::vector<AABB>& aabbs) {

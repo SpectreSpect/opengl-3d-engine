@@ -4,8 +4,13 @@
 
 void ResourceLoader::create(VulkanEngine& engine, VkDeviceSize staging_buffer_size) {
     this->engine = &engine;
-    command_pool.create(engine.device, engine.physicalDevice);
+    
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
+
     staging_buffer.create(engine, staging_buffer_size);
     fence.create(engine.device);
 }
@@ -38,7 +43,7 @@ Texture2D ResourceLoader::load_hdr_texture2d(const std::string& filepath, uint32
 
         texture.upload_data(pixels, image_size, command_buffer, staging_buffer);
 
-        command_buffer.submit(fence);
+        command_buffer.submit_and_wait(compute_queue, fence);
     } catch (...) {
         stbi_image_free(pixels);
         throw std::runtime_error("failed to create Texture2D");

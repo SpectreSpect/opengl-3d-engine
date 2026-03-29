@@ -79,4 +79,7 @@ private:
     ComputePipeline pipeline;
     DescriptorSetBundle descriptor_set_bundle;
     Fence fence;
+    uint32_t cubemap_face_size;
+    uint32_t compute_queue_family_id;
+    VkQueue compute_queue;
 };

@@ -17,7 +17,11 @@ IrradianceMapGenerator::IrradianceMapGenerator(VulkanEngine& engine) {
 
 void IrradianceMapGenerator::create(VulkanEngine& engine) {
     this->engine = &engine;
-    command_pool.create(engine.device, engine.physicalDevice);
+
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
 
     equirect_to_cubemap_cs.create(engine.device, "shaders/generate_irradiance_map.comp.spv");
@@ -90,9 +94,7 @@ Cubemap IrradianceMapGenerator::generate(Cubemap& environment_map, uint32_t face
     // command_buffer.memory_barrier(temp_storage_buffer);
     command_buffer.end();
 
-    command_buffer.submit(fence);
-
-    fence.wait_for_fence();
+    command_buffer.submit_and_wait(compute_queue, fence);
 
     return cubemap;
 }

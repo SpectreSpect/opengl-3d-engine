@@ -41,5 +41,6 @@ private:
     VideoBuffer uniform_buffer;
     ShaderModule generate_brdf_lut_cs;
     
-    uint32_t cubemap_face_size;
+    uint32_t compute_queue_family_id;
+    VkQueue compute_queue;
 };

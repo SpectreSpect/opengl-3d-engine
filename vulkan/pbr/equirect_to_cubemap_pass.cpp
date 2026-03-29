@@ -17,7 +17,11 @@ EquirectToCubemapPass::EquirectToCubemapPass(VulkanEngine& engine) {
 
 void EquirectToCubemapPass::create(VulkanEngine& engine) {
     this->engine = &engine;
-    command_pool.create(engine.device, engine.physicalDevice);
+    
+    compute_queue_family_id = vulkan_utils::find_compute_queue_family(engine.physicalDevice);
+    vkGetDeviceQueue(engine.device, compute_queue_family_id, 0, &compute_queue);
+
+    command_pool.create(engine.device, engine.physicalDevice, compute_queue_family_id, compute_queue);
     command_buffer.create(command_pool);
 
     equirect_to_cubemap_cs.create(engine.device, "shaders/equirect_to_cubemap.comp.spv");
@@ -95,8 +99,7 @@ Cubemap EquirectToCubemapPass::generate(Texture2D& equirectangular_map, uint32_t
 
     command_buffer.end();
 
-    command_buffer.submit(fence);
-    fence.wait_for_fence();
+    command_buffer.submit_and_wait(compute_queue, fence);
 
     return cubemap;
 }

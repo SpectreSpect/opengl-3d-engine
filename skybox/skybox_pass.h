@@ -37,4 +37,7 @@ private:
     VideoBuffer uniform_buffer;
 
     Mesh cube_mesh;
+
+    uint32_t compute_queue_family_id;
+    VkQueue compute_queue;
 };

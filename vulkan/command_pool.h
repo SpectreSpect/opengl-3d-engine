@@ -1,17 +1,19 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include "vulkan_utils.h"
+#include <stdexcept>
 
 class CommandPool {
 public:
     VkDevice* device = nullptr;
     VkPhysicalDevice* physical_device = nullptr;
-    VkCommandPool pool;
+    VkCommandPool pool = VK_NULL_HANDLE;
 
-    uint32_t compute_queue_family_id;
-    VkQueue compute_queue;
+    uint32_t queue_family_id = 0;
+    VkQueue queue = VK_NULL_HANDLE;
 
     CommandPool() = default;
-    CommandPool(VkDevice& device, VkPhysicalDevice& physical_device);
-    void create(VkDevice& device, VkPhysicalDevice& physical_device);
+    CommandPool(VkDevice& device, VkPhysicalDevice& physical_device, uint32_t queue_family_id, VkQueue queue);
+
+    void create(VkDevice& device, VkPhysicalDevice& physical_device, uint32_t queue_family_id, VkQueue queue);
+    void destroy();
 };

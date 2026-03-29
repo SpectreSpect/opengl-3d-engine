@@ -5,11 +5,13 @@
 class Fence {
 public:
     VkDevice* device = nullptr;
-    VkFence fence;
+    VkFence fence = VK_NULL_HANDLE;
 
     Fence() = default;
-    Fence(VkDevice& device);
-    void create(VkDevice& device);
+    Fence(VkDevice& device, bool signaled = false);
+
+    void create(VkDevice& device, bool signaled = false);
+    void destroy();
     void reset();
     void wait_for_fence();
 };
