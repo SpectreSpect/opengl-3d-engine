@@ -15,9 +15,17 @@
 
 class LightingSystem {
 public:
-    struct LightingSystemUniform{
+    // struct LightingSystemUniform{
+    //     uint32_t num_clusters;
+    //     uint32_t max_lights_per_cluster;
+    //     glm::mat4 view_matrix;
+    // };
+
+    struct alignas(16) LightingSystemUniform {
         uint32_t num_clusters;
         uint32_t max_lights_per_cluster;
+        uint32_t pad0;
+        uint32_t pad1;
         glm::mat4 view_matrix;
     };
 

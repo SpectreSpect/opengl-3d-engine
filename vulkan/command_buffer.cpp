@@ -55,6 +55,45 @@ void CommandBuffer::dispatch(uint32_t x_groups, uint32_t y_groups, uint32_t z_gr
     vkCmdDispatch(buffer, x_groups, y_groups, z_groups);
 }
 
+void CommandBuffer::fill_buffer(VideoBuffer& video_buffer, uint32_t data) {
+    vkCmdFillBuffer(
+        buffer,
+        video_buffer.buffer,
+        0,
+        video_buffer.size_bytes,
+        data
+    );
+}
+
+
+void CommandBuffer::buffer_barrier(
+    VideoBuffer& video_buffer,
+    VkPipelineStageFlags src_stage,
+    VkAccessFlags src_access,
+    VkPipelineStageFlags dst_stage,
+    VkAccessFlags dst_access)
+{
+    VkBufferMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = dst_access;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer = video_buffer.buffer;
+    barrier.offset = 0;
+    barrier.size = video_buffer.size_bytes;
+
+    vkCmdPipelineBarrier(
+        buffer,
+        src_stage,
+        dst_stage,
+        0,
+        0, nullptr,
+        1, &barrier,
+        0, nullptr
+    );
+}
+
 void CommandBuffer::memory_barrier(VideoBuffer& video_buffer) {
     VkBufferMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -91,6 +130,8 @@ void CommandBuffer::submit(Fence& fence) {
         throw std::runtime_error("failed to submit compute work");
     }
 }
+
+
 
 
     // commandBuffers.resize(swapchainImages.size());

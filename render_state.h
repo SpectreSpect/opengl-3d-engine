@@ -5,8 +5,8 @@
 // #include "renderer.h"
 
 class Renderer;
-
 class VulkanEngine;
+class LightingSystem;
 
 struct RenderState {
     glm::mat4 proj;
@@ -19,6 +19,7 @@ struct RenderState {
     Camera* camera;
     VulkanEngine* engine;
     Renderer* renderer;
+    LightingSystem* lighting_system = nullptr;
 
     glm::ivec2 viewport_px;
 };

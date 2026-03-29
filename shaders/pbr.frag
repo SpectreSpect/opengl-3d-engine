@@ -18,9 +18,10 @@ struct LightSource {
 };
 
 layout(std140, set = 0, binding = 0) uniform PBRUniformBuffer {
-    mat4 mvp;
-    mat4 model;
     mat4 view;
+    mat4 proj;
+
+    // mat4 model;
 
     vec4 viewPos;                // xyz used
     vec4 environmentMultiplier;  // xyz used
@@ -159,8 +160,8 @@ void accumulateLight(
 void main()
 {
     vec3 albedo = clamp(vColor, 0.0, 1.0);
-    float metallic = 1.0;
-    float roughness = 0.01;
+    float metallic = 0.0;
+    float roughness = 1.0;
     float ao = 1.0;
 
     roughness = clamp(roughness, 0.0005, 1.0);
@@ -191,7 +192,9 @@ void main()
     uint cluster_id   = computeClusterID();
     uint cluster_base = cluster_id * max_lights_per_cluster;
 
-    for (uint i = 0u; i < num_lights_in_clusters[cluster_id]; ++i) {
+    uint count = min(num_lights_in_clusters[cluster_id], max_lights_per_cluster);
+
+    for (uint i = 0u; i < count; ++i) {
         LightSource light_source = light_sources[lights_in_clusters[cluster_base + i]];
 
         vec3 light_vec = light_source.position.xyz - vFragPos;

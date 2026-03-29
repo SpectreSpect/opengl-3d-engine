@@ -300,6 +300,21 @@ int main() {
     PBRRenderer renderer = PBRRenderer(engine, vert_module, frag_module, 0.3f);
 
     Mesh mesh = create_sphere_mesh(engine, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    Mesh sphere_2 = create_sphere_mesh(engine, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+    sphere_2.position.x = 2;
+    std::vector<Mesh> spheres;
+
+    for (int x = -5; x < 5; x++)
+        for (int z = -5; z < 5; z++) {
+            // Mesh sphere_mesh = create_sphere_mesh(engine, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+            // sphere_mesh.position = glm::vec3(x, 0, z);
+
+            spheres.push_back(create_sphere_mesh(engine, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)));
+            spheres.back().position = glm::vec3(x, 0, z);
+        }
+
 
     EquirectToCubemapPass equirect_to_cubemap_pass(engine);
     BrdfLutGenerater brdf_lut_generator(engine);
@@ -309,9 +324,9 @@ int main() {
     ResourceLoader resource_loader;
     resource_loader.create(engine, 154217728);
 
-    Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/st_peters_square_night_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
+    // Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/st_peters_square_night_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
     // Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/citrus_orchard_puresky_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
-    // Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/studio_kominka_02_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
+    Texture2D equirectangular_map = resource_loader.load_hdr_texture2d("assets/hdr/studio_kominka_02_4k.hdr", 6, VK_IMAGE_USAGE_SAMPLED_BIT);
     
     Texture2D brdf_lut = brdf_lut_generator.generate(256, 256);
     
@@ -326,18 +341,20 @@ int main() {
     LightingSystem lighting_system;
     lighting_system.init(engine);
 
-    LightSource light_source{};
+    LightSource red_light_source{glm::vec4(1, 2, 0, 10), glm::vec4(1, 0, 0, 1)};
+    LightSource green_light_source{glm::vec4(0, 2, 1, 10), glm::vec4(0, 1, 0, 1)};
+    LightSource blue_light_source{glm::vec4(-1, 2, 0, 10), glm::vec4(0, 0, 1, 1)};
 
-    light_source.position = glm::vec4(0, 2, 0, 10);
-    light_source.color = glm::vec4(1, 0, 0, 1);
+    // light_source.position = glm::vec4(0, 2, 0, 10);
+    // light_source.color = glm::vec4(1, 0, 0, 1);
 
-    lighting_system.set_light_source(0, light_source);
-    // lighting_system.update_light_sources();
 
-    // lighting_system.cluster_aabbs_ssbo.clear();
+    lighting_system.set_light_source(0, red_light_source);
+    lighting_system.set_light_source(1, green_light_source);
+    lighting_system.set_light_source(2, blue_light_source);
 
-    // lighting_system.update_light_indices_for_clusters(camera);
-
+    // lighting_system.set_light_source(0, light_source);
+    float timer = 0.0f;
     float last_frame = 0.0f;
     while(window.is_open()) {
         float currentFrame = (float)glfwGetTime();
@@ -345,14 +362,31 @@ int main() {
         last_frame = currentFrame;  
 
         camera_controller.update(&window, delta_time);
-        // lighting_system.update(camera);
 
+
+        red_light_source.position.y = sin(timer * 2 + 0.234f) * 2;
+        green_light_source.position.x = sin(timer * 2 + 1.3423f) * 2;
+        blue_light_source.position.z = cos(timer * 2) * 2;
+
+
+        lighting_system.set_light_source(0, red_light_source);
+        lighting_system.set_light_source(1, green_light_source);
+        lighting_system.set_light_source(2, blue_light_source);
+        
         engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
+        lighting_system.update(camera);
 
         skybox_pass.render(camera, environment_map);        
-        renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut);
+        renderer.render(sphere_2, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
+        renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
+        
+
+        for (int i = 0; i < spheres.size(); i++)
+            renderer.render(spheres[i], camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
 
         engine.end_frame();
         engine.poll_events();
+
+        timer += delta_time;
     }
 }

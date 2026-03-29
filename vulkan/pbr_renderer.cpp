@@ -35,7 +35,7 @@ PBRRenderer::PBRRenderer(VulkanEngine& engine, ShaderModule& vertex_shader, Shad
 }
 
 
-void PBRRenderer::render(Drawable& drawable, Camera& camera, Cubemap& irradiance_map, Cubemap& prefilter_map, Texture2D& brdf_lut) {
+void PBRRenderer::render(Drawable& drawable, Camera& camera, Cubemap& irradiance_map, Cubemap& prefilter_map, Texture2D& brdf_lut, LightingSystem& lighting_system) {
     if (!engine)
         throw "'engine' was nullptr";
 
@@ -50,36 +50,70 @@ void PBRRenderer::render(Drawable& drawable, Camera& camera, Cubemap& irradiance
     render_state.camera = &camera;
     render_state.view = camera.get_view_matrix();
     render_state.prefilte_map_mip_levels = prefilter_map.image_resource.mip_levels - 1;
+    render_state.lighting_system = &lighting_system;
+    render_state.viewport_px = {engine->swapchainExtent.width, engine->swapchainExtent.height};
     
 
     descriptor_set_bundle.bind_combined_image_sampler(1, irradiance_map);
     descriptor_set_bundle.bind_combined_image_sampler(2, prefilter_map);
     descriptor_set_bundle.bind_combined_image_sampler(3, brdf_lut);
 
+    descriptor_set_bundle.bind_storage_buffer(4, lighting_system.light_source_ssbo);
+    descriptor_set_bundle.bind_storage_buffer(5, lighting_system.num_lights_in_clusters_ssbo);
+    descriptor_set_bundle.bind_storage_buffer(6, lighting_system.lights_in_clusters_ssbo);
+
+
+    // layout(std430, set = 0, binding = 4) readonly buffer LightSourcesBuffer {
+    //     LightSource light_sources[];
+    // };
+
+    // layout(std430, set = 0, binding = 5) readonly buffer NumLightsInClustersBuffer {
+    //     uint num_lights_in_clusters[];
+    // };
+
+    // layout(std430, set = 0, binding = 6) readonly buffer LightsInClustersBuffer {
+    //     uint lights_in_clusters[];
+    // };
+
+    PBRUniform ubo{};
+
+    ubo.view = render_state.view;
+    ubo.proj = render_state.proj;
+
+    ubo.viewPos = glm::vec4(render_state.camera->position, 1.0f);
+    ubo.environmentMultiplier = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    ubo.pbrParams.y = render_state.prefilte_map_mip_levels;
+    ubo.pbrParams.z = exposure;
+    
+    ubo.clusterGrid.x = render_state.lighting_system->num_clusters.x;
+    ubo.clusterGrid.y = render_state.lighting_system->num_clusters.y;
+    ubo.clusterGrid.z = render_state.lighting_system->num_clusters.z;
+    ubo.clusterGrid.w = render_state.lighting_system->max_lights_per_cluster;
+    ubo.screenParams.x = render_state.viewport_px.x;
+    ubo.screenParams.y = render_state.viewport_px.y;
+    ubo.screenParams.z = render_state.camera->near;
+    ubo.screenParams.w = render_state.camera->far;
+
+    uniform_buffer.update_data(&ubo, sizeof(ubo));
+
     drawable.draw(render_state);
 }
 
 void PBRRenderer::render_mesh(Mesh& mesh, RenderState state) {
-    PBRUniform ubo{};
+    glm::mat4 model = state.transform * mesh.get_model_matrix();
 
-    glm::mat4 model = mesh.get_model_matrix();
-    glm::mat4 world = state.transform * model;
-    glm::mat4 mvp = state.vp * world;
-
-    ubo.mvp = mvp;
-    ubo.model = model;
-    ubo.view = state.view;
-
-    ubo.viewPos = glm::vec4(state.camera->position, 1.0f);
-    ubo.environmentMultiplier = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    ubo.pbrParams.y = state.prefilte_map_mip_levels;
-    ubo.pbrParams.z = exposure;
-
-    uniform_buffer.update_data(&ubo, sizeof(ubo));
-    
     state.engine->bind_pipeline(pipeline);
     state.engine->bind_vertex_buffer(mesh.vertex_buffer);
     state.engine->bind_index_buffer(mesh.index_buffer);
+
+    vkCmdPushConstants(
+        state.engine->currentCommandBuffer,
+        pipeline.pipeline_layout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        sizeof(glm::mat4),
+        &model
+    );
 
     state.engine->draw_indexed(mesh.num_indices);
 }

@@ -10,5 +10,6 @@ public:
     Fence() = default;
     Fence(VkDevice& device);
     void create(VkDevice& device);
+    void reset();
     void wait_for_fence();
 };

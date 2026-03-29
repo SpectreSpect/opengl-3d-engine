@@ -15,6 +15,15 @@ void Fence::create(VkDevice& device) {
     }
 }
 
+void Fence::reset() {
+    if (!device)
+        throw std::runtime_error("device was null");
+
+    if (vkResetFences(*device, 1, &fence) != VK_SUCCESS) {
+        throw std::runtime_error("failed to reset fence");
+    }
+}
+
 void Fence::wait_for_fence() {
     if (!this->device)
         throw std::runtime_error("device was null");

@@ -66,19 +66,11 @@ void LightingSystem::update_light_sources() {
     if (dirty_lights.empty())
         return;
 
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, light_source_ssbo.id_);
-
-    for (size_t light_id : dirty_lights) {
-        // light_source_ssbo.read_subdata(light_id * sizeof(LightSource), &light_sources[light_id], sizeof(LightSource));
-        light_source_ssbo.update_data(&light_sources[light_id], sizeof(LightSource), light_id * sizeof(LightSource));
-
-        // glBufferSubData(
-        //     GL_SHADER_STORAGE_BUFFER,
-        //     light_id * sizeof(LightSource),
-        //     sizeof(LightSource),
-        //     &light_sources[light_id]
-        // );
-    }
+    light_source_ssbo.update_data(
+        light_sources.data(),
+        sizeof(LightSource) * light_sources.size(),
+        0
+    );
 
     dirty_lights.clear();
 }
@@ -104,36 +96,45 @@ void LightingSystem::update_clusters(const std::vector<AABB> &clusters, const gl
 
 void LightingSystem::update_light_indices_for_clusters(const Camera& camera) {
     unsigned int total_clusters_count = num_clusters.x * num_clusters.y * num_clusters.z;
-    
-    int x_count = vulkan_utils::div_up_u32(total_clusters_count, 256u);;
+
+    int x_count = vulkan_utils::div_up_u32(total_clusters_count, 256u);
     int y_count = light_sources.size();
 
     LightingSystemUniform uniform_data{};
-
     uniform_data.num_clusters = total_clusters_count;
     uniform_data.max_lights_per_cluster = max_lights_per_cluster;
     uniform_data.view_matrix = camera.get_view_matrix();
 
-    // light_indices_for_clusters_program.set_uint("num_clusters", total_clusters_count);
-    // light_indices_for_clusters_program.set_uint("max_lights_per_cluster", max_lights_per_cluster);
-    // light_indices_for_clusters_program.set_mat4("view_matrix", camera.get_view_matrix());
-
-    num_lights_in_clusters_ssbo.clear();    
-    // bind_buffers();
+    lighting_system_uniform_buffer.update_data(&uniform_data, sizeof(LightingSystemUniform));
+    // num_lights_in_clusters_ssbo.clear();
 
     command_buffer.begin();
+    command_buffer.fill_buffer(num_lights_in_clusters_ssbo, 0);
+
     command_buffer.bind_pipeline(pipeline);
     command_buffer.dispatch(x_count, y_count, 1);
-    command_buffer.memory_barrier(cluster_aabbs_ssbo);
-    command_buffer.memory_barrier(light_source_ssbo);
-    command_buffer.memory_barrier(num_lights_in_clusters_ssbo);
-    command_buffer.memory_barrier(lights_in_clusters_ssbo);
+
+    // compute writes -> fragment reads
+    command_buffer.buffer_barrier(
+        num_lights_in_clusters_ssbo,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_READ_BIT
+    );
+
+    command_buffer.buffer_barrier(
+        lights_in_clusters_ssbo,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_READ_BIT
+    );
 
     command_buffer.end();
 
     command_buffer.submit(fence);
     fence.wait_for_fence();
-    // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 void LightingSystem::set_cluster_aabbs(std::vector<AABB>& aabbs) {

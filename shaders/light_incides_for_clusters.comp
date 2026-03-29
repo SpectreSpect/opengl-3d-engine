@@ -28,6 +28,8 @@ layout(std430, binding=7) buffer OutIndices { uint out_indices[]; };
 layout(set = 0, binding = 0) uniform UniformBufferObject {
     uint num_clusters;
     uint max_lights_per_cluster;
+    uint pad0;
+    uint pad1;
     mat4 view_matrix;
 } ubo;
 

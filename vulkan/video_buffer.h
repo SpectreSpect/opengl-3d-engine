@@ -36,7 +36,7 @@ public:
                 VkMemoryPropertyFlags properties = vulkan_utils::VK_MEMORY_PROPERTY_DEFAULT);
 
     void update_data(const void* data, VkDeviceSize size, VkDeviceSize offset = 0, VkMemoryMapFlags flags = 0);
-    void clear();
+    void clear_cpu();
 
     void read_subdata(VkDeviceSize offset_bytes, void* out, VkDeviceSize out_bytes);
     void destroy();

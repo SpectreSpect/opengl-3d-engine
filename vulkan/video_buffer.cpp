@@ -131,7 +131,7 @@ void VideoBuffer::update_data(const void* data, VkDeviceSize size, VkDeviceSize 
     vkUnmapMemory(*device, buffer_memory);
 }
 
-void VideoBuffer::clear() {
+void VideoBuffer::clear_cpu() {
     if (!device || buffer_memory == VK_NULL_HANDLE) {
         throw std::runtime_error("VideoBuffer::clear on uninitialized buffer");
     }

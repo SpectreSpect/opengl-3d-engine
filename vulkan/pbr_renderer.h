@@ -3,6 +3,7 @@
 #include "graphics_pipeline.h"
 #include "shader_module.h"
 #include "image/cubemap.h"
+#include "lighting_system/lighting_system.h"
 
 class PBRRenderer : public Renderer {
 public:
@@ -11,10 +12,11 @@ public:
     // };
 
     struct PBRUniform {
-        glm::mat4 mvp;
-        glm::mat4 model;
         glm::mat4 view;
+        glm::mat4 proj;
 
+        // glm::mat4 model;
+        
         glm::vec4 viewPos;
         glm::vec4 environmentMultiplier;
 
@@ -43,6 +45,6 @@ public:
     PBRRenderer(VulkanEngine& engine, ShaderModule& vertex_shader, ShaderModule& fragment_shader, float exposure = 0.3f);
     // PBRRenderer(VulkanEngine& engine, GraphicsPipeline& pipeline);
 
-    void render(Drawable& drawable, Camera& camera, Cubemap& irradiance_map, Cubemap& prefilter_map, Texture2D& brdf_lut);
+    void render(Drawable& drawable, Camera& camera, Cubemap& irradiance_map, Cubemap& prefilter_map, Texture2D& brdf_lut, LightingSystem& lighting_system);
     virtual void render_mesh(Mesh& mesh, RenderState state) override;
 };

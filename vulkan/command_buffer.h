@@ -20,6 +20,10 @@ public:
     void end();
     void bind_pipeline(Pipeline& pipeline);
     void dispatch(uint32_t x_groups, uint32_t y_groups, uint32_t z_groups);
+    void buffer_barrier(VideoBuffer& video_buffer, VkPipelineStageFlags src_stage, VkAccessFlags src_access,
+                        VkPipelineStageFlags dst_stage,VkAccessFlags dst_access);
+    void fill_buffer(VideoBuffer& video_buffer, uint32_t data);
     void memory_barrier(VideoBuffer& video_buffer);
+    
     void submit(Fence& fence);
 };

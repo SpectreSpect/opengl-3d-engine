@@ -15,9 +15,9 @@ layout(location = 5) out vec3 vColor;
 layout(location = 6) out vec2 vUV;
 
 layout(std140, set = 0, binding = 0) uniform PBRUniformBuffer {
-    mat4 mvp;
-    mat4 model;
     mat4 view;
+    mat4 proj;
+    // mat4 model;
 
     vec4 viewPos;                // xyz used
     vec4 environmentMultiplier;  // xyz used
@@ -27,11 +27,15 @@ layout(std140, set = 0, binding = 0) uniform PBRUniformBuffer {
     vec4  pbrParams;             // normalStrength, prefilterMaxMip, exposure, unused
 } ubo;
 
+layout(push_constant) uniform ObjectPushConstants {
+    mat4 model;
+} pc;
+
 void main()
 {
-    vec4 worldPos = ubo.model * vec4(inPosition.xyz, 1.0);
+    vec4 worldPos = pc.model * vec4(inPosition.xyz, 1.0);
 
-    mat3 normalMatrix = mat3(transpose(inverse(ubo.model)));
+    mat3 normalMatrix = mat3(transpose(inverse(pc.model)));
 
     vFragPos      = worldPos.xyz;
     vFragPosView  = vec3(ubo.view * worldPos);
@@ -41,5 +45,8 @@ void main()
     vColor        = inColor.xyz;
     vUV           = inUV;
 
-    gl_Position = ubo.mvp * vec4(inPosition.xyz, 1.0);
+    mat4 mvp = ubo.proj * ubo.view * pc.model;
+
+    gl_Position = mvp * vec4(inPosition.xyz, 1.0);
+    // gl_Position = mvp * vec4(inPosition.xyz, 1.0);
 }
