@@ -109,7 +109,7 @@ VoxelGridGPU::VoxelGridGPU(const VoxelGridDesc& desc, ShaderHelper* shader_helpe
 
     load_list_ = BufferObject(sizeof(uint32_t) * (size_t)(1 + count_active_chunks), GL_DYNAMIC_DRAW);
 
-    VoxelDataGPU voxel_prifab(0u, 0u, 0u, glm::ivec3(255));
+    VoxelDataGPU voxel_prifab(0u, VOXEL_VISABILITY_FLAG_BIT, glm::ivec3(255));
     uint32_t count_voxels_in_chunk = chunk_size.x * chunk_size.y * chunk_size.z;
     voxels_ = BufferObject::from_fill(sizeof(VoxelDataGPU) * count_voxels_in_chunk * count_active_chunks, GL_DYNAMIC_DRAW, voxel_prifab, *shader_manager);
 

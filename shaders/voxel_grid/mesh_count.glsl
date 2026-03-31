@@ -41,13 +41,13 @@ void main() {
     int lz = int(voxelId / uint(u_chunk_dim.x * u_chunk_dim.y));
     ivec3 p = ivec3(lx, ly, lz);
 
-    uint t = voxel_type_in_chunk(chunkId, p);
-    if (t == 0u) return;
+    VoxelData voxel_data = voxel_data_in_chunk(chunkId, p);
+    if ((read_voxel_flags(voxel_data.type_flags) & VOXEL_VISABILITY_FLAG_BIT) == 0u) return;
 
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
 }

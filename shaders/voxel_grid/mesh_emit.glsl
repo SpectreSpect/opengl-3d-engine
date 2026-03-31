@@ -51,9 +51,9 @@ uint ao_corner(uint chunkId, ivec3 chunkCoord, ivec3 p,
     ivec3 du = U * su;
     ivec3 dv = V * sv;
 
-    uint s1 = occ(chunkId, chunkCoord, p, N + du);
-    uint s2 = occ(chunkId, chunkCoord, p, N + dv);
-    uint c  = occ(chunkId, chunkCoord, p, N + du + dv);
+    uint s1 = voxel_vis(chunkId, chunkCoord, p, N + du);
+    uint s2 = voxel_vis(chunkId, chunkCoord, p, N + dv);
+    uint c  = voxel_vis(chunkId, chunkCoord, p, N + du + dv);
 
     // если оба сайда заняты — угол максимально тёмный
     if (s1 == 1u && s2 == 1u) return 3u;
@@ -206,15 +206,15 @@ void main() {
     int lz = int(voxelId / uint(u_chunk_dim.x * u_chunk_dim.y));
     ivec3 p = ivec3(lx, ly, lz);
 
-    uint t = voxel_type_in_chunk(chunkId, p);
-    if (t == 0u) return;
+    VoxelData voxel_data = voxel_data_in_chunk(chunkId, p);
+    if ((read_voxel_flags(voxel_data.type_flags) & VOXEL_VISABILITY_FLAG_BIT) == 0u) return;
 
-    uint color = voxel_color_in_chunk(chunkId, p);
+    uint color = voxel_data.color;
 
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 0u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 1u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 2u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 3u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) emit_quad(chunkId, chunkCoord, p, 4u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) emit_quad(chunkId, chunkCoord, p, 5u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 0u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 1u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 2u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 3u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) emit_quad(chunkId, chunkCoord, p, 4u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) emit_quad(chunkId, chunkCoord, p, 5u, color);
 }

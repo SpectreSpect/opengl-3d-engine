@@ -13,7 +13,7 @@ VoxelRasterizatorGPU::VoxelRasterizatorGPU(const VoxelRasterizatorDesc& desc, IG
     dispatch_args = BufferObject(sizeof(uint32_t) * 3, GL_DYNAMIC_DRAW);
     counter_hash_table_ = BufferObject(sizeof(HashTableCounters) + sizeof(CounterHashTableSlot) * desc.counter_hash_table_size, GL_DYNAMIC_DRAW);
     active_chunk_keys_list_ = BufferObject(sizeof(uint64_t) * (desc.counter_hash_table_size + 1u), GL_DYNAMIC_DRAW);
-    triangle_indices_list_ = BufferObject(sizeof(uint32_t) * (desc.counter_hash_table_size + 1u), GL_DYNAMIC_DRAW);
+    triangle_indices_list_ = BufferObject::from_fill(sizeof(uint32_t) * (desc.counter_hash_table_size + 1u), GL_DYNAMIC_DRAW, 0u, *shader_manager);
     voxel_writes_ = BufferObject(sizeof(uint32_t) * 4 + sizeof(VoxelWriteGPU) * count_voxel_writes, GL_DYNAMIC_DRAW);
 
     init_programs();
@@ -29,7 +29,6 @@ void VoxelRasterizatorGPU::init_programs() {
     // prog_add_block_offsets_ = ComputeProgram(&shader_manager->add_block_offsets_cs);
     // prog_fix_last_ = ComputeProgram(&shader_manager->fix_last_cs);
     // prog_copy_offsets_to_cursor_ = ComputeProgram(&shader_manager->copy_offsets_to_cursor_cs);
-    // prog_fill_triangle_indices_ = ComputeProgram(&shader_manager->fill_triangle_indices_cs);
 
     // prog_roi_reduce_indices_ = ComputeProgram(&shader_manager->roi_reduce_indices_cs);
     // prog_roi_reduce_pairs_ = ComputeProgram(&shader_manager->roi_reduce_pairs_cs);
@@ -40,6 +39,7 @@ void VoxelRasterizatorGPU::init_programs() {
     prog_reset_voxelize_pipeline_ = ComputeProgram(&shader_manager->reset_voxelize_pipeline_cs);
     prog_mark_and_count_active_chunks_ = ComputeProgram(&shader_manager->mark_and_count_active_chunks_cs);
     prog_alloc_active_chunk_triangles_ = ComputeProgram(&shader_manager->alloc_active_chunk_triangles_cs);
+    prog_fill_triangle_indices_ = ComputeProgram(&shader_manager->fill_triangle_indices_cs);
     // prog_copy_counters_from_counter_hash_table_ = ComputeProgram(&shader_manager->copy_counters_from_counter_hash_table_cs);
     prog_voxelize_triangles_ = ComputeProgram(&shader_manager->voxelize_triangles_cs);
 }
@@ -96,16 +96,18 @@ void VoxelRasterizatorGPU::mark_and_count_active_chunks(const Mesh& mesh) {
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void VoxelRasterizatorGPU::alloc_active_chunk_triangles() {    
+void VoxelRasterizatorGPU::alloc_active_chunk_triangles(const BufferObject& dispatch_args) {    
     counter_hash_table_.bind_base_as_ssbo(0);
-    triangle_indices_list_.bind_base_as_ssbo(1);
+    active_chunk_keys_list_.bind_base_as_ssbo(1);
+    triangle_indices_list_.bind_base_as_ssbo(2);
+
+    glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
     prog_alloc_active_chunk_triangles_.use();
 
     glUniform1ui(glGetUniformLocation(prog_alloc_active_chunk_triangles_.id, "u_counter_hash_table_size"), counter_hash_table_size);
 
-    uint32_t slot_groups = math_utils::div_up_u32(counter_hash_table_size, 256u);
-    prog_alloc_active_chunk_triangles_.dispatch_compute(slot_groups, 1, 1);
+    glDispatchComputeIndirect(0);
 
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -149,7 +151,7 @@ void VoxelRasterizatorGPU::voxelize_chunks(
     const BufferObject& dispatch_args,
     const Mesh& mesh,
     BufferObject& voxel_writes,
-    uint32_t voxel_type_vis_flags,
+    uint32_t voxel_type_flags,
     uint32_t voxel_color,
     uint32_t voxel_set_flags) 
 {
@@ -165,7 +167,7 @@ void VoxelRasterizatorGPU::voxelize_chunks(
     triangle_indices_list_.bind_base_as_ssbo(2);
     mesh.vbo.bind_base_as_ssbo(3);
     mesh.ebo.bind_base_as_ssbo(4);
-    voxel_writes_.bind_base_as_ssbo(5);
+    voxel_writes.bind_base_as_ssbo(5);
 
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, dispatch_args.id());
 
@@ -173,6 +175,9 @@ void VoxelRasterizatorGPU::voxelize_chunks(
 
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_counter_hash_table_size"), counter_hash_table_size);
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_count_voxels_in_chunk"), chunk_size.x * chunk_size.y * chunk_size.z);
+
+    glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_vertex_stride_bytes"), vertex_stride_bytes);
+    glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_vertex_position_offset_bytes"), position_offset_bytes);
 
     glUniform3ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_chunk_dim"), chunk_size.x, chunk_size.y, chunk_size.z);
     glUniform3f(glGetUniformLocation(prog_voxelize_triangles_.id, "u_voxel_size"), voxel_size.x, voxel_size.y, voxel_size.z);
@@ -182,7 +187,7 @@ void VoxelRasterizatorGPU::voxelize_chunks(
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_pack_offset"), math_utils::OFFSET);
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "u_pack_bits"), math_utils::BITS);
 
-    glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "voxel_type_vis_flags"), voxel_type_vis_flags);
+    glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "voxel_type_flags"), voxel_type_flags);
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "voxel_color"), voxel_color);
     glUniform1ui(glGetUniformLocation(prog_voxelize_triangles_.id, "voxel_set_flags"), voxel_set_flags);
 
@@ -191,14 +196,108 @@ void VoxelRasterizatorGPU::voxelize_chunks(
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
+void VoxelRasterizatorGPU::print_triangle_emmit_diff() {
+    std::vector<CounterHashTableSlot> slot(counter_hash_table_size);
+    counter_hash_table_.read_subdata(sizeof(HashTableCounters), sizeof(CounterHashTableSlot) * counter_hash_table_size, slot.data());
+
+    uint32_t count_alloc = active_chunk_keys_list_.read_scalar<uint32_t>(0);
+
+    uint32_t count_occupied = 0u;
+    for (uint32_t slot_id = 0u; slot_id < counter_hash_table_size; slot_id++) {
+        if (slot[slot_id].state == SLOT_OCCUPIED) {
+            count_occupied++;
+
+            uint32_t diff = slot[slot_id].value.triangle_emmit_counter - slot[slot_id].value.triangle_indices_base;
+            std::cout << "SLOT_ID " << slot_id << ": " << "count_triangles = " << slot[slot_id].value.count_triangles << "   diff = " << diff << std::endl;
+        }
+    }
+    std::cout << std::endl;
+
+    std::cout << "COUNT_ALLOC: " << count_alloc << std::endl;
+    std::cout << "COUNT_OCCUPIED: " << count_occupied << std::endl;
+    std::cout << std::endl;
+}
+
+void VoxelRasterizatorGPU::print_hash_table_counters_state() {
+    HashTableCounters counters = counter_hash_table_.read_scalar<HashTableCounters>(0);
+    std::cout << "cout_empty: " << counters.reduce_read_count_empty() << std::endl;
+    std::cout << "count_occupied: " << counters.reduce_read_count_occupied() << std::endl;
+    std::cout << "count_tomb: " << counters.reduce_read_count_tomb() << std::endl;
+    std::cout << std::endl;
+}
+
+void VoxelRasterizatorGPU::print_count_nonzero_triangles(const Mesh& mesh) {
+    uint32_t count_triangles = triangle_indices_list_.read_scalar<uint32_t>(0);
+    std::vector<uint32_t> triangles_list(count_triangles);
+    triangle_indices_list_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * count_triangles, triangles_list.data());
+
+    uint32_t count_nonzero_triangles = 0u;
+    for (uint32_t i = 0u; i < count_triangles; i++) {
+        if (triangles_list[i] != 0u) count_nonzero_triangles++;
+    }
+
+    std::cout << "REAL_COUNT_TRIANGLES: " << mesh.ebo.size_bytes() / (sizeof(uint32_t) * 3) << std::endl;
+    std::cout << "COUNT_TRIANGLES: " << count_triangles << std::endl;
+    std::cout << "COUNT_NONZERO_TRIANGLES: " << count_nonzero_triangles << std::endl;
+}
+
+void VoxelRasterizatorGPU::print_active_chunks() {
+    uint32_t count_active_chunks = active_chunk_keys_list_.read_scalar<uint32_t>(0);
+    std::vector<uint64_t> active_chunk_keys(count_active_chunks);
+    active_chunk_keys_list_.read_subdata(sizeof(uint64_t), sizeof(uint64_t) * count_active_chunks, active_chunk_keys.data());
+
+    for (uint32_t i = 0u; i < count_active_chunks; i++) {
+        glm::ivec3 chunk_pos = math_utils::unpack_key(active_chunk_keys[i]);
+        std::cout << "ID " << i << ":   " << chunk_pos.x << ", " << chunk_pos.y << ", " << chunk_pos.z << std::endl; 
+    }
+    std::cout << std::endl;
+}
+
+void VoxelRasterizatorGPU::print_total_count_triangles_in_hash_table() {
+    std::vector<CounterHashTableSlot> slots(counter_hash_table_size);
+    counter_hash_table_.read_subdata(sizeof(HashTableCounters), sizeof(CounterHashTableSlot) * counter_hash_table_size, slots.data());
+
+    uint32_t total_count_triangles = 0u;
+    for (uint32_t slot_id = 0u; slot_id < counter_hash_table_size; slot_id++) {
+        if (slots[slot_id].state == SLOT_OCCUPIED) {
+            total_count_triangles += slots[slot_id].value.count_triangles;
+        }
+    }
+    
+    std::cout << "TOTAL COUNT TRIANGLES: " << total_count_triangles << std::endl;
+    std::cout << std::endl;
+}
+
+void VoxelRasterizatorGPU::print_triangle_list() {
+    std::vector<uint32_t> triangle_list;
+    uint32_t count_trinalges;
+
+    triangle_indices_list_.read_subdata(0, sizeof(uint32_t), &count_trinalges);
+    triangle_list.resize(count_trinalges);
+    triangle_indices_list_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * count_trinalges, triangle_list.data());
+
+    std::cout << "COUNT TRIANGLES: " << count_trinalges << std::endl;
+    for (uint32_t triangle_id = 0u; triangle_id < count_trinalges; triangle_id++) {
+        std::cout << "TRIANGLE_ID " << triangle_id << ": " << triangle_list[triangle_id] << std::endl;
+    }
+    std::cout << std::endl;
+}
+
 void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prifab, BufferObject* out_voxel_writes)
 {
     BufferObject* voxel_writes_buffer = out_voxel_writes ? out_voxel_writes : &voxel_writes_;
-
+    // GPUTimestamp t0;
     reset_voxelize_pipline(*voxel_writes_buffer, out_voxel_writes == nullptr);
+    // GPUTimestamp t1;
     mark_and_count_active_chunks(mesh);
-    alloc_active_chunk_triangles();
+    // GPUTimestamp t2;
+
+    shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&active_chunk_keys_list_, 0)); 
+    alloc_active_chunk_triangles(dispatch_args);
+    // GPUTimestamp t3;
+
     fill_triangle_indices(mesh);
+    // GPUTimestamp t4;
 
     shader_helper->prepare_dispatch_args(
         dispatch_args, 
@@ -209,11 +308,12 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prif
         dispatch_args,
         mesh,
         *voxel_writes_buffer,
-        prifab.voxel_data.type_vis_flags,
+        prifab.voxel_data.type_flags,
         prifab.voxel_data.color,
         prifab.set_flags
     );
-    
+    // GPUTimestamp t5;
+
     if (out_voxel_writes == nullptr) {
         if (gridable_gpu != nullptr) {
             gridable_gpu->set_voxels(voxel_writes_);
@@ -221,4 +321,14 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prif
             //TODO
         }
     }
+    // GPUTimestamp t6;
+
+    // std::cout << "reset_voxelize_pipline(): " << t1 - t0 << std::endl;
+    // std::cout << "mark_and_count_active_chunks(): " << t2 - t1 << std::endl;
+    // std::cout << "alloc_active_chunk_triangles(): " << t3 - t2 << std::endl;
+    // std::cout << "fill_triangle_indices(): " << t4 - t3 << std::endl;
+    // std::cout << "voxelize_chunks(): " << t5 - t4 << std::endl;
+    // std::cout << "set_voxels(): " << t6 - t5 << std::endl;
+    // std::cout << "total time: " << t6 - t0 << std::endl;
+    // std::cout << std::endl;
 }

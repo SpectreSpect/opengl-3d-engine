@@ -65,7 +65,8 @@ void main() {
     VoxelWrite voxel_write;
     voxel_write.world_voxel = ivec4(voxel_pos, 0u);
 
-    voxel_write.voxel_data.type_vis_flags = ((voxel_type & TYPE_MASK) << TYPE_SHIFT) | ((voxel_visability & VIS_MASK) << VIS_SHIFT);
+    uint voxel_flags = voxel_visability == 1u ? (1u << VOXEL_VISABILITY_FLAG_BIT) : (1u << VOXEL_EASY_OVERWRITE_FLAG_BIT);
+    voxel_write.voxel_data.type_flags = pack_voxel_type_flags(voxel_type, voxel_flags);
     voxel_write.voxel_data.color = pack_color(voxel_color);
     voxel_write.set_flags = set_flags;
 

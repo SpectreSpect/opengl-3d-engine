@@ -78,10 +78,10 @@ void main() {
     float height = 20.0 + n * 30.0; // базовый уровень + амплитуда
 
     uint type = (float(worldVoxel.y) <= height) ? 1u : 0u;
-    uint vis  = (type != 0u) ? 1u : 0u;
+    uint voxel_flags = (type != 0u) ? VOXEL_VISABILITY_FLAG_BIT : VOXEL_EASY_OVERWRITE_FLAG_BIT;
 
     VoxelData vd;
-    vd.type_vis_flags = (type << TYPE_SHIFT) | (vis << VIS_SHIFT);
+    vd.type_flags = pack_voxel_type_flags(type, voxel_flags);
     // цвет: чуть меняем по высоте
     vec3 col = (type != 0u) ? mix(vec3(0.15,0.35,0.10), vec3(0.45,0.30,0.15), n) : vec3(0.0);
     vd.color = pack_color(col);
@@ -89,7 +89,6 @@ void main() {
     uint base = chunkId * u_voxels_per_chunk;
 
     uint global_voxel_id = base + voxelId;
-    uint voxel_visability = (voxels[global_voxel_id].type_vis_flags >> VIS_SHIFT) & VIS_MASK;
     voxels[global_voxel_id] = vd;
 
     // один раз на чанк

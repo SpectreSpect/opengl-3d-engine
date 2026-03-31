@@ -35,7 +35,7 @@ void main() {
 
     VoxelWrite w = writes[wi];
 
-    uint type = (w.voxel_data.type_vis_flags >> TYPE_SHIFT) & TYPE_MASK;
+    uint type = read_voxel_type(w.voxel_data.type_flags);
     if (type == 0u) return;
 
     ivec3 wc = w.world_voxel.xyz;

@@ -57,8 +57,7 @@ void main() {
         mark_dirty_around(chunk_id, chunk_pos);
     }
     else {
-        uint voxel_visability = (voxels[global_voxel_id].type_vis_flags >> VIS_SHIFT) & VIS_MASK;
-        if (voxel_visability == 0u) {
+        if ((read_voxel_flags(voxels[global_voxel_id].type_flags) & VOXEL_EASY_OVERWRITE_FLAG_BIT) > 0u) {
             voxels[global_voxel_id] = voxel_write.voxel_data;
             mark_dirty_around(chunk_id, chunk_pos);
         }

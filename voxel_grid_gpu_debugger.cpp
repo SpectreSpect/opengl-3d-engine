@@ -623,12 +623,11 @@ void VoxelGridGPUDebugger::print_dirty_list_emit_counters() {
 
 void VoxelGridGPUDebugger::print_dirty_list_quad_count() {
     uint32_t dirty_count = voxel_grid->dirty_list_.read_scalar<uint32_t>(0u);
-    std::vector<uint32_t> dirty_list(dirty_count);
     std::vector<uint32_t> dirty_quad_count(dirty_count);
     
-    voxel_grid->dirty_list_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * dirty_count, dirty_list.data());
     voxel_grid->dirty_quad_count_.read_subdata(0, sizeof(uint32_t) * dirty_count, dirty_quad_count.data());
 
+    std::cout << "DIRTY QUAD COUNT: " << dirty_count << std::endl;
     std::cout << "DIRTY QUAD COUNTERS: " << std::endl;
     for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
         std::cout << "dirty_id " << dirty_id << ": " << dirty_quad_count[dirty_id] << std::endl;
@@ -745,6 +744,10 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         print_dirty_list();
     }
 
+    if (ImGui::Button("print_dirty_list_quad_count()")) {
+        print_dirty_list_quad_count();
+    }
+
     float render_distance_in_chunks = voxel_grid->render_distance / (voxel_grid->voxel_size.x * voxel_grid->chunk_size.x);
     if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 300.0f)) {
         voxel_grid->render_distance = render_distance_in_chunks * voxel_grid->voxel_size.x * voxel_grid->chunk_size.x;
@@ -813,7 +816,7 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
     ImGui::Separator();
 
     if (ImGui::Button("mesh_reset()")) {
-        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_reset(voxel_grid->dispatch_args);
     }
 
@@ -822,18 +825,18 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
         shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
-            BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
+            BufferDispatchArg(&voxel_grid->dirty_list_, 0u)
         );
         voxel_grid->mesh_count(voxel_grid->dispatch_args, math_utils::BITS, math_utils::OFFSET);
     }
 
     if (ImGui::Button("mesh_alloc()")) {
-        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_alloc(voxel_grid->dispatch_args);
     }
 
     if (ImGui::Button("verify_mesh_allocation()")) {
-        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->verify_mesh_allocation(voxel_grid->mesh_buffers_status_);
     }
 
@@ -847,13 +850,13 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
         shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
-            BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
+            BufferDispatchArg(&voxel_grid->dirty_list_, 0u)
         );
         voxel_grid->mesh_emit(voxel_grid->dispatch_args, math_utils::BITS, math_utils::OFFSET);
     }
 
     if (ImGui::Button("mesh_finalize()")) {
-        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_finalize(voxel_grid->dispatch_args);
     }
 

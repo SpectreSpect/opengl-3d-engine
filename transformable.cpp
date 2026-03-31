@@ -1,6 +1,6 @@
  #include "transformable.h"
  
-Transformable::Transformable(const glm::vec3& position, const glm::vec3& scale, const glm::vec3& rotation)
+Transformable::Transformable(glm::vec3 position, glm::vec3 scale, glm::vec3 rotation)
     :   position(position),
         scale(scale),
         rotation(rotation)

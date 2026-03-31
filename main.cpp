@@ -14,6 +14,7 @@
 #include "voxel_grid_gpu.h"
 #include "voxel_grid_gpu_debugger.h"
 #include "torus.h"
+#include "cube.h"
 
 #include "voxel_rasterizator_gpu.h"
 
@@ -29,7 +30,7 @@ BufferObject create_voxel_write_rect(glm::ivec3 origin, glm::uvec3 rect_dim, glm
             for (uint32_t z = 0u; z < rect_dim.z; z++) {
                 double ton = 0.5 + ((double)(rand() % 100000) / 100000) * 0.5;
                 voxels[id].world_voxel = glm::ivec4(origin + glm::ivec3(x, y, z), 0);
-                voxels[id].voxel_data = std::move(VoxelDataGPU(1, 1, 0, glm::ivec3(color * glm::vec3(ton))));
+                voxels[id].voxel_data = std::move(VoxelDataGPU(1, VOXEL_VISABILITY_FLAG_BIT, glm::ivec3(color * glm::vec3(ton))));
                 voxels[id].set_flags = OVERWRITE_BIT;
                 id++;
             }
@@ -64,7 +65,7 @@ int main() {
     Mesh torus = Torus::create_torus_mesh();
     glm::vec3 torus_origin_pos = glm::vec3(0, 70, 0);
     torus.position = torus_origin_pos;
-    torus.scale = glm::vec3(20);
+    torus.scale = glm::vec3(30);
     torus.rotation = glm::vec3(0, 0, 0);
 
     glm::vec3 voxel_size(1.0f);
@@ -90,17 +91,21 @@ int main() {
     VoxelGridGPUDebugger voxel_grid_debugger(&voxel_grid_gpu, &shader_helper, &window);
 
     VoxelRasterizatorGPU::VoxelRasterizatorDesc voxel_rasterizator_desc;
-    voxel_rasterizator_desc.chunk_size = chunk_size;
+    voxel_rasterizator_desc.chunk_size = glm::ivec3(4);
     voxel_rasterizator_desc.voxel_size = voxel_size;
-    voxel_rasterizator_desc.counter_hash_table_size = 10'000;
+    voxel_rasterizator_desc.counter_hash_table_size = 640'000;
     voxel_rasterizator_desc.count_voxel_writes = 0;
     VoxelRasterizatorGPU voxel_rasterizator(voxel_rasterizator_desc, &voxel_grid_gpu, &shader_manager, &shader_helper);
-    // voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
 
-    VoxelWriteGPU voxel_write_prifab;
-    voxel_write_prifab.voxel_data = VoxelDataGPU(1, 1, 0, glm::ivec3(66, 135, 245));
-    voxel_write_prifab.set_flags = OVERWRITE_BIT;
-    // voxel_rasterizator.rasterize(torus, voxel_write_prifab, &voxel_grid_gpu.local_voxel_write_list_);
+    VoxelWriteGPU blue_voxel_prifab;
+    blue_voxel_prifab.voxel_data = VoxelDataGPU(1u, VOXEL_VISABILITY_FLAG_BIT, glm::ivec3(66, 135, 245));
+    blue_voxel_prifab.set_flags = OVERWRITE_BIT;
+
+    VoxelWriteGPU air_voxel_prifab;
+    air_voxel_prifab.voxel_data = VoxelDataGPU(0u, VOXEL_EASY_OVERWRITE_FLAG_BIT, glm::ivec3(255));
+    air_voxel_prifab.set_flags = OVERWRITE_BIT;
+
+    voxel_rasterizator.rasterize(torus, blue_voxel_prifab, &voxel_grid_gpu.local_voxel_write_list_);
 
     float rotation_speed = glm::pi<float>() / 2.0f;
 
@@ -126,13 +131,13 @@ int main() {
         window.clear_color({clear_col[0], clear_col[1], clear_col[2], clear_col[3]});
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
-        // voxel_rasterizator.rasterize(torus, 1, 1, glm::ivec3(66, 135, 245), 0);
+        voxel_rasterizator.rasterize(torus, blue_voxel_prifab, &voxel_grid_gpu.local_voxel_write_list_);
             
         voxel_grid_gpu.stream_chunks_sphere(camera_controller.camera->position, -1, 45345345);
         window.draw(&voxel_grid_gpu, &camera);
         // window.draw(&torus, &camera);
 
-        // voxel_rasterizator.rasterize(torus, 0, 0, glm::ivec3(66, 135, 245), 1);
+        voxel_rasterizator.rasterize(torus, air_voxel_prifab, &voxel_grid_gpu.local_voxel_write_list_);
         ///////////////////////////////////////////////////////////////////////////////////////////////////
 
         torus.rotation.x += rotation_speed * delta_time;

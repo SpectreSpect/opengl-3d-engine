@@ -21,7 +21,7 @@ public:
     ~BufferObject();
 
     BufferObject(const BufferObject&) = delete;
-    BufferObject& operator&=(const BufferObject&) = delete;
+    BufferObject& operator=(const BufferObject&) = delete;
 
     void move_from(BufferObject&& other);
     BufferObject(BufferObject&& other) noexcept;

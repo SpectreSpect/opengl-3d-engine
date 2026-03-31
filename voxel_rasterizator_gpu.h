@@ -22,6 +22,7 @@
 #include "shader_manager.h"
 #include "voxel_engine_gpu_structures.h"
 #include "shader_helper.h"
+#include "gpu_timestamp.h"
 
 // GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
@@ -74,8 +75,7 @@ private:
     BufferObject triangle_indices_list_;     // uint triId[totalPairs]
     BufferObject active_chunk_keys_list_;
     BufferObject voxel_writes_;
-
-
+    
     
     BufferObject counters_list_;        // uint counters[chunkCount]
     BufferObject offsets_list_;         // uint offsets[chunkCount+1]
@@ -98,14 +98,22 @@ private:
 
     void reset_voxelize_pipline(BufferObject& voxel_writes, bool reset_voxel_write_list = true);
     void mark_and_count_active_chunks(const Mesh& mesh);
-    void alloc_active_chunk_triangles();
+    void alloc_active_chunk_triangles(const BufferObject& dispatch_args);
     void fill_triangle_indices(const Mesh& mesh);
     void voxelize_chunks(
         const BufferObject& dispatch_args,
         const Mesh& mesh,
         BufferObject& voxel_writes,
-        uint32_t voxel_type_vis_flags,
+        uint32_t voxel_type_flags,
         uint32_t voxel_color,
         uint32_t voxel_set_flags
     );
+
+    // ===== DEBUG =====
+    void print_triangle_emmit_diff();
+    void print_hash_table_counters_state();
+    void print_count_nonzero_triangles(const Mesh& mesh);
+    void print_active_chunks();
+    void print_total_count_triangles_in_hash_table();
+    void print_triangle_list();
 };

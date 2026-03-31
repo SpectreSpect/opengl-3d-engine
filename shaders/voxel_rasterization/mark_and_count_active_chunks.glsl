@@ -7,7 +7,7 @@ layout(local_size_x = 256) in;
 
 layout(std430, binding=0) coherent buffer CounterHashTable { HashTableCounters counter_hash_table_counters; CounterHashTableSlot counter_hash_table_slots[]; };
 layout(std430, binding=1) buffer ActiveChunkKeysList { uint active_chunk_keys_counter; uvec2 active_chunk_keys_list[]; };
-layout(std430, binding=2) buffer VBO { vec4 vbo_data[]; };
+layout(std430, binding=2) buffer VBO { float vbo_data[]; };
 layout(std430, binding=3) buffer EBO { uint ebo_data[]; };
 
 uniform uint u_count_mesh_triangles;
@@ -32,7 +32,11 @@ uniform mat4 u_transform;
 
 vec4 voxel_index_to_position(uint voxel_id) {
     uint position_offset_bytes = voxel_id * u_vertex_stride_bytes + u_vertex_position_offset_bytes;
-    return vbo_data[position_offset_bytes / 16u];
+    uint position_offset_index = position_offset_bytes / 4u;
+    float x = vbo_data[position_offset_index + 0u];
+    float y = vbo_data[position_offset_index + 1u];
+    float z = vbo_data[position_offset_index + 2u];
+    return vec4(x, y, z, 1.0f);
 }
 
 void main() {
