@@ -57,6 +57,8 @@ add_executable(app
   point_cloud/point_cloud_pass.cpp
   point_cloud/point_cloud.cpp
   vulkan/compute_program.cpp
+  point_cloud/point_cloud_video.cpp
+  point_cloud/point_cloud_frame.cpp
 )
 
 target_link_libraries(app PRIVATE

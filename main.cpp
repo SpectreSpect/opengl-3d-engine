@@ -98,6 +98,7 @@
 #include "vulkan/lighting_system/lighting_system.h"
 #include "point_cloud/point_cloud_pass.h"
 #include "point_cloud/point_cloud.h"
+#include "point_cloud/point_cloud_video.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -339,7 +340,6 @@ int main() {
     SkyboxPass skybox_pass;
     skybox_pass.create(engine);
 
-
     LightingSystem lighting_system;
     lighting_system.init(engine);
 
@@ -375,6 +375,13 @@ int main() {
 
     point_cloud.set_points(point_instances);
 
+    PointCloudVideo point_cloud_video = PointCloudVideo();
+    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 100);
+
+    
+
+
+
     float timer = 0.0f;
     float last_frame = 0.0f;
     while(window.is_open()) {
@@ -401,6 +408,9 @@ int main() {
         renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
         
         point_cloud_pass.render(point_cloud, camera);
+        // point_cloud_pass.render(point_cloud_video.frames[0].point_cloud, camera);
+        point_cloud_video.update(delta_time);
+        point_cloud_video.draw_clouds(point_cloud_pass, camera);
 
         engine.end_frame();
         engine.poll_events();

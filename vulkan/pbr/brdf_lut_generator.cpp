@@ -94,7 +94,7 @@ Texture2D BrdfLutGenerater::generate(uint32_t width, uint32_t height) {
 
     command_buffer.submit_and_wait(compute_queue, fence);
 
-    fence.wait_for_fence();
+    // fence.wait_for_fence();
 
     return brdf_lut_texture;
 }

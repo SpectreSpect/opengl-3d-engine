@@ -1,0 +1,427 @@
+#include "point_cloud_frame.h"
+
+PointCloudFrame::PointCloudFrame(VulkanEngine& engine, const std::filesystem::path& path) {
+    load_from_file(engine, path);
+}
+
+void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("Failed to open: " + path.string());
+
+    uint32_t count = 0;
+
+    in.read(reinterpret_cast<char*>(&timestamp_ns), sizeof(uint64_t));
+    in.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
+    // in.read(reinterpret_cast<char*>(&flags), sizeof(uint32_t));
+    if (!in) throw std::runtime_error("Bad header in: " + path.string());
+
+    std::vector<PointInstance> local_points;
+    local_points.reserve(count);
+
+    const bool has_rgb = (flags & 1u) != 0;
+    const bool has_intensity = (flags & 2u) != 0;
+
+    size_t bpp = 10 * sizeof(float);
+    // if (has_rgb) bpp += 3 * sizeof(uint8_t);
+    // if (has_intensity) bpp += sizeof(float);
+
+    std::vector<uint8_t> buf(size_t(count) * bpp);
+    in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+    if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
+
+    local_points.resize(count);
+
+    const uint8_t* p = buf.data();
+    for (uint32_t i = 0; i < count; ++i) {
+        std::memcpy(&local_points[i].pos.x, p, 4); p += 4;
+        std::memcpy(&local_points[i].pos.y, p, 4); p += 4;
+        std::memcpy(&local_points[i].pos.z, p, 4); p += 4;
+        p += 28;
+        // std::memcpy(&local_points[i].time, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.x, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.y, p, 4); p += 4;
+        // std::memcpy(&local_points[i].gps_pos.z, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.x, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.y, p, 4); p += 4;
+        // std::memcpy(&local_points[i].imu_rotation.z, p, 4); p += 4;
+
+        // std::memcpy(&local_points[i].time, p, 4); p += 4;
+
+        // local_points[i].pos.x += local_points[i].gps_pos.x;
+        // local_points[i].pos.y += local_points[i].gps_pos.z;
+        // local_points[i].pos.z += local_points[i].gps_pos.y;
+
+
+
+        // std::cout << local_points[i].time << std::endl;
+
+
+        // How do I apply the gps and imu transformation to each point here?????
+        
+        float y = local_points[i].pos.y;
+        float z = local_points[i].pos.z;
+
+        local_points[i].pos.x = -local_points[i].pos.x;
+        local_points[i].pos.y = z;
+        local_points[i].pos.z = y;
+
+
+
+        // glm::vec3 p_local_ros = local_points[i].pos;
+
+        // // 2) pose in ROS coords (translation + RPY)
+        // glm::vec3 t_ros = local_points[i].gps_pos;
+        // float roll  = local_points[i].imu_rotation.x;
+        // float pitch = local_points[i].imu_rotation.y;
+        // float yaw   = local_points[i].imu_rotation.z;
+
+        // // 3) transform point into "world" (or whatever GPS frame is)
+        // glm::mat3 R_ros = rpy_to_mat3_zyx(roll, pitch, yaw);
+        // glm::vec3 p_world_ros = R_ros * p_local_ros + t_ros;
+
+        // // 4) convert to engine coords once
+        // local_points[i].pos = ros_pos_to_engine(p_world_ros);
+
+        
+
+        // ros_rpy_to_engine_rpy
+        
+
+
+        //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
+        // local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = 1.0f;
+        
+        local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = local_points[i].pos.y / 3.0f;
+        local_points[i].color = glm::vec4(0, 0, 1, 1);
+
+        // if (has_rgb) {
+        //     // local_points[i].color.r = *p++;
+        //     // local_points[i].color.g = *p++;
+        //     // local_points[i].color.b = *p++;
+        // }
+        // if (has_intensity) {
+        //     // std::memcpy(&local_points[i].intensity, p, 4); 
+        //     // p += 4;
+        // }
+    }
+
+    get_normals(local_points, normals);
+    remove_invalid_points_and_normals(local_points, normals);
+    drop_out_points_and_normals(local_points, normals, 2500);
+
+    remove_points_near_origin(local_points, normals, 3);
+
+    // // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
+    point_cloud.create(engine);
+    point_cloud.set_points(std::move(local_points));
+    // point_cloud.get_normals_ssbo(normals, normals_ssbo);
+}
+
+void PointCloudFrame::remove_points_near_origin(std::vector<PointInstance>& points,
+                                           std::vector<glm::vec4>& normals,
+                                           float min_distance)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "remove_points_near_origin: points.size() != normals.size()\n";
+        return;
+    }
+
+    float min_dist_sq = min_distance * min_distance;
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec4> filtered_normals;
+
+    filtered_points.reserve(points.size());
+    filtered_normals.reserve(normals.size());
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const PointInstance& p = points[i];
+        const glm::vec4& n = normals[i];
+
+        glm::vec3 pos = glm::vec3(p.pos);
+        float dist_sq = glm::dot(pos, pos);
+
+        // remove points that are too close to the lidar origin
+        // if (dist_sq < min_dist_sq || p.pos.y < 1.0)
+        if (dist_sq < min_dist_sq)
+            continue;
+
+        filtered_points.push_back(p);
+        filtered_normals.push_back(n);
+    }
+
+    points = std::move(filtered_points);
+    normals = std::move(filtered_normals);
+}
+
+void PointCloudFrame::drop_out_points_and_normals(std::vector<PointInstance>& points,
+                                             std::vector<glm::vec4>& normals,
+                                             size_t target_size)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "drop_out_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    size_t n = points.size();
+
+    if (target_size >= n) {
+        return; // nothing to drop
+    }
+
+    if (target_size == 0) {
+        points.clear();
+        normals.clear();
+        return;
+    }
+
+    // Create indices [0, 1, 2, ..., n-1]
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // Shuffle indices randomly
+    static std::random_device rd;
+    static std::mt19937 rng(rd());
+    std::shuffle(indices.begin(), indices.end(), rng);
+
+    // Keep only the first target_size indices
+    indices.resize(target_size);
+
+    // Optional: sort so the remaining points keep their original relative order
+    std::sort(indices.begin(), indices.end());
+
+    std::vector<PointInstance> new_points;
+    std::vector<glm::vec4> new_normals;
+
+    new_points.reserve(target_size);
+    new_normals.reserve(target_size);
+
+    for (size_t idx : indices) {
+        new_points.push_back(points[idx]);
+        new_normals.push_back(normals[idx]);
+    }
+
+    points = std::move(new_points);
+    normals = std::move(new_normals);
+}
+
+
+void PointCloudFrame::remove_invalid_points_and_normals(std::vector<PointInstance>& points,
+                                                   std::vector<glm::vec4>& normals)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "remove_invalid_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec4> filtered_normals;
+
+    filtered_points.reserve(points.size());
+    filtered_normals.reserve(normals.size());
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const PointInstance& p = points[i];
+        const glm::vec4& n4 = normals[i];
+        glm::vec3 n = glm::vec3(n4);
+
+        bool point_valid = is_point_valid(p);
+        bool normal_valid = glm::dot(n, n) > 1e-12f;
+
+        if (!point_valid || !normal_valid)
+            continue;
+
+        filtered_points.push_back(p);
+        filtered_normals.push_back(glm::vec4(glm::normalize(n), 0.0f));
+    }
+
+    points = std::move(filtered_points);
+    normals = std::move(filtered_normals);
+}
+
+
+
+// void PointCloudFrame::get_normals(std::vector<PointInstance> points, std::vector<glm::vec3> normals) {
+//     int rings_count = 16;
+//     int ring_width = points.size() / rings_count;
+//     int cloud_size = points.size();
+
+//     for (int y = 0; y < rings_count - 1; y++){
+//         for (int x = 0; x < ring_width - 1; x++){
+
+//         }
+//     }
+// }
+
+// void PointCloudFrame::draw(RenderState state) {
+//     state.transform *= get_model_matrix();
+//     point_cloud.draw(state);
+// }
+
+bool PointCloudFrame::is_point_valid(const PointInstance &p) {
+    return std::isfinite(p.pos.x) && std::isfinite(p.pos.y) && std::isfinite(p.pos.z);
+}
+
+glm::vec3 PointCloudFrame::triangle_normal(const PointInstance& a, const PointInstance& b, const PointInstance& c) {
+    glm::vec3 av = {a.pos.x, a.pos.y, a.pos.z};
+    glm::vec3 bv = {b.pos.x, b.pos.y, b.pos.z};
+    glm::vec3 cv = {c.pos.x, c.pos.y, c.pos.z};
+
+    glm::vec3 u = bv - av;
+    glm::vec3 v = cv - av;
+    glm::vec3 n = glm::cross(u, v);           // unnormalized normal (also proportional to triangle area)
+    return glm::normalize(n);       // returns {0,0,0} if degenerate
+}
+
+int PointCloudFrame::xy_id(int x, int y, int ring_width, int cloud_size){
+    int idx = x + y * ring_width;
+
+    if (idx < 0 || idx >= cloud_size) {
+        throw "Bad index";
+        return -1;
+    }
+
+    return idx;
+}
+
+float PointCloudFrame::radial_distance(const PointInstance &p) {
+    return std::hypot(static_cast<double>(p.pos.x), static_cast<double>(p.pos.y), static_cast<double>(p.pos.z));
+}
+
+
+bool PointCloudFrame::is_same_object(const PointInstance &p0, const PointInstance &p1,
+                                float rel_thresh, bool more_permissive_with_distance,float abs_thresh)
+{
+    if (!is_point_valid(p0) || !is_point_valid(p1))
+        return false;
+
+    float r0 = radial_distance(p0);
+    float r1 = radial_distance(p1);
+
+    if (!std::isfinite(r0) || !std::isfinite(r1))
+        return false;
+
+    float allowed = 0;
+    float dr = std::fabs(r0 - r1);
+
+
+    if (more_permissive_with_distance) {
+        // float thresh = std::max(0.2f - p0.pos.y, 0.0f);
+        // allowed = std::max(thresh * std::min(r0, r1), abs_thresh);
+        float permission_factor = 1.5;
+        allowed = rel_thresh * pow((std::min(r0, r1) / std::pow(permission_factor, 1.5)), permission_factor);
+    }
+    else {
+        // float thresh = std::max(0.2f - p0.pos.y, 0.0f);
+        // allowed = std::max(thresh, abs_thresh);
+        allowed = std::max(rel_thresh, abs_thresh);
+    }
+    return dr <= allowed;
+}
+
+
+void PointCloudFrame::get_normals(const std::vector<PointInstance>& points, std::vector<glm::vec4>& normals)
+{
+    normals.clear();
+    normals.resize(points.size(), glm::vec4(0.0f));
+
+    if (points.empty())
+        return;
+
+    const int rings_count = 16;
+    const int cloud_size = static_cast<int>(points.size());
+
+    if (cloud_size < rings_count)
+        return;
+
+    const int ring_width = cloud_size / rings_count;
+    if (ring_width < 2)
+        return;
+
+    const float rel_thresh = 1.0f;
+
+    auto accumulate_triangle_normal = [&](int ia, int ib, int ic)
+    {
+        const PointInstance& a = points[ia];
+        const PointInstance& b = points[ib];
+        const PointInstance& c = points[ic];
+
+        // Extra safety: don't accumulate into invalid points
+        if (!is_point_valid(a) || !is_point_valid(b) || !is_point_valid(c))
+            return;
+
+        glm::vec3 n = triangle_normal(a, b, c);
+
+        if (glm::dot(n, n) < 1e-12f)
+            return;
+
+        // Keep normals consistently oriented upward
+        if (glm::dot(n, glm::vec3(0.0f, 1.0f, 0.0f)) < 0.0f)
+            n = -n;
+
+        glm::vec4 n4(n, 0.0f);
+
+        normals[ia] += n4;
+        normals[ib] += n4;
+        normals[ic] += n4;
+    };
+
+    for (int y = 0; y < rings_count - 1; y++) {
+        for (int x = 0; x < ring_width - 1; x++) {
+            int id1 = xy_id(x,     y,     ring_width, cloud_size);
+            int id2 = xy_id(x,     y + 1, ring_width, cloud_size);
+            int id3 = xy_id(x + 1, y + 1, ring_width, cloud_size);
+            int id5 = xy_id(x + 1, y,     ring_width, cloud_size);
+
+            const PointInstance& p0 = points[id1]; // lower-left
+            const PointInstance& p1 = points[id2]; // upper-left
+            const PointInstance& p2 = points[id3]; // upper-right
+            const PointInstance& p3 = points[id5]; // lower-right
+
+            bool tri1_ok = false;
+            bool tri2_ok = false;
+
+            if (is_point_valid(p0) && is_point_valid(p1) && is_point_valid(p2)) {
+                if (is_same_object(p0, p1, rel_thresh) &&
+                    is_same_object(p1, p2, 1.5f, false))
+                {
+                    tri1_ok = true;
+                }
+            }
+
+            if (is_point_valid(p2) && is_point_valid(p3) && is_point_valid(p0)) {
+                if (is_same_object(p3, p2, rel_thresh) &&
+                    is_same_object(p3, p0, 1.5f, false))
+                {
+                    tri2_ok = true;
+                }
+            }
+
+            if (tri1_ok) {
+                accumulate_triangle_normal(id3, id1, id2);
+            }
+
+            if (tri2_ok) {
+                accumulate_triangle_normal(id1, id3, id5);
+            }
+        }
+    }
+
+    // Normalize only valid points that actually accumulated something.
+    // Invalid points remain degenerate: (0,0,0,0).
+    for (size_t i = 0; i < normals.size(); i++) {
+        if (!is_point_valid(points[i])) {
+            normals[i] = glm::vec4(0.0f);
+            continue;
+        }
+
+        glm::vec3 n = glm::vec3(normals[i]);
+        float len2 = glm::dot(n, n);
+
+        if (len2 < 1e-12f) {
+            normals[i] = glm::vec4(0.0f);
+        } else {
+            normals[i] = glm::vec4(glm::normalize(n), 0.0f);
+        }
+    }
+}
