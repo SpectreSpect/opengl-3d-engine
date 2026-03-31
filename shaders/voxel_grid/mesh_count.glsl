@@ -5,14 +5,13 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=3) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=4) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
-layout(std430, binding=5) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) readonly buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=2) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=3) buffer DirtyQuadCountBuf { uint dirty_quad_count[]; };
+layout(std430, binding=4) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
 
-uniform uint  u_hash_table_size;
+uniform uint  u_chunk_hash_table_size;
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
 
@@ -21,9 +20,7 @@ uniform int  u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
-
-#define NOT_INCLUDE_MARK_DIRTY
-#include "../common/chunk_pool.glsl"
+#include "chunk_pool/read_voxels.glsl"
 // -------------------
 
 void main() {
@@ -44,13 +41,13 @@ void main() {
     int lz = int(voxelId / uint(u_chunk_dim.x * u_chunk_dim.y));
     ivec3 p = ivec3(lx, ly, lz);
 
-    uint t = voxel_type_in_chunk(chunkId, p);
-    if (t == 0u) return;
+    VoxelData voxel_data = voxel_data_in_chunk(chunkId, p);
+    if ((read_voxel_flags(voxel_data.type_flags) & VOXEL_VISABILITY_FLAG_BIT) == 0u) return;
 
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) atomicAdd(dirty_quad_count[dirtyIdx], 1u);
 }

@@ -10,6 +10,9 @@
 #include <set>
 #include <filesystem>
 #include <array>
+#include <sstream>
+#include <iomanip>
+#include <string>
 
 #include "buffer_object.h"
 #include "voxel_grid_gpu.h"
@@ -17,8 +20,9 @@
 
 class VoxelGridGPUDebugger {
 public:
-    std::shared_ptr<VoxelGridGPU> voxel_grid;
-    std::shared_ptr<Window> window;
+    VoxelGridGPU* voxel_grid = nullptr;
+    Window* window = nullptr;
+    ShaderHelper* shader_helper = nullptr;
 
     static constexpr int COUNT_DRAWING_STEPS = 3;
     bool voxel_grid_draw_streaming[COUNT_DRAWING_STEPS] = {false};
@@ -41,7 +45,7 @@ public:
         "reset_voxel_write_list_counter()"
     };
 
-    VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window);
+    VoxelGridGPUDebugger(VoxelGridGPU* voxel_grid, ShaderHelper* shader_helper, Window* window);
 
     void print_finded_chunks_in_hash_table(glm::ivec3 chunk_pos);
 

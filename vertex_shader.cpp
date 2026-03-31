@@ -3,10 +3,11 @@
 
 VertexShader::VertexShader(
     const std::filesystem::path& path, 
-    const std::vector<std::filesystem::path>& include_directories
-) {
-    std::string src = load_text_file(path, include_directories);
-    this->id = compile_shader(GL_VERTEX_SHADER, src.c_str(), &path);
+    const std::vector<std::filesystem::path>* include_directories,
+    const std::filesystem::path* debug_path) 
+    :   Shader(GL_VERTEX_SHADER, path, include_directories, debug_path)   
+{
+
 }
 
 VertexShader::VertexShader(VertexShader&& o) noexcept {

@@ -5,21 +5,19 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=3) buffer EnqueuedBuf { uint enqueued[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=2) buffer EnqueuedBuf { uint enqueued[]; };
 
 uniform uint u_max_chunks;
-uniform uint u_hash_table_size;
+uniform uint u_chunk_hash_table_size;
 uniform uint u_pack_bits;
 uniform int u_pack_offset;
 
 // ----- include -----
 #include "../utils.glsl"
-
-#define NOT_INCLUDE_GET_OR_CREATE
-#include "../common/hash_table.glsl"
+#include "chunk_hash_table/common.glsl"
+#include "chunk_hash_table/lookup_remove.glsl"
 // -------------------
 
 void main() {
@@ -31,5 +29,5 @@ void main() {
 
     uvec2 key = uvec2(chunk_meta.key_lo, chunk_meta.key_hi);
 
-    set_chunk(key, chunk_id);
+    chunk_hash_table_set_slot_value(key, chunk_id);
 }

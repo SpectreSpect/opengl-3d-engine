@@ -23,6 +23,12 @@ public:
     GLuint id;
 
     Shader() = default;
+    Shader(
+        GLenum shader_type,
+        const std::filesystem::path& path, 
+        const std::vector<std::filesystem::path>* include_directories = nullptr,
+        const std::filesystem::path* debug_path = nullptr
+    );
     ~Shader();
 
     Shader(const Shader&) = delete;
@@ -38,9 +44,26 @@ public:
     }
     void print_shader_log(const char* name = "NO NAME");
 
+    template<class T>
+    static inline T build_shader(
+        const std::filesystem::path& relative_path, 
+        const std::filesystem::path& root_path,
+        const std::filesystem::path* debug_root_path,
+        const std::vector<std::filesystem::path>* include_directories = nullptr)
+    {
+        std::filesystem::path path = root_path / relative_path;
+        std::filesystem::path debug_path;
+
+        if (debug_root_path != nullptr) {
+            debug_path = *debug_root_path / relative_path;
+        } 
+
+        return T(path, include_directories, debug_root_path != nullptr ? &debug_path : nullptr);
+    }
+
     static std::string load_text_file(
         const std::filesystem::path& path, 
-        const std::vector<std::filesystem::path>& include_directories = std::vector<std::filesystem::path>()
+        const std::vector<std::filesystem::path>* include_directories = nullptr
     );
     static GLuint compile_shader(GLenum type, const char* src, const std::filesystem::path* shader_path = nullptr);
 };

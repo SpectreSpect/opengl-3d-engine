@@ -1,5 +1,24 @@
 #include "shader.h"
 
+Shader::Shader(
+    GLenum shader_type, 
+    const std::filesystem::path& path, 
+    const std::vector<std::filesystem::path>* include_directories,
+    const std::filesystem::path* debug_path)
+{
+    std::string src = load_text_file(path, include_directories);
+
+    if (debug_path != nullptr) {
+        std::filesystem::create_directories(debug_path->parent_path());
+
+        std::ofstream debug_out(*debug_path);
+        debug_out << src;
+        debug_out.close();
+    }
+
+    this->id = compile_shader(shader_type, src.c_str(), &path);
+}
+
 Shader::~Shader() {
     glDeleteShader(id);
 }
@@ -23,7 +42,10 @@ void Shader::print_shader_log(const char* name) {
     if (!log.empty()) std::cout << log << "\n";
 }
 
-std::string Shader::load_text_file(const std::filesystem::path& path, const std::vector<std::filesystem::path>& include_directories) {
+std::string Shader::load_text_file(
+    const std::filesystem::path& path, 
+    const std::vector<std::filesystem::path>* include_directories) 
+{
     GlslPreprocessor preprocessor;
     return preprocessor.load(path, include_directories);
 }

@@ -5,19 +5,18 @@ layout(local_size_x = 256) in;
 #include "../common/buffer_structures.glsl"
 // -------------------
 
-layout(std430, binding=0) coherent buffer ChunkHashKeys { uvec2 hash_keys[]; };
-layout(std430, binding=1) coherent buffer ChunkHashVals { uint count_tomb; uint  hash_vals[]; };
-layout(std430, binding=2) readonly buffer ChunkVoxels { VoxelData voxels[]; };
-layout(std430, binding=3) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
-layout(std430, binding=4) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
-layout(std430, binding=5) buffer EmitCounterBuf { uint emit_counter[]; };
-layout(std430, binding=6) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
-layout(std430, binding=7) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
-layout(std430, binding=8) buffer GlobalVB { Vertex vb[]; };
-layout(std430, binding=9) buffer GlobalIB { uint ib[]; };
+layout(std430, binding=0) coherent buffer ChunkHashTable { HashTableCounters chunk_hash_table_counters; ChunkHashTableSlot chunk_hash_table_slots[]; };
+layout(std430, binding=1) readonly buffer ChunkVoxels { VoxelData voxels[]; };
+layout(std430, binding=2) buffer MeshBuffersStatusBuf { uint is_vb_full; uint is_ib_full; };
+layout(std430, binding=3) readonly buffer DirtyListBuf { uint dirty_count; uint dirty_list[]; };
+layout(std430, binding=4) buffer EmitCounterBuf { uint emit_counter[]; };
+layout(std430, binding=5) buffer ChunkMeshAllocBuf { ChunkMeshAlloc chunk_alloc[]; }; 
+layout(std430, binding=6) readonly buffer ChunkMetaBuf { ChunkMeta meta[]; };
+layout(std430, binding=7) buffer GlobalVB { Vertex vb[]; };
+layout(std430, binding=8) buffer GlobalIB { uint ib[]; };
 
 // ===== uniforms =====
-uniform uint  u_hash_table_size;
+uniform uint  u_chunk_hash_table_size;
 uniform ivec3 u_chunk_dim;
 uniform uint  u_voxels_per_chunk;
 uniform vec3  u_voxel_size;
@@ -30,9 +29,7 @@ uniform uint u_ib_page_inds;
 
 // ----- include -----
 #include "../utils.glsl"
-
-#define NOT_INCLUDE_MARK_DIRTY
-#include "../common/chunk_pool.glsl"
+#include "chunk_pool/read_voxels.glsl"
 // -------------------
 
 #define AO_STEP   0.22   // сила затемнения за "ступень" 0..3
@@ -54,9 +51,9 @@ uint ao_corner(uint chunkId, ivec3 chunkCoord, ivec3 p,
     ivec3 du = U * su;
     ivec3 dv = V * sv;
 
-    uint s1 = occ(chunkId, chunkCoord, p, N + du);
-    uint s2 = occ(chunkId, chunkCoord, p, N + dv);
-    uint c  = occ(chunkId, chunkCoord, p, N + du + dv);
+    uint s1 = voxel_vis(chunkId, chunkCoord, p, N + du);
+    uint s2 = voxel_vis(chunkId, chunkCoord, p, N + dv);
+    uint c  = voxel_vis(chunkId, chunkCoord, p, N + du + dv);
 
     // если оба сайда заняты — угол максимально тёмный
     if (s1 == 1u && s2 == 1u) return 3u;
@@ -209,15 +206,15 @@ void main() {
     int lz = int(voxelId / uint(u_chunk_dim.x * u_chunk_dim.y));
     ivec3 p = ivec3(lx, ly, lz);
 
-    uint t = voxel_type_in_chunk(chunkId, p);
-    if (t == 0u) return;
+    VoxelData voxel_data = voxel_data_in_chunk(chunkId, p);
+    if ((read_voxel_flags(voxel_data.type_flags) & VOXEL_VISABILITY_FLAG_BIT) == 0u) return;
 
-    uint color = voxel_color_in_chunk(chunkId, p);
+    uint color = voxel_data.color;
 
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 0u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 1u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 2u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 3u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) emit_quad(chunkId, chunkCoord, p, 4u, color);
-    if (neighbor_type(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) emit_quad(chunkId, chunkCoord, p, 5u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 0u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3(-1, 0, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 1u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 2u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0,-1, 0)) == 0u) emit_quad(chunkId, chunkCoord, p, 3u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0, 1)) == 0u) emit_quad(chunkId, chunkCoord, p, 4u, color);
+    if (voxel_vis(chunkId, chunkCoord, p, ivec3( 0, 0,-1)) == 0u) emit_quad(chunkId, chunkCoord, p, 5u, color);
 }

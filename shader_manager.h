@@ -13,28 +13,20 @@ namespace fs = std::filesystem;
 
 class ShaderManager {
 public:
-    std::vector<std::filesystem::path> include_directories;
-
-    // General
+    // general
     ComputeShader dispatch_adapter_cs;
     ComputeShader clear_buffer_cs;
     ComputeProgram clear_buffer_prog;
 
-    //voxelizaton
-    ComputeShader count_triangles_in_chunks_cs;
-    ComputeShader scan_blocks_cs;
-    ComputeShader add_block_offsets_cs;
-    ComputeShader fix_last_cs;
-    ComputeShader copy_offsets_to_cursor_cs;
+    // voxelizaton
+    ComputeShader reset_voxelize_pipeline_cs;
+    ComputeShader mark_and_count_active_chunks_cs;
+    ComputeShader alloc_active_chunk_triangles_cs;
     ComputeShader fill_triangle_indices_cs;
-    ComputeShader voxelize_cs;
-    ComputeShader roi_reduce_indices_cs;
-    ComputeShader roi_reduce_pairs_cs;
-    ComputeShader build_active_chunks_cs;
-    ComputeShader roi_finalize_cs;
-    ComputeShader build_voxel_writes_cs;
+    ComputeShader voxelize_triangles_cs;
 
-    //voxel_grid
+
+    // voxel_grid
     ComputeShader clear_chunks_cs;
     ComputeShader world_init_cs;
     ComputeShader apply_writes_to_world_cs;
@@ -69,13 +61,19 @@ public:
     VertexShader voxel_mesh_vs;
     FragmentShader voxel_mesh_fs;
 
-    ShaderManager(const std::filesystem::path& root_path, std::vector<std::filesystem::path> include_directories = std::vector<std::filesystem::path>());
+    ShaderManager(
+        const std::filesystem::path& root_path,
+        const std::vector<std::filesystem::path>* include_directories = nullptr,
+        const std::filesystem::path* debug_root_path = nullptr
+    );
     ShaderManager(const ShaderManager&) = delete;
     ShaderManager& operator=(const ShaderManager&) = delete;
     ShaderManager(ShaderManager&&) noexcept = default;
     ShaderManager& operator=(ShaderManager&&) noexcept = default;
 
-    void add_include_directory(std::filesystem::path directory);
-
-    void init_shaders(const std::filesystem::path& root_path);
+    void init_shaders(
+        const std::filesystem::path& root_path, 
+        const std::vector<std::filesystem::path>* include_directories,
+        const std::filesystem::path* debug_root_path
+    );
 };

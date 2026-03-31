@@ -1,83 +1,72 @@
 #version 430
 layout(local_size_x = 256) in;
 
-layout(std430, binding=0) readonly buffer Vert   { float v[]; };
-layout(std430, binding=1) readonly buffer Ind    { uint  idx[]; };
-layout(std430, binding=2) buffer Cursor          { coherent uint cursor[]; };
-layout(std430, binding=3) buffer OutTriIds       { uint outTriIds[]; };
+// ----- include -----
+#include "../common/buffer_structures.glsl"
+// -------------------
 
-uniform mat4  uTransform;
-uniform float uVoxelSize;
-uniform int   uChunkSize;
-uniform ivec3 uChunkOrigin;
-uniform uvec3 uGridDim;
-uniform uint  uTriCount;
-uniform uint  uOutCapacity;
+layout(std430, binding=0) buffer CounterHashTable { HashTableCounters counter_hash_table_counters; CounterHashTableSlot counter_hash_table_slots[]; };
+layout(std430, binding=1) buffer TriangleIndicesList { uint triangle_counter; uint triangle_indices_list[]; };
+layout(std430, binding=2) buffer VBO { float vbo_data[]; };
+layout(std430, binding=3) buffer EBO { uint ebo_data[]; };
 
-uniform uint uStrideF;
-uniform uint uPosOffF;
+uniform uint u_count_mesh_triangles;
+uniform uint u_counter_hash_table_size;
 
-int floor_div_no_mod(int a, int b) {
-    int q = a / b;
-    int prod = q * b;
-    if (prod != a && ((a < 0) != (b < 0)))
-        q -= 1;
-    return q;
-}
+uniform uint u_vertex_stride_bytes;
+uniform uint u_vertex_position_offset_bytes;
 
-vec3 load_pos(uint vid) {
-    uint base = vid * uStrideF + uPosOffF;
-    return vec3(v[base+0u], v[base+1u], v[base+2u]);
-}
+uniform vec3 u_voxel_size;
+uniform uvec3 u_chunk_size;
 
-bool in_roi(ivec3 c, out uint idxOut) {
-    ivec3 rel = c - uChunkOrigin;
-    ivec3 dim = ivec3(uGridDim);
-    if (any(lessThan(rel, ivec3(0))) || any(greaterThanEqual(rel, dim))) return false;
-    idxOut = (uint(rel.z) * uGridDim.y + uint(rel.y)) * uGridDim.x + uint(rel.x);
-    return true;
+uniform uint u_pack_offset;
+uniform uint u_pack_bits;
+
+uniform mat4 u_transform;
+
+// ----- include -----
+#include "../utils.glsl"
+#include "counter_hash_table/lookup_remove.glsl"
+// -------------------
+
+vec4 voxel_index_to_position(uint voxel_id) {
+    uint position_offset_bytes = voxel_id * u_vertex_stride_bytes + u_vertex_position_offset_bytes;
+    uint position_offset_index = position_offset_bytes / 4u;
+    float x = vbo_data[position_offset_index + 0u];
+    float y = vbo_data[position_offset_index + 1u];
+    float z = vbo_data[position_offset_index + 2u];
+    return vec4(x, y, z, 1.0f);
 }
 
 void main() {
-    uint tid = gl_GlobalInvocationID.x;
-    if (tid >= uTriCount) return;
+    uint triangle_id = gl_GlobalInvocationID.x;
+    if (triangle_id >= u_count_mesh_triangles) return;
 
-    uint i0 = idx[tid*3u + 0u];
-    uint i1 = idx[tid*3u + 1u];
-    uint i2 = idx[tid*3u + 2u];
+    uint vi0 = ebo_data[triangle_id*3u + 0u];
+    uint vi1 = ebo_data[triangle_id*3u + 1u];
+    uint vi2 = ebo_data[triangle_id*3u + 2u];
 
-    vec3 p0 = (uTransform * vec4(load_pos(i0), 1.0)).xyz / uVoxelSize;
-    vec3 p1 = (uTransform * vec4(load_pos(i1), 1.0)).xyz / uVoxelSize;
-    vec3 p2 = (uTransform * vec4(load_pos(i2), 1.0)).xyz / uVoxelSize;
+    vec4 p0_local = voxel_index_to_position(vi0);
+    vec4 p1_local = voxel_index_to_position(vi1);
+    vec4 p2_local = voxel_index_to_position(vi2);
 
-    vec3 mn = min(p0, min(p1, p2));
-    vec3 mx = max(p0, max(p1, p2));
+    vec3 render_chunk_size = u_voxel_size * u_chunk_size;
+    ivec3 p0 = ivec3(floor((u_transform * p0_local).xyz / render_chunk_size));
+    ivec3 p1 = ivec3(floor((u_transform * p1_local).xyz / render_chunk_size));
+    ivec3 p2 = ivec3(floor((u_transform * p2_local).xyz / render_chunk_size));
 
-    mn -= vec3(1e-4);
-    mx += vec3(1e-4);
+    ivec3 min_p = min(p0, min(p1, p2));
+    ivec3 max_p = max(p0, max(p1, p2));
 
-    ivec3 vmin = ivec3(floor(mn));
-    ivec3 vmax = ivec3(floor(mx));
-    vmax = max(vmax, vmin);
+    for (int x = min_p.x; x <= max_p.x; x++)
+    for (int y = min_p.y; y <= max_p.y; y++)
+    for (int z = min_p.z; z <= max_p.z; z++) {
+        uvec2 key = pack_key_uvec2(ivec3(x, y, z), u_pack_offset, u_pack_bits);
+        
+        uint slot_id = counter_hash_table_lookup_hash_table_slot_id(key, true);
+        if (slot_id == INVALID_ID) continue;
 
-    ivec3 cmin = ivec3(
-        floor_div_no_mod(vmin.x, uChunkSize),
-        floor_div_no_mod(vmin.y, uChunkSize),
-        floor_div_no_mod(vmin.z, uChunkSize)
-    );
-    ivec3 cmax = ivec3(
-        floor_div_no_mod(vmax.x, uChunkSize),
-        floor_div_no_mod(vmax.y, uChunkSize),
-        floor_div_no_mod(vmax.z, uChunkSize)
-    );
-
-    for (int cz=cmin.z; cz<=cmax.z; ++cz)
-    for (int cy=cmin.y; cy<=cmax.y; ++cy)
-    for (int cx=cmin.x; cx<=cmax.x; ++cx) {
-        uint cidx;
-        if (!in_roi(ivec3(cx,cy,cz), cidx)) continue;
-
-        uint dst = atomicAdd(cursor[cidx], 1u);
-        if (dst < uOutCapacity) outTriIds[dst] = tid;
+        uint base = atomicAdd(counter_hash_table_slots[slot_id].value.triangle_emmit_counter, 1u);
+        triangle_indices_list[base] = triangle_id;
     }
 }

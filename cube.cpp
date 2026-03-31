@@ -1,39 +1,14 @@
 #include "cube.h"
 
-Cube::Cube(glm::vec3 position, glm::vec3 scale, glm::vec3 color) {
-    this->position = position;
-    this->scale = scale;
-    this->_color = color;
-
-    MeshData mesh_data = create_mesh_data(color);
-
-    VertexLayout vertex_layout;
-    vertex_layout.add(
-        "position",
-        0, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        0, 
-        0, {0.0f, 0.0f, 0.0f}
-    );
-    vertex_layout.add(
-        "normal",
-        1, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        3 * sizeof(float),
-        0, {0.0f, 1.0f, 0.0f}
-    );
-    vertex_layout.add(
-        "color",
-        2, 3, GL_FLOAT, GL_FALSE,
-        9 * sizeof(float),
-        6 * sizeof(float),
-        0, {1.0f, 1.0f, 1.0f}
-    );
-
-    mesh = new Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);
+Cube::Cube(glm::vec3 position, glm::vec3 scale, glm::vec3 color) 
+    :   Transformable(position, scale, glm::vec3(0)),
+        _color(color),
+        mesh(Cube::create_mesh(color))
+{
+    
 }
 
-MeshData Cube::create_mesh_data(glm::vec3 color) const {
+MeshData Cube::create_mesh_data(glm::vec3 color) {
     std::vector<float> vertices = {
         // positions            // normals
 
@@ -89,13 +64,42 @@ MeshData Cube::create_mesh_data(glm::vec3 color) const {
     return mesh_data;
 }
 
+Mesh Cube::create_mesh(glm::vec3 color) {
+    MeshData mesh_data = Cube::create_mesh_data(color);
+
+    VertexLayout vertex_layout;
+    vertex_layout.add(
+        "position",
+        0, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        0, 
+        0, {0.0f, 0.0f, 0.0f}
+    );
+    vertex_layout.add(
+        "normal",
+        1, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        3 * sizeof(float),
+        0, {0.0f, 1.0f, 0.0f}
+    );
+    vertex_layout.add(
+        "color",
+        2, 3, GL_FLOAT, GL_FALSE,
+        9 * sizeof(float),
+        6 * sizeof(float),
+        0, {1.0f, 1.0f, 1.0f}
+    );
+
+    return Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);
+}
+
 void Cube::set_color(glm::vec3& color) {
     _color = color;
     MeshData mesh_data = create_mesh_data(color);
-    mesh->update(mesh_data.vertices, mesh_data.indices);
+    mesh.update(mesh_data.vertices, mesh_data.indices);
 }
 
 void Cube::draw(RenderState state) {
     state.transform *= get_model_matrix();
-    mesh->draw(state);
+    mesh.draw(state);
 }

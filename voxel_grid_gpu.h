@@ -27,6 +27,7 @@
 #include "gpu_timestamp.h"
 #include "gridable_gpu.h"
 #include "voxel_engine_gpu_structures.h"
+#include "shader_helper.h"
 
 class VoxelGridGPU : public Transformable, public Drawable, public IGridableGPU {
 public:
@@ -87,7 +88,25 @@ public:
         uint32_t bool_push_result;
     };
 
+    struct VoxelGridDesc {
+        glm::ivec3 chunk_size; 
+        glm::vec3 voxel_size;
+        uint32_t count_active_chunks; 
+        uint32_t max_quads;
+        float chunk_hash_table_size_factor; 
+        uint32_t count_evict_buckets;
+        uint32_t min_free_chunks;
+        float tomb_fraction_to_rebuild;
+        float eviction_bucket_shell_thickness;
+        uint32_t vb_page_size_order_of_two;
+        uint32_t ib_page_size_order_of_two;
+        float buddy_allocator_nodes_factor;
+        float render_distance;
+        uint32_t generation_distance;
+        uint32_t max_write_count;
+    };
 
+    ShaderHelper* shader_helper = nullptr;
     ShaderManager* shader_manager = nullptr;
 
     ComputeProgram prog_dispatch_adapter_;
@@ -124,12 +143,11 @@ public:
     ComputeProgram prog_add_voxel_write_list_counters_together_;
     VfProgram prog_vf_voxel_mesh_diffusion_spec_;
 
+    BufferObject chunk_hash_table_;
     BufferObject dispatch_args;
     BufferObject dispatch_args_additional;
     BufferObject voxels_;
     BufferObject chunk_meta_;
-    BufferObject chunk_hash_keys_;
-    BufferObject chunk_hash_vals_;
     BufferObject free_list_;
     BufferObject mesh_buffers_status_;
     BufferObject local_voxel_write_list_;
@@ -178,23 +196,7 @@ public:
 
     VAO vao;
 
-    VoxelGridGPU(
-        glm::ivec3 chunk_size, 
-        glm::vec3 voxel_size, 
-        uint32_t count_active_chunks, 
-        uint32_t max_quads,
-        float chunk_hash_table_size_factor, 
-        uint32_t count_evict_buckets,
-        uint32_t min_free_chunks,
-        float tomb_fraction_to_rebuild,
-        float eviction_bucket_shell_thickness,
-        uint32_t vb_page_size_order_of_two,
-        uint32_t ib_page_size_order_of_two,
-        float buddy_allocator_nodes_factor,
-        float render_distance,
-        uint32_t generation_distance,
-        uint32_t max_write_count,
-        ShaderManager& shader_manager);
+    VoxelGridGPU(const VoxelGridDesc& desc, ShaderHelper* shader_helper, ShaderManager* shader_manager);
 
     void apply_writes_to_world_gpu(uint32_t write_count);
     void apply_writes_to_world_from_cpu(const std::vector<glm::ivec3>& positions, const std::vector<VoxelDataGPU>& voxels);
@@ -226,14 +228,7 @@ public:
     void clear_chunk_hash_table(const BufferObject& dispatch_args); 
     void fill_chunk_hash_table(const BufferObject& dispatch_args, uint32_t pack_bits, uint32_t pack_offset); 
     void conditional_prepare_rebuild(BufferObject& clear_dispatch_args, BufferObject& fill_dispatch_args);
-    void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset); 
-
-    void prepare_dispatch_args(
-        BufferObject& dispatch_args,
-        const DispatchArg& arg_x = ValueDispatchArg(1u),
-        const DispatchArg& arg_y = ValueDispatchArg(1u),
-        const DispatchArg& arg_z = ValueDispatchArg(1u)
-    );
+    void rebuild_chunk_hash_table(uint32_t pack_bits, uint32_t pack_offset);
 
     void reset_heads(); 
     void build_bucket_lists(const glm::vec3& cam_pos); 

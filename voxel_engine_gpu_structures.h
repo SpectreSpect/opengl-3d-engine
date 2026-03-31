@@ -7,33 +7,106 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 
+static constexpr uint32_t INVALID_ID = 0xFFFFFFFFu;
+
+static constexpr uint32_t ST_MASK_BITS = 4u;
+static constexpr uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
+
+static constexpr uint32_t ST_FREE = 0u;
+static constexpr uint32_t ST_ALLOC = 1u;
+static constexpr uint32_t ST_MERGED = 2u;
+
+static constexpr uint32_t HEAD_TAG_BITS = 4u;
+static constexpr uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
+static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
+
+static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
+static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
+static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
+static constexpr uint32_t SLOT_OCCUPIED = 0xFFFFFFFCu;
+
+static constexpr uint32_t OVERWRITE_BIT = 1u;
+
+static constexpr uint32_t DIRTY_FLAG_BIT = 1u;
+static constexpr uint32_t NEED_GENERATION_FLAG_BIT = 2u;
+
+static constexpr uint32_t VOXEL_TYPE_BITS = 16u;
+static constexpr uint32_t VOXEL_TYPE_MASK = (1u << VOXEL_TYPE_BITS) - 1u;
+
+static constexpr uint32_t VOXEL_VISABILITY_FLAG_BIT = 1u; // Определяет, видим ли воксель
+static constexpr uint32_t VOXEL_EASY_OVERWRITE_FLAG_BIT = 2u; // Определяет, можно ли заменять воксель как будто бы он "воздух" или "вода" в майне
+
 struct alignas(8) VoxelDataGPU {
-    uint32_t type_vis_flags;
+    uint32_t type_flags;
     uint32_t color;
 
     VoxelDataGPU() = default;
 
-    inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
-        init(type, visability, flags, color);
+    inline VoxelDataGPU(uint32_t type, uint32_t flags, uint32_t color) {
+        init(type, flags, color);
     }
 
-    inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec4 color) {
+    inline VoxelDataGPU(uint32_t type, uint32_t flags, glm::ivec4 color) {
         uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | (color.w & 0xFFu);
-        init(type, visability, flags, packed_color);
+        init(type, flags, packed_color);
     }
 
-    inline VoxelDataGPU(uint32_t type, uint32_t visability, uint32_t flags, glm::ivec3 color) {
+    inline VoxelDataGPU(uint32_t type, uint32_t flags, glm::ivec3 color) {
         uint32_t packed_color = ((color.x & 0xFFu) << 24u) | ((color.y & 0xFFu) << 16u) | ((color.z & 0xFFu) << 8u) | 0xFFu;
-        init(type, visability, flags, packed_color);
+        init(type, flags, packed_color);
     }
 
-    inline void init(uint32_t type, uint32_t visability, uint32_t flags, uint32_t color) {
-        this->type_vis_flags = ((type & 0xFFu) << 16) | ((visability & 0xFFu) << 8) | (flags & 0xFFu); // Тип 0
+    inline void init(uint32_t type, uint32_t flags, uint32_t color) {
+        this->type_flags = (flags << VOXEL_TYPE_BITS) | (type & VOXEL_TYPE_MASK);
         this->color = color;
     }
 };
 static_assert(sizeof(VoxelDataGPU) == 8);
 static_assert(alignof(VoxelDataGPU) == 8);
+
+struct ChunkHashTableSlot {
+    alignas(8) uint64_t key;
+    uint32_t value;
+    uint32_t state;
+};
+
+static_assert(sizeof(ChunkHashTableSlot) == 16);
+static_assert(alignof(ChunkHashTableSlot) == 8);
+
+struct CounterAllocMeta {
+    uint32_t count_triangles;
+    uint32_t triangle_indices_base;
+    uint32_t triangle_emmit_counter;
+};
+
+struct CounterHashTableSlot {
+    alignas(8) uint64_t key;
+    CounterAllocMeta value;
+    uint32_t state;
+};
+static_assert(sizeof(CounterHashTableSlot) == 24);
+static_assert(alignof(CounterHashTableSlot) == 8);
+
+
+static constexpr uint32_t COUNT_TABLE_COUNTERS = 16u;
+
+struct HashTableCounters {
+    uint32_t count_empty[COUNT_TABLE_COUNTERS];
+    uint32_t count_occupied[COUNT_TABLE_COUNTERS];
+    uint32_t count_tomb[COUNT_TABLE_COUNTERS];
+
+    uint32_t reduce_read_count(size_t counter_offset_bytes) {
+        uint32_t* counter = (uint32_t*)((char*)this + counter_offset_bytes);
+        uint32_t count = 0u;
+        for (uint32_t i = 0u; i < COUNT_TABLE_COUNTERS; i++) count += counter[i];
+        return count;
+    }
+
+    uint32_t reduce_read_count_empty() { return reduce_read_count(offsetof(HashTableCounters, count_empty)); }
+    uint32_t reduce_read_count_occupied() { return reduce_read_count(offsetof(HashTableCounters, count_occupied)); }
+    uint32_t reduce_read_count_tomb() { return reduce_read_count(offsetof(HashTableCounters, count_tomb)); }
+};
+static_assert(sizeof(HashTableCounters) == 192);
 
 
 struct alignas(16) VoxelWriteGPU {
@@ -42,6 +115,7 @@ struct alignas(16) VoxelWriteGPU {
     uint32_t set_flags;
     uint32_t pad1;
 };
+
 static_assert(sizeof(VoxelWriteGPU) == 32);
 static_assert(alignof(VoxelWriteGPU) == 16);
 
@@ -91,25 +165,3 @@ struct AllocNode {
     uint32_t page;
     uint32_t next;
 };
-
-static constexpr uint32_t INVALID_ID = 0xFFFFFFFFu;
-
-static constexpr uint32_t ST_MASK_BITS = 4u;
-static constexpr uint32_t ST_MASK = (1u << ST_MASK_BITS) - 1u;
-
-static constexpr uint32_t ST_FREE = 0u;
-static constexpr uint32_t ST_ALLOC = 1u;
-static constexpr uint32_t ST_MERGED = 2u;
-
-static constexpr uint32_t HEAD_TAG_BITS = 4u;
-static constexpr uint32_t HEAD_TAG_MASK = (1u << HEAD_TAG_BITS) - 1u;
-static constexpr uint32_t INVALID_HEAD_IDX = INVALID_ID >> HEAD_TAG_BITS;
-
-static constexpr uint32_t SLOT_EMPTY = 0xFFFFFFFFu;
-static constexpr uint32_t SLOT_LOCKED = 0xFFFFFFFEu;
-static constexpr uint32_t SLOT_TOMB = 0xFFFFFFFDu; 
-
-static constexpr uint32_t OVERWRITE_BIT = 1u;
-
-static constexpr uint32_t DIRTY_FLAG_BIT = 1u;
-static constexpr uint32_t NEED_GENERATION_FLAG_BIT = 2u;

@@ -55,6 +55,7 @@ add_executable(app
   voxel_grid_gpu_debugger.cpp
   gpu_timestamp.cpp
   torus.cpp
+  shader_helper.cpp
 )
 
 

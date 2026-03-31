@@ -1,7 +1,8 @@
 #include "voxel_grid_gpu_debugger.h"
 
-VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_grid, std::shared_ptr<Window> window) 
-: voxel_grid(voxel_grid), window(window) {
+VoxelGridGPUDebugger::VoxelGridGPUDebugger(VoxelGridGPU* voxel_grid_in, ShaderHelper* shader_helper_in, Window* window_in) 
+: voxel_grid(voxel_grid_in), shader_helper(shader_helper_in), window(window_in) {
+
     std::fill(std::begin(voxel_grid_draw_streaming), std::end(voxel_grid_draw_streaming), voxel_grid_draw_streaming[0]);
     std::fill(std::begin(voxel_grid_generation_streaming), std::end(voxel_grid_generation_streaming), voxel_grid_generation_streaming[0]);
     
@@ -55,17 +56,17 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
     };
 
     std::function<void()> mark_write_chunks_to_generate_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0));
         voxel_grid->mark_write_chunks_to_generate(voxel_grid->dispatch_args);
     };
 
     std::function<void()> generate_terrain_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, ValueDispatchArg(voxel_grid->vox_per_chunk), BufferDispatchArg(&voxel_grid->load_list_, 0u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, ValueDispatchArg(voxel_grid->vox_per_chunk), BufferDispatchArg(&voxel_grid->load_list_, 0u));
         voxel_grid->generate_terrain(voxel_grid->dispatch_args, 45345345);
     };
 
     std::function<void()> write_voxels_to_grid_fn = [&](){
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->voxel_write_list_, 0u));
         voxel_grid->write_voxels_to_grid();
     };
     
@@ -87,23 +88,20 @@ VoxelGridGPUDebugger::VoxelGridGPUDebugger(std::shared_ptr<VoxelGridGPU> voxel_g
 }
 
 void VoxelGridGPUDebugger::print_finded_chunks_in_hash_table(glm::ivec3 chunk_pos) {
-    std::vector<uint64_t> hash_keys(voxel_grid->chunk_hash_table_size);
-    std::vector<uint32_t> hash_vals(voxel_grid->chunk_hash_table_size);
-
-    voxel_grid->chunk_hash_keys_.read_subdata(0, sizeof(uint64_t) * voxel_grid->chunk_hash_table_size, hash_keys.data());
-    voxel_grid->chunk_hash_vals_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * voxel_grid->chunk_hash_table_size, hash_vals.data());
+    std::vector<ChunkHashTableSlot> chunk_hash_table_slot(voxel_grid->chunk_hash_table_size);
+    voxel_grid->chunk_hash_table_.read_subdata(sizeof(uint32_t) * 2, sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
 
     uint64_t key = math_utils::pack_key(chunk_pos.x, chunk_pos.y, chunk_pos.z);
     
     uint32_t count_matches = 0;
     std::cout << "==== HASH TABLE (" << chunk_pos.x << ", " << chunk_pos.y << ", " << chunk_pos.z << ") MATCHES ====" << std::endl;
     for (uint32_t slot_id = 0; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
-        if (key == hash_keys[slot_id]) {
+        if (key == chunk_hash_table_slot[slot_id].key) {
             std::string slot_value_str;
-            if (hash_vals[slot_id] == SLOT_EMPTY) slot_value_str = "SLOT_EMPTY";
-            else if (hash_vals[slot_id] == SLOT_TOMB) slot_value_str = "SLOT_TOMB";
-            else if (hash_vals[slot_id] == SLOT_LOCKED) slot_value_str = "SLOT_LOCKED";
-            else slot_value_str = std::to_string(hash_vals[slot_id]);
+            if (chunk_hash_table_slot[slot_id].value == SLOT_EMPTY) slot_value_str = "SLOT_EMPTY";
+            else if (chunk_hash_table_slot[slot_id].value == SLOT_TOMB) slot_value_str = "SLOT_TOMB";
+            else if (chunk_hash_table_slot[slot_id].value == SLOT_LOCKED) slot_value_str = "SLOT_LOCKED";
+            else slot_value_str = std::to_string(chunk_hash_table_slot[slot_id].value);
 
             std::cout << "SLOT_ID " << slot_id << ": " << "slot_value = " << slot_value_str << std::endl;
             count_matches++;
@@ -371,36 +369,51 @@ void VoxelGridGPUDebugger::print_count_free_mesh_alloc() {
 }
 
 void VoxelGridGPUDebugger::print_chunks_hash_table_log() {
-    std::vector<uint32_t> hash_table_vals(voxel_grid->chunk_hash_table_size);
-    uint32_t count_tombs_gpu = voxel_grid->chunk_hash_vals_.read_scalar<uint32_t>(0u);
+    std::vector<ChunkHashTableSlot> chunk_hash_table_slot(voxel_grid->chunk_hash_table_size);
+    voxel_grid->chunk_hash_table_.read_subdata(sizeof(HashTableCounters), sizeof(ChunkHashTableSlot) * voxel_grid->chunk_hash_table_size, chunk_hash_table_slot.data());
 
-    voxel_grid->chunk_hash_vals_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * voxel_grid->chunk_hash_table_size, hash_table_vals.data());
+    HashTableCounters counters = voxel_grid->chunk_hash_table_.read_scalar<HashTableCounters>(0u);
 
-    uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_alloc_slots = 0u;
+    uint32_t count_empty_slots = 0u, count_lock_slots = 0u, count_tomb_slots = 0u, count_occupied_slots = 0u, count_error_states = 0u; 
     for (uint32_t slot_id = 0u; slot_id < voxel_grid->chunk_hash_table_size; slot_id++) {
-        uint32_t v = hash_table_vals[slot_id];
+        uint32_t state = chunk_hash_table_slot[slot_id].state;
 
-        if (v == SLOT_EMPTY) count_empty_slots++;
-        else if (v == SLOT_LOCKED) count_lock_slots++;
-        else if (v == SLOT_TOMB) count_tomb_slots++;
-        else count_alloc_slots++;
+        if (state == SLOT_EMPTY) count_empty_slots++;
+        else if (state == SLOT_LOCKED) count_lock_slots++;
+        else if (state == SLOT_TOMB) count_tomb_slots++;
+        else if (state == SLOT_OCCUPIED) count_occupied_slots++;
+        else count_error_states++;
     }
+
+    auto get_count_string = [&](uint32_t count_cpu) -> std::string {
+        std::ostringstream ss;
+
+        float cpu_percent = static_cast<float>(count_cpu) / voxel_grid->chunk_hash_table_size * 100.0f;
+
+        ss << count_cpu
+        << " (" << std::fixed << std::setprecision(2) << cpu_percent << "%)";
+
+        return ss.str();
+    };
 
     std::cout << "======= CHUNKS HASH TABLE LOG =======" << std::endl;
     std::cout << "Total count hash table slots: " << voxel_grid->chunk_hash_table_size << std::endl;
-    std::cout << "SLOT_EMPTY: " << count_empty_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_empty_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
+
+    std::cout << "**CPU**:" << std::endl;
+    std::cout << "SLOT_EMPTY: " << get_count_string(count_empty_slots) << std::endl;
+    std::cout << "SLOT_TOMB: " << get_count_string(count_tomb_slots) << std::endl;
+    std::cout << "SLOT_OCCUPIED: " << get_count_string(count_occupied_slots) << std::endl;
     std::cout << "SLOT_LOCKED: " << count_lock_slots << "(" 
               << std::fixed << std::setprecision(2) << (float)count_lock_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
-    std::cout << "SLOT_TOMB: " << count_tomb_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_tomb_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
-    
-    std::cout << "SLOT_TOMB_GPU: " << count_tombs_gpu << std::endl;
-    
-    std::cout << "SLOT_ALLOC: " << count_alloc_slots << "(" 
-              << std::fixed << std::setprecision(2) << (float)count_alloc_slots / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
+
+    std::cout << "ERROR_SLOTS: " << count_error_states << "(" 
+              << std::fixed << std::setprecision(2) << (float)count_error_states / voxel_grid->chunk_hash_table_size * 100.0f << "%)" << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "**GPU**:" << std::endl;
+    std::cout << "SLOT_EMPTY: " << get_count_string(counters.reduce_read_count_empty()) << std::endl;
+    std::cout << "SLOT_TOMB: " << get_count_string(counters.reduce_read_count_tomb()) << std::endl;
+    std::cout << "SLOT_OCCUPIED: " << get_count_string(counters.reduce_read_count_occupied()) << std::endl;
 
     std::cout << std::endl;
 }
@@ -610,12 +623,11 @@ void VoxelGridGPUDebugger::print_dirty_list_emit_counters() {
 
 void VoxelGridGPUDebugger::print_dirty_list_quad_count() {
     uint32_t dirty_count = voxel_grid->dirty_list_.read_scalar<uint32_t>(0u);
-    std::vector<uint32_t> dirty_list(dirty_count);
     std::vector<uint32_t> dirty_quad_count(dirty_count);
     
-    voxel_grid->dirty_list_.read_subdata(sizeof(uint32_t), sizeof(uint32_t) * dirty_count, dirty_list.data());
     voxel_grid->dirty_quad_count_.read_subdata(0, sizeof(uint32_t) * dirty_count, dirty_quad_count.data());
 
+    std::cout << "DIRTY QUAD COUNT: " << dirty_count << std::endl;
     std::cout << "DIRTY QUAD COUNTERS: " << std::endl;
     for (uint32_t dirty_id = 0u; dirty_id < dirty_count && dirty_id < 100u; dirty_id++) {
         std::cout << "dirty_id " << dirty_id << ": " << dirty_quad_count[dirty_id] << std::endl;
@@ -732,6 +744,10 @@ void VoxelGridGPUDebugger::dispay_debug_window() {
         print_dirty_list();
     }
 
+    if (ImGui::Button("print_dirty_list_quad_count()")) {
+        print_dirty_list_quad_count();
+    }
+
     float render_distance_in_chunks = voxel_grid->render_distance / (voxel_grid->voxel_size.x * voxel_grid->chunk_size.x);
     if (ImGui::SliderFloat("Render distance", &render_distance_in_chunks, 0.0f, 300.0f)) {
         voxel_grid->render_distance = render_distance_in_chunks * voxel_grid->voxel_size.x * voxel_grid->chunk_size.x;
@@ -800,27 +816,27 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
     ImGui::Separator();
 
     if (ImGui::Button("mesh_reset()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_reset(voxel_grid->dispatch_args);
     }
 
     if (ImGui::Button("mesh_count()")) {
         uint32_t vox_per_chunk = (uint32_t)(voxel_grid->chunk_size.x * voxel_grid->chunk_size.y * voxel_grid->chunk_size.z);
-        voxel_grid->prepare_dispatch_args(
+        shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
-            BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
+            BufferDispatchArg(&voxel_grid->dirty_list_, 0u)
         );
         voxel_grid->mesh_count(voxel_grid->dispatch_args, math_utils::BITS, math_utils::OFFSET);
     }
 
     if (ImGui::Button("mesh_alloc()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_alloc(voxel_grid->dispatch_args);
     }
 
     if (ImGui::Button("verify_mesh_allocation()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->verify_mesh_allocation(voxel_grid->mesh_buffers_status_);
     }
 
@@ -831,16 +847,16 @@ void VoxelGridGPUDebugger::display_build_from_dirty_window() {
 
     if (ImGui::Button("mesh_emit()")) {
         uint32_t vox_per_chunk = (uint32_t)(voxel_grid->chunk_size.x * voxel_grid->chunk_size.y * voxel_grid->chunk_size.z);
-        voxel_grid->prepare_dispatch_args(
+        shader_helper->prepare_dispatch_args(
             voxel_grid->dispatch_args, 
             ValueDispatchArg(vox_per_chunk), 
-            BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u)
+            BufferDispatchArg(&voxel_grid->dirty_list_, 0u)
         );
         voxel_grid->mesh_emit(voxel_grid->dispatch_args, math_utils::BITS, math_utils::OFFSET);
     }
 
     if (ImGui::Button("mesh_finalize()")) {
-        voxel_grid->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->mesh_buffers_status_, 1u));
+        shader_helper->prepare_dispatch_args(voxel_grid->dispatch_args, BufferDispatchArg(&voxel_grid->dirty_list_, 0u));
         voxel_grid->mesh_finalize(voxel_grid->dispatch_args);
     }
 
@@ -962,7 +978,7 @@ void VoxelGridGPUDebugger::display_stream_chunks_pipeline_window() {
     ImGui::Begin("Steam chunks pipeline");
     
     if (ImGui::Button("Run all pipeline")) {
-        voxel_grid->stream_chunks_sphere(window->camera->position, 15, 45345345u);
+        voxel_grid->stream_chunks_sphere(window->camera->position, -1, 45345345u);
     }
 
     ImGui::Separator();

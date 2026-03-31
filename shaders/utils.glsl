@@ -10,9 +10,9 @@
 #define INVALID_ID 0xFFFFFFFFu
 #define BYTE_MASK 0xFFu
 
-uint max(uint a, uint b) {
-    return a > b ? a : b;
-}
+// uint max(uint a, uint b) {
+//     return a > b ? a : b;
+// }
 
 uint div_up_u32(uint a, uint b) { 
     return (a + b - 1u) / b; 
