@@ -75,7 +75,7 @@ int main() {
     voxel_grid_desc.voxel_size = voxel_size;
     voxel_grid_desc.count_active_chunks = 10'000;
     voxel_grid_desc.max_quads = 3'000'000;
-    voxel_grid_desc.chunk_hash_table_size_factor = 4.0f;
+    voxel_grid_desc.chunk_hash_table_size_factor = 1.0f;
     voxel_grid_desc.count_evict_buckets = 32;
     voxel_grid_desc.min_free_chunks = 4'500;
     voxel_grid_desc.tomb_fraction_to_rebuild = 0.2f;
@@ -93,7 +93,7 @@ int main() {
     VoxelRasterizatorGPU::VoxelRasterizatorDesc voxel_rasterizator_desc;
     voxel_rasterizator_desc.chunk_size = glm::ivec3(4);
     voxel_rasterizator_desc.voxel_size = voxel_size;
-    voxel_rasterizator_desc.counter_hash_table_size = 640'000;
+    voxel_rasterizator_desc.counter_hash_table_size = 50'000;
     voxel_rasterizator_desc.count_voxel_writes = 0;
     VoxelRasterizatorGPU voxel_rasterizator(voxel_rasterizator_desc, &voxel_grid_gpu, &shader_manager, &shader_helper);
 
@@ -104,8 +104,6 @@ int main() {
     VoxelWriteGPU air_voxel_prifab;
     air_voxel_prifab.voxel_data = VoxelDataGPU(0u, VOXEL_EASY_OVERWRITE_FLAG_BIT, glm::ivec3(255));
     air_voxel_prifab.set_flags = OVERWRITE_BIT;
-
-    voxel_rasterizator.rasterize(torus, blue_voxel_prifab, &voxel_grid_gpu.local_voxel_write_list_);
 
     float rotation_speed = glm::pi<float>() / 2.0f;
 

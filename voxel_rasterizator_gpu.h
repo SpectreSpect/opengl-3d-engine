@@ -24,7 +24,6 @@
 #include "shader_helper.h"
 #include "gpu_timestamp.h"
 
-// GPU CSR: плотная ROI (Nx*Ny*Nz чанков)
 class VoxelRasterizatorGPU {
 public:
     IGridable* gridable = nullptr;
@@ -50,49 +49,18 @@ public:
     void rasterize(const Mesh& mesh, const VoxelWriteGPU& prifab, BufferObject* out_voxel_writes = nullptr);
 
 private:
-    // Programs
-    ComputeProgram prog_count_;
-    ComputeProgram prog_scan_blocks_;
-    ComputeProgram prog_add_block_offsets_;
-    ComputeProgram prog_fix_last_;
-    ComputeProgram prog_copy_offsets_to_cursor_;
-    ComputeProgram prog_fill_triangle_indices_;
-    ComputeProgram prog_voxelize_triangles_;
-    // ComputeProgram prog_clear_;
-    ComputeProgram prog_roi_reduce_indices_;
-    ComputeProgram prog_roi_reduce_pairs_;
-    ComputeProgram prog_roi_finalize_;
-    ComputeProgram prog_build_active_chunks_;
-    ComputeProgram prog_build_voxel_writes_;
+    ComputeProgram prog_reset_voxelize_pipeline_;
     ComputeProgram prog_mark_and_count_active_chunks_;
     ComputeProgram prog_alloc_active_chunk_triangles_;
-    ComputeProgram prog_copy_counters_from_counter_hash_table_;
-    ComputeProgram prog_reset_voxelize_pipeline_;
+    ComputeProgram prog_fill_triangle_indices_;
+    ComputeProgram prog_voxelize_triangles_;
 
-    // GPU buffers
     BufferObject dispatch_args;
     BufferObject counter_hash_table_;
-    BufferObject triangle_indices_list_;     // uint triId[totalPairs]
     BufferObject active_chunk_keys_list_;
+    BufferObject triangle_indices_list_;
     BufferObject voxel_writes_;
     
-    
-    BufferObject counters_list_;        // uint counters[chunkCount]
-    BufferObject offsets_list_;         // uint offsets[chunkCount+1]
-
-    BufferObject cursor_ssbo_;          // uint cursor[chunkCount]
-    
-    BufferObject total_pairs_ssbo_;     // uint totalPairs (1 элемент)
-    BufferObject block_sums_ssbo_;      // uint blockSums[numBlocks]
-    BufferObject block_prefix_ssbo_;    // uint blockPrefix[numBlocks]
-    BufferObject voxels_ssbo_;          // uint packed RGBA8 per voxel in ROI
-    BufferObject active_chunks_ssbo_;
-    BufferObject active_count_ssbo_;
-    
-
-    // scan scratch уровни (чтобы не было ограничения numBlocks<=256)
-    std::vector<BufferObject> scan_sums_;
-    std::vector<BufferObject> scan_prefix_;
 private:
     void init_programs();
 

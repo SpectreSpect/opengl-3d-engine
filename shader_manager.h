@@ -13,31 +13,20 @@ namespace fs = std::filesystem;
 
 class ShaderManager {
 public:
-    // General
+    // general
     ComputeShader dispatch_adapter_cs;
     ComputeShader clear_buffer_cs;
     ComputeProgram clear_buffer_prog;
 
-    //voxelizaton
-    ComputeShader count_triangles_in_chunks_cs;
-    ComputeShader scan_blocks_cs;
-    ComputeShader add_block_offsets_cs;
-    ComputeShader fix_last_cs;
-    ComputeShader copy_offsets_to_cursor_cs;
-    ComputeShader copy_counters_from_counter_hash_table_cs;
-    ComputeShader roi_reduce_indices_cs;
-    ComputeShader roi_reduce_pairs_cs;
-    ComputeShader build_active_chunks_cs;
-    ComputeShader roi_finalize_cs;
-    ComputeShader build_voxel_writes_cs;
-
+    // voxelizaton
     ComputeShader reset_voxelize_pipeline_cs;
     ComputeShader mark_and_count_active_chunks_cs;
     ComputeShader alloc_active_chunk_triangles_cs;
     ComputeShader fill_triangle_indices_cs;
     ComputeShader voxelize_triangles_cs;
 
-    //voxel_grid
+
+    // voxel_grid
     ComputeShader clear_chunks_cs;
     ComputeShader world_init_cs;
     ComputeShader apply_writes_to_world_cs;

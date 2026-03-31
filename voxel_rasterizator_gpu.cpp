@@ -24,23 +24,10 @@ VoxelRasterizatorGPU::~VoxelRasterizatorGPU() {
 }
 
 void VoxelRasterizatorGPU::init_programs() {
-    // prog_count_ = ComputeProgram(&shader_manager->count_triangles_in_chunks_cs);
-    // prog_scan_blocks_ = ComputeProgram(&shader_manager->scan_blocks_cs);
-    // prog_add_block_offsets_ = ComputeProgram(&shader_manager->add_block_offsets_cs);
-    // prog_fix_last_ = ComputeProgram(&shader_manager->fix_last_cs);
-    // prog_copy_offsets_to_cursor_ = ComputeProgram(&shader_manager->copy_offsets_to_cursor_cs);
-
-    // prog_roi_reduce_indices_ = ComputeProgram(&shader_manager->roi_reduce_indices_cs);
-    // prog_roi_reduce_pairs_ = ComputeProgram(&shader_manager->roi_reduce_pairs_cs);
-    // prog_roi_finalize_ = ComputeProgram(&shader_manager->roi_finalize_cs);
-    // prog_build_active_chunks_ = ComputeProgram(&shader_manager->build_active_chunks_cs);
-    // prog_build_voxel_writes_ = ComputeProgram(&shader_manager->build_voxel_writes_cs);
-
     prog_reset_voxelize_pipeline_ = ComputeProgram(&shader_manager->reset_voxelize_pipeline_cs);
     prog_mark_and_count_active_chunks_ = ComputeProgram(&shader_manager->mark_and_count_active_chunks_cs);
     prog_alloc_active_chunk_triangles_ = ComputeProgram(&shader_manager->alloc_active_chunk_triangles_cs);
     prog_fill_triangle_indices_ = ComputeProgram(&shader_manager->fill_triangle_indices_cs);
-    // prog_copy_counters_from_counter_hash_table_ = ComputeProgram(&shader_manager->copy_counters_from_counter_hash_table_cs);
     prog_voxelize_triangles_ = ComputeProgram(&shader_manager->voxelize_triangles_cs);
 }
 
@@ -286,18 +273,15 @@ void VoxelRasterizatorGPU::print_triangle_list() {
 void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prifab, BufferObject* out_voxel_writes)
 {
     BufferObject* voxel_writes_buffer = out_voxel_writes ? out_voxel_writes : &voxel_writes_;
-    // GPUTimestamp t0;
+
     reset_voxelize_pipline(*voxel_writes_buffer, out_voxel_writes == nullptr);
-    // GPUTimestamp t1;
+
     mark_and_count_active_chunks(mesh);
-    // GPUTimestamp t2;
 
     shader_helper->prepare_dispatch_args(dispatch_args, BufferDispatchArg(&active_chunk_keys_list_, 0)); 
     alloc_active_chunk_triangles(dispatch_args);
-    // GPUTimestamp t3;
 
     fill_triangle_indices(mesh);
-    // GPUTimestamp t4;
 
     shader_helper->prepare_dispatch_args(
         dispatch_args, 
@@ -312,7 +296,6 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prif
         prifab.voxel_data.color,
         prifab.set_flags
     );
-    // GPUTimestamp t5;
 
     if (out_voxel_writes == nullptr) {
         if (gridable_gpu != nullptr) {
@@ -321,14 +304,4 @@ void VoxelRasterizatorGPU::rasterize(const Mesh& mesh, const VoxelWriteGPU& prif
             //TODO
         }
     }
-    // GPUTimestamp t6;
-
-    // std::cout << "reset_voxelize_pipline(): " << t1 - t0 << std::endl;
-    // std::cout << "mark_and_count_active_chunks(): " << t2 - t1 << std::endl;
-    // std::cout << "alloc_active_chunk_triangles(): " << t3 - t2 << std::endl;
-    // std::cout << "fill_triangle_indices(): " << t4 - t3 << std::endl;
-    // std::cout << "voxelize_chunks(): " << t5 - t4 << std::endl;
-    // std::cout << "set_voxels(): " << t6 - t5 << std::endl;
-    // std::cout << "total time: " << t6 - t0 << std::endl;
-    // std::cout << std::endl;
 }

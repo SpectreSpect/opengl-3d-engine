@@ -24,32 +24,20 @@ void ShaderManager::init_shaders(
     const fs::path& p = root_path;
     const fs::path*& d = debug_root_path;
     const fs::path s;
+
+    // general
     dispatch_adapter_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "dispatch_adapter.glsl", p, d, include_directories);
     clear_buffer_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "clear_buffer.glsl", p, d, include_directories);
     clear_buffer_prog = ComputeProgram(&clear_buffer_cs);
 
-    // count_triangles_in_chunks_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "count_triangles_in_chunks.glsl", include_directories); 
-    // scan_blocks_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "scan_blocks.glsl", include_directories);
-    // add_block_offsets_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "add_block_offsets.glsl", include_directories);
-    // fix_last_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "fix_last.glsl", include_directories);
-    // copy_offsets_to_cursor_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "copy_offsets_to_cursor.glsl", include_directories);
-    // roi_reduce_indices_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_reduce_indices.glsl", include_directories);
-    // roi_reduce_pairs_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_reduce_pairs.glsl", include_directories);
-    // build_active_chunks_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_active_chunks.glsl");
-    // roi_finalize_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "roi_finalize.glsl", include_directories);
-    // build_voxel_writes_cs = ComputeShader(p / "shaders" / "voxel_rasterization" / "build_voxel_writes.glsl", include_directories);
-
-    //---------------------------------------------------
-
+    // voxelizaton
+    reset_voxelize_pipeline_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "reset_voxelize_pipeline.glsl", p, d, include_directories);
     mark_and_count_active_chunks_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "mark_and_count_active_chunks.glsl", p, d, include_directories);
     alloc_active_chunk_triangles_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "alloc_active_chunk_triangles.glsl", p, d, include_directories);
-    // copy_counters_from_counter_hash_table_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "copy_counters_from_counter_hash_table.glsl", p, d, include_directories);
-    reset_voxelize_pipeline_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "reset_voxelize_pipeline.glsl", p, d, include_directories);
     fill_triangle_indices_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "fill_triangle_indices.glsl", p, d, include_directories);
     voxelize_triangles_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_rasterization" / "voxelize_triangles.glsl", p, d, include_directories);
 
-    //---------------------------------------------------
-
+    // voxel_grid
     clear_chunks_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_grid" / "clear_chunks.glsl", p, d, include_directories);
     world_init_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_grid" / "world_init.glsl", p, d, include_directories);
     apply_writes_to_world_cs = Shader::build_shader<ComputeShader>(s / "shaders" / "voxel_grid" / "apply_writes_to_world.glsl", p, d, include_directories);
