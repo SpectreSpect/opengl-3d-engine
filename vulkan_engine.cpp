@@ -304,6 +304,12 @@ void VulkanEngine::bind_vertex_buffer(VideoBuffer& vertex_buffer) {
     vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, vertexBuffers, offsets);
 }
 
+void VulkanEngine::bind_vertex_and_instance_buffers(VideoBuffer& vertex_buffer, VideoBuffer& instance_buffer) {
+    VkBuffer vertexBuffers[] = {vertex_buffer.buffer, instance_buffer.buffer};
+    VkDeviceSize offsets[] = {0, 0};
+    vkCmdBindVertexBuffers(currentCommandBuffer, 0, 2, vertexBuffers, offsets);
+}
+
 
 void VulkanEngine::bind_index_buffer(VideoBuffer& index_buffer) {        
     vkCmdBindIndexBuffer(currentCommandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);

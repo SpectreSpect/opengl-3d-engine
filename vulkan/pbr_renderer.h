@@ -11,6 +11,14 @@ public:
     //     glm::mat4 mvp;
     // };
 
+    struct PBRVertex {
+        glm::vec4 position;
+        glm::vec4 normal;
+        glm::vec4 color;
+        glm::vec2 uv;
+        glm::vec4 tangent;
+    };
+
     struct PBRUniform {
         glm::mat4 view;
         glm::mat4 proj;
@@ -28,15 +36,10 @@ public:
 
     
     VulkanEngine* engine;
-    
     ShaderModule* vertex_shader;
     ShaderModule* fragment_shader;
-
     GraphicsPipeline pipeline;
-
     VideoBuffer uniform_buffer;
-    // Texture2D albedo;
-    // Cubemap env_map;
     DescriptorSetBundle descriptor_set_bundle;
 
     float exposure = 0.3f;

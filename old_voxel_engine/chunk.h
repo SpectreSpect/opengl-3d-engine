@@ -7,9 +7,8 @@
 
 #include "../mesh.h"
 #include "voxel.h"
-#include "gridable.h"
-#include "mesh_data.h"
-#include "../vulkan_engine.h"
+#include "../gridable.h"
+#include "../mesh_data.h"
 
 enum class Face {Left, Right, Back, Front, Top, Bottom};
 
@@ -17,18 +16,16 @@ class VoxelGrid;
 
 class Chunk : public Drawable, public Gridable, public Transformable {
 public:
-    VulkanEngine* engine = nullptr;
-
     glm::ivec3 size;
     glm::vec3 voxel_size;
-    // VertexLayout* vertex_layout = nullptr;
+    VertexLayout* vertex_layout = nullptr;
     std::atomic<uint32_t> revision{0};
     // std::atomic<uint32_t> mesh_ticket{0};
     std::shared_ptr<const std::vector<Voxel>> voxels;
     bool empty_mesh = false;
 
     Mesh* mesh = nullptr;
-    Chunk(VulkanEngine& engine, glm::ivec3 size, glm::vec3 voxel_size);
+    Chunk(glm::ivec3 size, glm::vec3 voxel_size);
     // Chunk(glm::ivec3 size, glm::vec3 voxel_size, std::shared_ptr<const std::vector<Voxel>> voxels);
     ~Chunk();
 

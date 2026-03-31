@@ -48,14 +48,20 @@ void VulkanVertexLayout::add(uint32_t location, uint32_t binding, VkFormat forma
 }
 
 VkPipelineVertexInputStateCreateInfo VulkanVertexLayout::get_vertex_intput() {
-    binding_desc.binding = binding;
-    binding_desc.stride = total_size;
-    binding_desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    // binding_desc.binding = binding;
+    // binding_desc.stride = total_size;
+    // binding_desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    if (binding_descs.size() <= 0)
+        throw std::runtime_error("VulkanVertexLayout::get_vertex_intput: no bindings were added");
+
+    if (attribute_descs.size() <= 0)
+        throw std::runtime_error("VulkanVertexLayout::get_vertex_intput: no attributes were added");
 
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInput.vertexBindingDescriptionCount = 1;
-    vertexInput.pVertexBindingDescriptions = &binding_desc;
+    vertexInput.vertexBindingDescriptionCount = binding_descs.size();
+    vertexInput.pVertexBindingDescriptions = binding_descs.data();
     vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_descs.size());
     vertexInput.pVertexAttributeDescriptions = attribute_descs.data();
 

@@ -1,8 +1,7 @@
 #include "chunk.h"
-// #include "voxel_grid.h"
+#include "voxel_grid.h"
 
-Chunk::Chunk(VulkanEngine& engine, glm::ivec3 size, glm::vec3 voxel_size) {
-    this->engine = &engine;
+Chunk::Chunk(glm::ivec3 size, glm::vec3 voxel_size) {
     this->size = size;
     this->voxel_size = voxel_size;
 
@@ -11,16 +10,16 @@ Chunk::Chunk(VulkanEngine& engine, glm::ivec3 size, glm::vec3 voxel_size) {
     auto v = std::make_shared<std::vector<Voxel>>(count, Voxel{});
     std::atomic_store(&voxels, std::shared_ptr<const std::vector<Voxel>>(v));
 
-    // this->vertex_layout = new VertexLayout();
-    // vertex_layout->add("position", 0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0, 0, {0.0f, 0.0f, 0.0f});
-    // vertex_layout->add("normal", 1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float), 0, {0.0f, 1.0f, 0.0f});
-    // vertex_layout->add("color", 2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 6 * sizeof(float), 0, {1.0f, 1.0f, 1.0f});
+    this->vertex_layout = new VertexLayout();
+    vertex_layout->add("position", 0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0, 0, {0.0f, 0.0f, 0.0f});
+    vertex_layout->add("normal", 1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 3 * sizeof(float), 0, {0.0f, 1.0f, 0.0f});
+    vertex_layout->add("color", 2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 6 * sizeof(float), 0, {1.0f, 1.0f, 1.0f});
 }
 
 
 Chunk::~Chunk() {
     delete mesh;
-    // delete vertex_layout;
+    delete vertex_layout;
 }
 
 void Chunk::clear_voxels() {
@@ -215,12 +214,10 @@ void Chunk::upload_mesh_gpu(MeshData& mesh_data) {
     }
     empty_mesh = false;
         
-    if (!mesh) {
-        // this->mesh = new Mesh(*engine, mesh_data.vertices, mesh_data.indices);
-    }
-    else {
-        // this->mesh->update(mesh_data.vertices, mesh_data.indices);
-    }
+    if (!mesh)
+        this->mesh = new Mesh(mesh_data.vertices, mesh_data.indices, vertex_layout);
+    else
+        this->mesh->update(mesh_data.vertices, mesh_data.indices);
 }
 
 bool Chunk::solid_from(const std::vector<Voxel>& self,

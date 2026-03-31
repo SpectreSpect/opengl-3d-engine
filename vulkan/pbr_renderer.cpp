@@ -9,12 +9,15 @@ PBRRenderer::PBRRenderer(VulkanEngine& engine, ShaderModule& vertex_shader, Shad
 
     VulkanVertexLayout vertex_layout;
     LayoutInitializer layout_initializer = vertex_layout.get_initializer();
+    layout_initializer.add_binding(VK_VERTEX_INPUT_RATE_VERTEX, sizeof(PBRVertex));
     layout_initializer.add(AttrFormat::FLOAT4);
     layout_initializer.add(AttrFormat::FLOAT4);
     layout_initializer.add(AttrFormat::FLOAT4);
     layout_initializer.add(AttrFormat::FLOAT2);
     layout_initializer.add(AttrFormat::FLOAT4);
-    VkPipelineVertexInputStateCreateInfo vertexInput = vertex_layout.get_vertex_intput();
+
+    
+    // VkPipelineVertexInputStateCreateInfo vertexInput = vertex_layout.get_vertex_intput();
 
     uniform_buffer = VideoBuffer(engine, sizeof(PBRUniform));
 

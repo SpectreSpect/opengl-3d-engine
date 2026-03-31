@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Optional: silence OpenGL CMP0072 warning on Ubuntu
 if(POLICY CMP0072)
   cmake_policy(SET CMP0072 NEW)
 endif()
@@ -21,73 +20,11 @@ find_package(Vulkan REQUIRED)
 
 add_executable(app
   main.cpp
-  # engine3d.cpp
-  # window.cpp
-  # vao.cpp
-  # vbo.cpp
-  # ebo.cpp
-  # vertex_shader.cpp
-  # fragment_shader.cpp
-  # program.cpp
-  # shader.cpp
-  # vertex_layout.cpp
   camera.cpp
   mesh.cpp
   transformable.cpp
-  # cube.cpp
   fps_camera_controller.cpp
-  # material_template.cpp
-  # material_manager.cpp
   imgui_layer.cpp
-  # voxel_engine/voxel.cpp
-  # voxel_engine/chunk.cpp
-  # voxel_engine/voxel_grid.cpp
-  # voxel_rastorizator.cpp
-  # ui_elements/triangle_controller.cpp
-  # triangle.cpp
-  # voxel_engine/voxel_editor.cpp
-  # a_star/a_star.cpp
-  # a_star/occupancy_cell.cpp
-  # a_star/occupancy_grid_3d.cpp
-  # a_star/voxel_occupancy_grid_3d.cpp
-  # line.cpp
-  # point.cpp
-  # a_star/nonholonomic_a_star.cpp
-  # a_star/curvature_a_star.cpp
-  # grid_3d.cpp
-  # a_star/reeds_shepp.cpp
-  # vtk_mesh_loader.cpp
-  # compute_shader.cpp
-  # vf_program.cpp
-  # compute_program.cpp
-  # ssbo.cpp
-  # voxel_rasterizator_gpu.cpp
-  # voxel_grid_gpu.cpp
-  # shader_manager.cpp
-  # point_cloud/point_cloud_frame.cpp
-  # point_cloud/point_cloud.cpp
-  # point_cloud/point_cloud_video.cpp
-  # lighting_system.cpp
-  # circle_cloud.cpp
-  # texture.cpp
-  # cubemap.cpp
-  # skybox.cpp
-  # framebuffer.cpp
-  # sphere.cpp
-  # quad.cpp
-  # texture_manager.cpp
-  # pbr_environment.cpp
-  # pbr_skybox.cpp
-  # third_person_camera_controller.cpp
-  # limb.cpp
-  # leg.cpp
-  # spider.cpp
-  # gicp.cpp
-  # dispatch_arg.cpp
-  # buffer_dispatch_arg.cpp
-  # value_dispatch_arg.cpp
-  # glsl_preprocessor.cpp
-  # opengl_engine.cpp
   vulkan_engine.cpp
   vulkan_window.cpp
   vulkan/shader_module.cpp
@@ -103,7 +40,6 @@ add_executable(app
   vulkan/render_pass.cpp
   vulkan/render_target_2d.cpp
   vulkan/pbr/equirect_to_cubemap_pass.cpp
-  # vulkan/cubemap.cpp
   vulkan/image/cubemap.cpp
   vulkan/command_pool.cpp
   vulkan/command_buffer.cpp
@@ -118,61 +54,25 @@ add_executable(app
   vulkan/pbr/irradiance_map_generator.cpp
   vulkan/pbr/prefilter_map_generator.cpp
   vulkan/lighting_system/lighting_system.cpp
+  point_cloud/point_cloud_pass.cpp
+  point_cloud/point_cloud.cpp
+  vulkan/compute_program.cpp
 )
 
-find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
-
-set(SHADERS_SRC_DIR "${CMAKE_SOURCE_DIR}/shaders")
-set(SHADERS_BIN_DIR "${CMAKE_BINARY_DIR}/shaders")
-
-file(MAKE_DIRECTORY "${SHADERS_BIN_DIR}")
-
-file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS
-  "${SHADERS_SRC_DIR}/*.vert"
-  "${SHADERS_SRC_DIR}/*.frag"
-  "${SHADERS_SRC_DIR}/*.comp"
+target_link_libraries(app PRIVATE
+  glfw
+  GLEW::GLEW
+  glm::glm
+  OpenGL::GL
+  Vulkan::Vulkan
 )
 
-set(SPIRV_OUTPUTS)
+if(WIN32)
+  target_compile_definitions(app PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  set_target_properties(app PROPERTIES WIN32_EXECUTABLE OFF)
+endif()
 
-foreach(SHADER ${SHADER_SOURCES})
-  get_filename_component(SHADER_NAME ${SHADER} NAME)
-  set(SPIRV_OUTPUT "${SHADERS_BIN_DIR}/${SHADER_NAME}.spv")
-
-  add_custom_command(
-    OUTPUT "${SPIRV_OUTPUT}"
-    COMMAND ${GLSLANG_VALIDATOR} -V "${SHADER}" -o "${SPIRV_OUTPUT}"
-    DEPENDS "${SHADER}"
-    COMMENT "Compiling shader ${SHADER_NAME}"
-    VERBATIM
-  )
-
-  list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
-endforeach()
-
-add_custom_target(compile_shaders ALL DEPENDS ${SPIRV_OUTPUTS})
-add_dependencies(app compile_shaders)
-
-
-set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
-add_custom_target(copy_assets ALL
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${ASSETS_SRC}"
-          "$<TARGET_FILE_DIR:app>/assets"
-  COMMENT "Copying assets next to app"
-)
-add_dependencies(copy_assets app)
-
-# set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
-# add_custom_target(copy_shaders ALL
-#   COMMAND ${CMAKE_COMMAND} -E copy_directory
-#           "${SHADERS_SRC}"
-#           "$<TARGET_FILE_DIR:app>/shaders"
-#   COMMENT "Copying shaders next to app"
-# )
-# add_dependencies(copy_shaders app)
-
-# ---------------- ImGui (FetchContent, no submodule) ----------------
+# ---------------- ImGui ----------------
 include(FetchContent)
 
 FetchContent_Declare(
@@ -188,10 +88,6 @@ target_sources(app PRIVATE
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-)
-
-# OpenGL ImGui backend
-target_sources(app PRIVATE
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
@@ -201,15 +97,60 @@ target_include_directories(app PRIVATE
   ${imgui_SOURCE_DIR}/backends
 )
 
-target_link_libraries(app PRIVATE
-  glfw
-  GLEW::GLEW
-  glm::glm
-  OpenGL::GL
-  Vulkan::Vulkan
+# ---------------- Shader compilation ----------------
+find_program(GLSLANG_VALIDATOR glslangValidator REQUIRED)
+
+set(SHADERS_SRC_DIR "${CMAKE_SOURCE_DIR}/shaders")
+set(SHADERS_BIN_DIR "${CMAKE_BINARY_DIR}/shaders")
+set(SHADERS_RUNTIME_DIR "$<TARGET_FILE_DIR:app>/shaders")
+
+file(GLOB_RECURSE SHADER_SOURCES CONFIGURE_DEPENDS
+  "${SHADERS_SRC_DIR}/*.vert"
+  "${SHADERS_SRC_DIR}/*.frag"
+  "${SHADERS_SRC_DIR}/*.comp"
 )
 
-if (WIN32)
-  target_compile_definitions(app PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-  set_target_properties(app PROPERTIES WIN32_EXECUTABLE OFF)
-endif()
+set(SPIRV_OUTPUTS)
+
+foreach(SHADER IN LISTS SHADER_SOURCES)
+  file(RELATIVE_PATH REL_PATH "${SHADERS_SRC_DIR}" "${SHADER}")
+  set(SPIRV_OUTPUT "${SHADERS_BIN_DIR}/${REL_PATH}.spv")
+
+  get_filename_component(SPIRV_OUTPUT_DIR "${SPIRV_OUTPUT}" DIRECTORY)
+
+  add_custom_command(
+    OUTPUT "${SPIRV_OUTPUT}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SPIRV_OUTPUT_DIR}"
+    COMMAND ${GLSLANG_VALIDATOR} -V "${SHADER}" -o "${SPIRV_OUTPUT}"
+    DEPENDS "${SHADER}"
+    COMMENT "Compiling shader ${REL_PATH}"
+    VERBATIM
+  )
+
+  list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
+endforeach()
+
+add_custom_target(compile_shaders ALL DEPENDS ${SPIRV_OUTPUTS})
+add_dependencies(app compile_shaders)
+
+add_custom_target(copy_shaders ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_RUNTIME_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${SHADERS_BIN_DIR}" "${SHADERS_RUNTIME_DIR}"
+  DEPENDS compile_shaders
+  COMMENT "Copying compiled shaders next to app"
+)
+
+add_dependencies(copy_shaders app)
+
+# ---------------- Assets ----------------
+set(ASSETS_SRC_DIR "${CMAKE_SOURCE_DIR}/assets")
+set(ASSETS_RUNTIME_DIR "$<TARGET_FILE_DIR:app>/assets")
+
+add_custom_target(copy_assets ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${ASSETS_SRC_DIR}"
+          "${ASSETS_RUNTIME_DIR}"
+  COMMENT "Copying assets next to app"
+)
+
+add_dependencies(copy_assets app)

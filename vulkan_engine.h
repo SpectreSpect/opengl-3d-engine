@@ -59,6 +59,7 @@ public:
     // void bind_descriptor_set(DescriptorSet& descriptor_set);
     void bind_pipeline(GraphicsPipeline& graphics_pipeline);
     void bind_vertex_buffer(VideoBuffer& vertex_buffer);
+    void bind_vertex_and_instance_buffers(VideoBuffer& vertex_buffer, VideoBuffer& instance_buffer);
     void bind_index_buffer(VideoBuffer& index_buffer);
     void draw_indexed(uint32_t num_indices);
     void set_viewport_and_scissor(VkExtent2D extent);

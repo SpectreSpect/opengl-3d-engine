@@ -96,6 +96,8 @@
 #include "vulkan/pbr/irradiance_map_generator.h"
 #include "vulkan/pbr/prefilter_map_generator.h"
 #include "vulkan/lighting_system/lighting_system.h"
+#include "point_cloud/point_cloud_pass.h"
+#include "point_cloud/point_cloud.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -353,7 +355,26 @@ int main() {
     lighting_system.set_light_source(1, green_light_source);
     lighting_system.set_light_source(2, blue_light_source);
 
-    // lighting_system.set_light_source(0, light_source);
+
+    PointCloudPass point_cloud_pass;
+    point_cloud_pass.create(engine);
+
+    PointCloud point_cloud;
+    point_cloud.create(engine);
+
+
+    std::vector<PointInstance> point_instances;
+
+    for (int i = 0; i < 100; i++) {
+        PointInstance point;
+        point.pos = glm::vec4(i, 0, 0, 1);
+        point.color = glm::vec4(i / 100.0f, i / 100.0f, 1.0f - i / 100.0f, 1);
+
+        point_instances.push_back(point);
+    }
+
+    point_cloud.set_points(point_instances);
+
     float timer = 0.0f;
     float last_frame = 0.0f;
     while(window.is_open()) {
@@ -379,9 +400,7 @@ int main() {
         renderer.render(sphere_2, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
         renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
         
-
-        for (int i = 0; i < spheres.size(); i++)
-            renderer.render(spheres[i], camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
+        point_cloud_pass.render(point_cloud, camera);
 
         engine.end_frame();
         engine.poll_events();

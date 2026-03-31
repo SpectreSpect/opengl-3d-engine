@@ -11,6 +11,7 @@
 #include "../command_pool.h"
 #include "../command_buffer.h"
 #include "../image/image_view.h"
+#include "../compute_program.h"
 
 class Mesh;
 

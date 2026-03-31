@@ -33,7 +33,6 @@ public:
 
     CommandPool command_pool;
     CommandBuffer command_buffer;
-
 private:
     VulkanEngine* engine = nullptr;
     ComputePipeline pipeline;

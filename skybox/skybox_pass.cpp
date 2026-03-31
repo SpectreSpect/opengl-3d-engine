@@ -15,6 +15,7 @@ void SkyboxPass::create(VulkanEngine& engine, float exposure) {
 
     VulkanVertexLayout vertex_layout;
     LayoutInitializer layout_initializer = vertex_layout.get_initializer();
+    layout_initializer.add_binding(VK_VERTEX_INPUT_RATE_VERTEX, sizeof(SkyboxVertex));
     layout_initializer.add(AttrFormat::FLOAT4); // position
 
     uniform_buffer = VideoBuffer(engine, sizeof(SkyboxUniform));

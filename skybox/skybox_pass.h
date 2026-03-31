@@ -11,6 +11,10 @@
 
 class SkyboxPass {
 public:
+    struct SkyboxVertex {
+        glm::vec4 position;
+    };
+
     struct SkyboxUniform {
         glm::mat4 proj;
         glm::mat4 view;
