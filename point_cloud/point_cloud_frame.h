@@ -14,6 +14,7 @@ public:
     uint32_t flags = 0;        // 1=rgb, 2=intensity
     PointCloud point_cloud;
     std::vector<glm::vec4> normals;
+    std::vector<PointInstance> points;
     VideoBuffer normals_ssbo;
 
     glm::vec3 car_pos;

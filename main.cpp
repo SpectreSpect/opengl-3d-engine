@@ -76,7 +76,6 @@
 #include "vulkan/pbr_renderer.h"
 #include "mesh.h"
 #include "pbr_uniform.h"
-#include "imgui_layer.h"
 // #include "vulkan/texture2d.h"
 #include "vulkan/image/texture2d.h"
 #include "vulkan/render_target_2d.h"
@@ -99,6 +98,7 @@
 #include "point_cloud/point_cloud_pass.h"
 #include "point_cloud/point_cloud.h"
 #include "point_cloud/point_cloud_video.h"
+#include "icp/gicp.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -283,10 +283,26 @@ Mesh create_sphere_mesh(VulkanEngine& engine, glm::vec4 color) {
 
 
 int main() {
-    VulkanEngine engine = VulkanEngine();
-    VulkanWindow window = VulkanWindow(&engine, 1280, 720, "3D visualization");
+    VulkanEngine engine;
+    VulkanWindow window(&engine, 1280, 720, "3D visualization");
     engine.set_vulkan_window(&window);
-    ui::init(window.window);
+
+    ui::VulkanInitInfo ui_info{};
+    ui_info.instance = engine.instance;
+    ui_info.physical_device = engine.physicalDevice;
+    ui_info.device = engine.device;
+    ui_info.queue_family = engine.get_graphics_queue_family();
+    ui_info.queue = engine.graphicsQueue;
+    ui_info.descriptor_pool = engine.get_imgui_descriptor_pool();
+    ui_info.render_pass = engine.renderPass;
+    ui_info.min_image_count = engine.get_imgui_min_image_count();
+    ui_info.image_count = static_cast<uint32_t>(engine.swapchainImages.size());
+    ui_info.msaa_samples = VK_SAMPLE_COUNT_1_BIT;
+    ui_info.pipeline_cache = VK_NULL_HANDLE;
+    ui_info.subpass = 0;
+    ui_info.check_vk_result_fn = VulkanEngine::imgui_check_vk_result;
+
+    ui::init(window.window, ui_info);
 
     Camera camera = Camera();
     window.set_camera(&camera);
@@ -359,35 +375,51 @@ int main() {
     PointCloudPass point_cloud_pass;
     point_cloud_pass.create(engine);
 
-    PointCloud point_cloud;
-    point_cloud.create(engine);
+    // PointCloud point_cloud;
+    // point_cloud.create(engine);
 
 
-    std::vector<PointInstance> point_instances;
+    // std::vector<PointInstance> point_instances;
 
-    for (int i = 0; i < 100; i++) {
-        PointInstance point;
-        point.pos = glm::vec4(i, 0, 0, 1);
-        point.color = glm::vec4(i / 100.0f, i / 100.0f, 1.0f - i / 100.0f, 1);
+    // for (int i = 0; i < 100; i++) {
+    //     PointInstance point;
+    //     point.pos = glm::vec4(i, 0, 0, 1);
+    //     point.color = glm::vec4(i / 100.0f, i / 100.0f, 1.0f - i / 100.0f, 1);
 
-        point_instances.push_back(point);
-    }
+    //     point_instances.push_back(point);
+    // }
 
-    point_cloud.set_points(point_instances);
+    // point_cloud.set_points(point_instances);
+
 
     PointCloudVideo point_cloud_video = PointCloudVideo();
-    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 100);
+    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
 
-    
+    PointCloudFrame& source_point_cloud_frame = point_cloud_video.frames[0];
+    PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[1];
 
+    source_point_cloud_frame.point_cloud.position += glm::vec3(3, 3, 0);
+    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0, 0, 0);
+
+    for (int i = 0; i < source_point_cloud_frame.points.size(); i++) {
+        source_point_cloud_frame.points[i].color = glm::vec4(1, 0, 0, 1);
+    }
+    source_point_cloud_frame.point_cloud.set_points(source_point_cloud_frame.points);
+
+
+    for (int i = 0; i < 10; i++) {
+        GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
+    }
 
 
     float timer = 0.0f;
     float last_frame = 0.0f;
-    while(window.is_open()) {
+    while (window.is_open()) {
+        engine.poll_events();
+
         float currentFrame = (float)glfwGetTime();
         float delta_time = currentFrame - last_frame;
-        last_frame = currentFrame;  
+        last_frame = currentFrame;
 
         camera_controller.update(&window, delta_time);
 
@@ -395,26 +427,39 @@ int main() {
         green_light_source.position.x = sin(timer * 2 + 1.3423f) * 2;
         blue_light_source.position.z = cos(timer * 2) * 2;
 
+        engine.begin_frame(glm::vec4(0.05f, 0.05f, 0.05f, 1.0f));
+        if (!engine.frameInProgress) {
+            continue;
+        }
 
-        lighting_system.set_light_source(0, red_light_source);
-        lighting_system.set_light_source(1, green_light_source);
-        lighting_system.set_light_source(2, blue_light_source);
-        
-        engine.begin_frame(glm::vec4(0.01f, 0.01f, 0.01f, 1.0f));
+        ui::begin_frame();
+        ui::update_mouse_mode(&window);
+
         lighting_system.update(camera);
 
-        skybox_pass.render(camera, environment_map);        
-        renderer.render(sphere_2, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
-        renderer.render(mesh, camera, irradiance_map, prefilter_map, brdf_lut, lighting_system);
-        
-        point_cloud_pass.render(point_cloud, camera);
-        // point_cloud_pass.render(point_cloud_video.frames[0].point_cloud, camera);
-        point_cloud_video.update(delta_time);
-        point_cloud_video.draw_clouds(point_cloud_pass, camera);
+        point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
+        point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
 
+        ImGui::Begin("Hello");
+        ImGui::Text("ImGui is working");
+        ImGui::ColorEdit3("Clear color", clear_col);
+
+        if (ImGui::Button("Click me")) {
+            std::cout << "Button clicked\n";
+        }
+
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::End();
+
+        ImGui::ShowDemoWindow();
+
+        ui::end_frame(engine.currentCommandBuffer);
         engine.end_frame();
-        engine.poll_events();
 
         timer += delta_time;
     }
+
+    vkDeviceWaitIdle(engine.device);
+    ui::shutdown();
 }
+

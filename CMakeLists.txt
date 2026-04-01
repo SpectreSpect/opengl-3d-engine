@@ -7,13 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(POLICY CMP0072)
-  cmake_policy(SET CMP0072 NEW)
-endif()
-set(OpenGL_GL_PREFERENCE GLVND)
-
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(Vulkan REQUIRED)
@@ -59,13 +52,12 @@ add_executable(app
   vulkan/compute_program.cpp
   point_cloud/point_cloud_video.cpp
   point_cloud/point_cloud_frame.cpp
+  icp/gicp.cpp
 )
 
 target_link_libraries(app PRIVATE
   glfw
-  GLEW::GLEW
   glm::glm
-  OpenGL::GL
   Vulkan::Vulkan
 )
 
@@ -77,21 +69,29 @@ endif()
 # ---------------- ImGui ----------------
 include(FetchContent)
 
+# Kept at your old pin to minimize code churn.
+# You can update later after the Vulkan integration is stable.
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
   GIT_TAG v1.90.9
+  GIT_SHALLOW TRUE
 )
 
-FetchContent_MakeAvailable(imgui)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+  FetchContent_Populate(imgui)
+endif()
 
 target_sources(app PRIVATE
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/imgui_demo.cpp        # optional, but useful while integrating
+
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
 
 target_include_directories(app PRIVATE

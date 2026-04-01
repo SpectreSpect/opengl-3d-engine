@@ -18,6 +18,7 @@
 #include "vulkan_window.h"
 #include <stdexcept>
 #include "drawable.h"
+#include "imgui_layer.h"
 
 class GraphicsPipeline;
 class VideoBuffer;
@@ -65,6 +66,12 @@ public:
     void set_viewport_and_scissor(VkExtent2D extent);
     VkQueue get_compute_queue(); 
 
+    uint32_t get_graphics_queue_family() const;
+    uint32_t get_imgui_min_image_count() const;
+    VkDescriptorPool get_imgui_descriptor_pool() const;
+
+    static void imgui_check_vk_result(VkResult err);
+
     // void draw(Drawable& drawable, Camera& camera);
 
     // vkCmdDrawIndexed(engine.currentCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
@@ -74,6 +81,9 @@ public:
             throw std::runtime_error(std::string(what) + " failed with VkResult = " + std::to_string(res));
         }
     }
+
+    VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+
 private:
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
@@ -83,6 +93,8 @@ private:
             return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
+
+    void create_imgui_descriptor_pool();
 
 public:
     VulkanWindow* m_window = nullptr;
@@ -118,6 +130,8 @@ public:
 
     uint32_t currentImageIndex = 0;
     VkCommandBuffer currentCommandBuffer = VK_NULL_HANDLE;
+    
+    uint32_t imguiMinImageCount = 2;
 
     bool frameInProgress = false;
     bool framebufferResized = false;

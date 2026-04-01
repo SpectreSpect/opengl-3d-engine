@@ -15,8 +15,8 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
     // in.read(reinterpret_cast<char*>(&flags), sizeof(uint32_t));
     if (!in) throw std::runtime_error("Bad header in: " + path.string());
 
-    std::vector<PointInstance> local_points;
-    local_points.reserve(count);
+    // std::vector<PointInstance> local_points;
+    points.reserve(count);
 
     const bool has_rgb = (flags & 1u) != 0;
     const bool has_intensity = (flags & 2u) != 0;
@@ -29,13 +29,13 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
     in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
     if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
 
-    local_points.resize(count);
+    points.resize(count);
 
     const uint8_t* p = buf.data();
     for (uint32_t i = 0; i < count; ++i) {
-        std::memcpy(&local_points[i].pos.x, p, 4); p += 4;
-        std::memcpy(&local_points[i].pos.y, p, 4); p += 4;
-        std::memcpy(&local_points[i].pos.z, p, 4); p += 4;
+        std::memcpy(&points[i].pos.x, p, 4); p += 4;
+        std::memcpy(&points[i].pos.y, p, 4); p += 4;
+        std::memcpy(&points[i].pos.z, p, 4); p += 4;
         p += 28;
         // std::memcpy(&local_points[i].time, p, 4); p += 4;
         // std::memcpy(&local_points[i].gps_pos.x, p, 4); p += 4;
@@ -58,12 +58,12 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
 
         // How do I apply the gps and imu transformation to each point here?????
         
-        float y = local_points[i].pos.y;
-        float z = local_points[i].pos.z;
+        float y = points[i].pos.y;
+        float z = points[i].pos.z;
 
-        local_points[i].pos.x = -local_points[i].pos.x;
-        local_points[i].pos.y = z;
-        local_points[i].pos.z = y;
+        points[i].pos.x = -points[i].pos.x;
+        points[i].pos.y = z;
+        points[i].pos.z = y;
 
 
 
@@ -91,8 +91,8 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
         //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
         // local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = 1.0f;
         
-        local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = local_points[i].pos.y / 3.0f;
-        local_points[i].color = glm::vec4(0, 0, 1, 1);
+        points[i].color.r = points[i].color.g = points[i].color.b = points[i].pos.y / 3.0f;
+        points[i].color = glm::vec4(0, 0, 1, 1);
 
         // if (has_rgb) {
         //     // local_points[i].color.r = *p++;
@@ -105,15 +105,15 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
         // }
     }
 
-    get_normals(local_points, normals);
-    remove_invalid_points_and_normals(local_points, normals);
-    drop_out_points_and_normals(local_points, normals, 2500);
+    get_normals(points, normals);
+    remove_invalid_points_and_normals(points, normals);
+    drop_out_points_and_normals(points, normals, 2500);
 
-    remove_points_near_origin(local_points, normals, 3);
+    remove_points_near_origin(points, normals, 3);
 
     // // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
     point_cloud.create(engine);
-    point_cloud.set_points(std::move(local_points));
+    point_cloud.set_points(std::move(points));
     // point_cloud.get_normals_ssbo(normals, normals_ssbo);
 }
 

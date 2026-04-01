@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+#include <cstdlib>
 
 namespace {
     constexpr const char* kDeviceExtensions[] = {
@@ -93,6 +94,7 @@ void VulkanEngine::set_vulkan_window(VulkanWindow* window) {
         create_framebuffers();
         create_command_buffers();
         create_sync_objects();
+        create_imgui_descriptor_pool();
 
         std::cout << "Vulkan initialized successfully\n";
     } catch (const std::exception& e) {
@@ -105,7 +107,31 @@ void VulkanEngine::poll_events() {
 }
 
 void VulkanEngine::enable_depth_test() {
-    glEnable(GL_DEPTH_TEST);
+    // No-op in Vulkan.
+    // Depth testing is configured in VkPipelineDepthStencilStateCreateInfo.
+}
+
+uint32_t VulkanEngine::get_graphics_queue_family() const {
+    return findQueueFamilies(physicalDevice).graphicsFamily.value();
+}
+
+uint32_t VulkanEngine::get_imgui_min_image_count() const {
+    return imguiMinImageCount;
+}
+
+void VulkanEngine::imgui_check_vk_result(VkResult err) {
+    if (err == VK_SUCCESS) {
+        return;
+    }
+
+    std::cerr << "[imgui/vulkan] VkResult = " << err << "\n";
+    if (err < 0) {
+        std::abort();
+    }
+}
+
+VkDescriptorPool VulkanEngine::get_imgui_descriptor_pool() const {
+    return imguiDescriptorPool;
 }
 
 VkFormat VulkanEngine::findSupportedFormat(
@@ -508,6 +534,7 @@ void VulkanEngine::recreate_swapchain() {
 
     create_framebuffers();
     create_command_buffers();
+    ui::set_min_image_count(imguiMinImageCount);
 }
 
 void VulkanEngine::destroy_swapchain_dependent_objects() {
@@ -660,6 +687,25 @@ void VulkanEngine::create_command_buffers() {
              "vkAllocateCommandBuffers");
 }
 
+
+void VulkanEngine::create_imgui_descriptor_pool() {
+    VkDescriptorPoolSize pool_sizes[] = {
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64 },
+    };
+
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 64;
+    pool_info.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes));
+    pool_info.pPoolSizes = pool_sizes;
+
+    vk_check(
+        vkCreateDescriptorPool(device, &pool_info, nullptr, &imguiDescriptorPool),
+        "vkCreateDescriptorPool(imgui)"
+    );
+}
+
 void VulkanEngine::create_sync_objects() {
     VkSemaphoreCreateInfo semInfo{};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -680,7 +726,8 @@ void VulkanEngine::create_sync_objects() {
 void VulkanEngine::cleanup() {
     for (VkImageView view : swapchainImageViews) {
         if (view != VK_NULL_HANDLE) {
-            vkDestroyImageView(device, view, nullptr);
+            vkDestroyDescriptorPool(device, imguiDescriptorPool, nullptr);
+            imguiDescriptorPool = VK_NULL_HANDLE;
         }
     }
     swapchainImageViews.clear();
@@ -688,6 +735,11 @@ void VulkanEngine::cleanup() {
     if (swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(device, swapchain, nullptr);
         swapchain = VK_NULL_HANDLE;
+    }
+
+    if (imguiDescriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(device, imguiDescriptorPool, nullptr);
+        imguiDescriptorPool = VK_NULL_HANDLE;
     }
 
     if (device != VK_NULL_HANDLE) {
@@ -704,6 +756,7 @@ void VulkanEngine::cleanup() {
         vkDestroyInstance(instance, nullptr);
         instance = VK_NULL_HANDLE;
     }
+    
 
     glfwTerminate();
 }
@@ -877,7 +930,7 @@ void VulkanEngine::createSwapchain() {
 
     VkSurfaceFormatKHR surfaceFormat = formats[0];
     for (const auto& f : formats) {
-        if (f.format == VK_FORMAT_B8G8R8A8_SRGB &&
+        if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
             f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             surfaceFormat = f;
             break;
@@ -939,6 +992,7 @@ void VulkanEngine::createSwapchain() {
 
     swapchainImageFormat = surfaceFormat.format;
     swapchainExtent = extent;
+    imguiMinImageCount = imageCount;
 }
 
 void VulkanEngine::createImageViews() {

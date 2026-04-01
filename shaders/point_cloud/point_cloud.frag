@@ -17,5 +17,7 @@ void main() {
         discard;
     }
 
-    FragColor = col;
+    vec3 color = pow(col.xyz, vec3(1.0 / 2.2));
+
+    FragColor = vec4(color, 1.0);
 }
