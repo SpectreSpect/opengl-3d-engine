@@ -1,0 +1,17 @@
+#version 460
+layout(local_size_x = 256) in;
+
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+    uint num_points;
+} ubo;
+
+// You can use rg16f / rg32f / rgba16f / rgba32f depending on your image format.
+// rgba32f is the safest "just works" option if you want to match your old vec4 output style.
+// layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outBrdfLUT;
+
+void main()
+{
+    uint x_id = gl_GlobalInvocationID.x;
+
+    if (x_id >= ubo.num_points)  return;
+}
