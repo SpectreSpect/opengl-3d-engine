@@ -99,6 +99,7 @@
 #include "point_cloud/point_cloud.h"
 #include "point_cloud/point_cloud_video.h"
 #include "icp/gicp.h"
+#include "icp/gicp_pass.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -678,6 +679,10 @@ Mesh create_sphere_mesh(VulkanEngine& engine, glm::vec4 color) {
 //     return diff <= rel_eps * scale;
 // }
 
+void print_vec4(glm::vec4 input_vec) {
+    std::cout << input_vec.x << " " << input_vec.y << " " << input_vec.z << " " << input_vec.w;
+}
+
 
 int main() {
     VulkanEngine engine;
@@ -842,10 +847,27 @@ int main() {
     source_point_cloud_frame.point_cloud.set_points(source_point_cloud_frame.points);
 
 
+
+    VideoBuffer target_normal_buffer;
+    VideoBuffer source_normal_buffer;
+
+    target_normal_buffer.create(engine, target_normals.size() * sizeof(glm::vec4));
+    source_normal_buffer.create(engine, source_normals.size() * sizeof(glm::vec4));
+
+    target_normal_buffer.update_data(target_normals.data(), target_normals.size() * sizeof(glm::vec4));
+    source_normal_buffer.update_data(source_normals.data(), source_normals.size() * sizeof(glm::vec4));
+
+
+    GICPPass gicp_pass;
+    gicp_pass.create(engine);
+
+
+
+    
+
     // for (int i = 0; i < 10; i++) {
     //     GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
     // }
-
 
     float timer = 0.0f;
     float last_frame = 0.0f;
@@ -867,6 +889,8 @@ int main() {
             continue;
         }
 
+        // skybox_pass.render(camera, environment_map);
+
         ui::begin_frame();
         ui::update_mouse_mode(&window);
 
@@ -880,7 +904,15 @@ int main() {
         ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
         if (ImGui::Button("GICP step")) {
-            GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
+            // GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
+            // GICP::step_test(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
+            gicp_pass.step(source_point_cloud_frame.point_cloud, target_point_cloud_frame.point_cloud, source_normal_buffer, target_normal_buffer);
+
+            std::cout << "position: (";
+            print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.position, 1.0f));
+            std::cout << ")     rotation: (";
+            print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.rotation, 1.0f));
+            std::cout << ")" << std::endl;
         }
 
         ImGui::End();

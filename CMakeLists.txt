@@ -53,6 +53,7 @@ add_executable(app
   point_cloud/point_cloud_video.cpp
   point_cloud/point_cloud_frame.cpp
   icp/gicp.cpp
+  icp/gicp_pass.cpp
 )
 
 target_link_libraries(app PRIVATE
