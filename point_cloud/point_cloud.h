@@ -29,7 +29,7 @@ public:
     // ShaderModule vertex_shader;
     // ShaderModule fragment_shader;
     // GraphicsPipeline pipeline;
-    VideoBuffer instance_buffer;
+    
     uint32_t num_instances = 0;
     // PointCloudPushConstants pc{};
     // pc.model = model;
@@ -41,4 +41,16 @@ public:
     PointCloud() = default;
     void create(VulkanEngine& engine);
     void set_points(const std::vector<PointInstance>& point_instances);
+    void set_points(VideoBuffer& point_instance_buffer, uint32_t num_instances);
+
+    VideoBuffer& get_instance_buffer() {
+        return external_instance_buffer ? *external_instance_buffer : instance_buffer;
+    }
+
+    const VideoBuffer& get_instance_buffer() const {
+        return external_instance_buffer ? *external_instance_buffer : instance_buffer;
+    }
+private:
+    VideoBuffer* external_instance_buffer = nullptr;
+    VideoBuffer instance_buffer;
 };

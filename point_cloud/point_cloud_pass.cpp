@@ -62,7 +62,7 @@ void PointCloudPass::render(PointCloud& point_cloud, Camera& camera) {
 
     engine->bind_pipeline(pipeline);
     // engine->bind_vertex_buffer(quad_mesh.vertex_buffer);
-    engine->bind_vertex_and_instance_buffers(quad_mesh.vertex_buffer, point_cloud.instance_buffer);
+    engine->bind_vertex_and_instance_buffers(quad_mesh.vertex_buffer, point_cloud.get_instance_buffer());
     engine->bind_index_buffer(quad_mesh.index_buffer);
 
 

@@ -100,6 +100,9 @@
 #include "point_cloud/point_cloud_video.h"
 #include "icp/gicp.h"
 #include "icp/gicp_pass.h"
+#include "icp/voxel_point_map.h"
+#include "icp/voxel_map_point_inserter.h"
+#include "icp/voxel_point_map_reseter.h"
 
 struct Vertex {
     glm::vec4 position;
@@ -839,7 +842,7 @@ int main() {
     // PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[1];
 
     source_point_cloud_frame.point_cloud.position += glm::vec3(3, 3, 0);
-    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0, 0, 0);
+    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0.2, 0, 0);
 
     for (int i = 0; i < source_point_cloud_frame.points.size(); i++) {
         source_point_cloud_frame.points[i].color = glm::vec4(1, 0, 0, 1);
@@ -857,10 +860,27 @@ int main() {
     target_normal_buffer.update_data(target_normals.data(), target_normals.size() * sizeof(glm::vec4));
     source_normal_buffer.update_data(source_normals.data(), source_normals.size() * sizeof(glm::vec4));
 
+    VoxelPointMap voxel_point_map;
+    voxel_point_map.create(engine, 1000, 1000);
+
+    VoxelPointMapReseter voxel_point_map_reseter;
+    voxel_point_map_reseter.create(engine);
+
+    voxel_point_map_reseter.reset(voxel_point_map);
+
+    VoxelMapPointInserter voxel_map_point_inserter;
+    voxel_map_point_inserter.create(engine);
+
+    voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud);
 
     GICPPass gicp_pass;
     gicp_pass.create(engine);
 
+    
+    PointCloud voxel_map_point_cloud;
+    voxel_map_point_cloud.create(engine);
+
+    voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
 
 
     
@@ -897,7 +917,9 @@ int main() {
         lighting_system.update(camera);
 
         point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
-        point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
+        // point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
+        point_cloud_pass.render(voxel_map_point_cloud, camera);
+        
 
         ImGui::Begin("Hello");
 

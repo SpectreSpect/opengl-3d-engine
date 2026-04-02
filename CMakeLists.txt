@@ -54,6 +54,9 @@ add_executable(app
   point_cloud/point_cloud_frame.cpp
   icp/gicp.cpp
   icp/gicp_pass.cpp
+  icp/voxel_point_map.cpp
+  icp/voxel_map_point_inserter.cpp
+  icp/voxel_point_map_reseter.cpp
 )
 
 target_link_libraries(app PRIVATE

@@ -48,8 +48,8 @@ void GICPPass::step(PointCloud& source_point_cloud, PointCloud& target_point_clo
     uniform_data.rotation = glm::vec4(source_point_cloud.rotation, 1.0f);
     uniform_buffer.update_data(&uniform_data, sizeof(GICPPassUniform));
 
-    descriptor_set_bundle.bind_storage_buffer(1, source_point_cloud.instance_buffer);
-    descriptor_set_bundle.bind_storage_buffer(2, target_point_cloud.instance_buffer);
+    descriptor_set_bundle.bind_storage_buffer(1, source_point_cloud.get_instance_buffer());
+    descriptor_set_bundle.bind_storage_buffer(2, target_point_cloud.get_instance_buffer());
 
     descriptor_set_bundle.bind_storage_buffer(3, source_normal_buffer);
     descriptor_set_bundle.bind_storage_buffer(4, target_normal_buffer);
