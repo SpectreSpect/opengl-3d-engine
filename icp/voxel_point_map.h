@@ -39,5 +39,6 @@ public:
     VideoBuffer map_uniform_buffer;
     VideoBuffer map_hash_table_buffer;
     VideoBuffer map_point_buffer;
+    VideoBuffer map_normal_buffer;
     VideoBuffer map_point_count_buffer;
 };

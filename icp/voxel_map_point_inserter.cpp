@@ -16,9 +16,11 @@ void VoxelMapPointInserter::create(VulkanEngine& engine) {
     DescriptorSetBundleBuilder builder = DescriptorSetBundleBuilder();
     builder.add_uniform_buffer(0, uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
     builder.add_storage_buffer(1, VK_SHADER_STAGE_COMPUTE_BIT); // SourcePointBuffer
-    builder.add_storage_buffer(2, VK_SHADER_STAGE_COMPUTE_BIT); // MapPointCountBuffer
-    builder.add_storage_buffer(3, VK_SHADER_STAGE_COMPUTE_BIT); // MapPointBuffer
-    builder.add_storage_buffer(4, VK_SHADER_STAGE_COMPUTE_BIT); // VoxelHashTableBuffer
+    builder.add_storage_buffer(2, VK_SHADER_STAGE_COMPUTE_BIT); // SourceNormalBuffer
+    builder.add_storage_buffer(3, VK_SHADER_STAGE_COMPUTE_BIT); // MapPointCountBuffer
+    builder.add_storage_buffer(4, VK_SHADER_STAGE_COMPUTE_BIT); // MapPointBuffer
+    builder.add_storage_buffer(5, VK_SHADER_STAGE_COMPUTE_BIT); // MapNormalBuffer
+    builder.add_storage_buffer(6, VK_SHADER_STAGE_COMPUTE_BIT); // VoxelHashTableBuffer
     descriptor_set_bundle = builder.create(engine.device);
 
     pipeline.create(engine.device, descriptor_set_bundle, shader_module);
@@ -26,7 +28,7 @@ void VoxelMapPointInserter::create(VulkanEngine& engine) {
     fence = Fence(engine.device);
 }
 
-void VoxelMapPointInserter::insert(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud) {
+void VoxelMapPointInserter::insert(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer) {
     if (!this->engine)
         throw std::runtime_error("engine was null");
         
@@ -37,9 +39,11 @@ void VoxelMapPointInserter::insert(VoxelPointMap& voxel_point_map, PointCloud& s
     uniform_buffer.update_data(&uniform_data, sizeof(InserterUniform));
 
     descriptor_set_bundle.bind_storage_buffer(1, source_point_cloud.get_instance_buffer());
-    descriptor_set_bundle.bind_storage_buffer(2, voxel_point_map.map_point_count_buffer);
-    descriptor_set_bundle.bind_storage_buffer(3, voxel_point_map.map_point_buffer);
-    descriptor_set_bundle.bind_storage_buffer(4, voxel_point_map.map_hash_table_buffer);
+    descriptor_set_bundle.bind_storage_buffer(2, source_normal_buffer);
+    descriptor_set_bundle.bind_storage_buffer(3, voxel_point_map.map_point_count_buffer);
+    descriptor_set_bundle.bind_storage_buffer(4, voxel_point_map.map_point_buffer);
+    descriptor_set_bundle.bind_storage_buffer(5, voxel_point_map.map_normal_buffer);
+    descriptor_set_bundle.bind_storage_buffer(6, voxel_point_map.map_hash_table_buffer);
 
     // descriptor_set_bundle.bind_storage_buffer(1, source_point_cloud.instance_buffer);
     // descriptor_set_bundle.bind_storage_buffer(2, target_point_cloud.instance_buffer);

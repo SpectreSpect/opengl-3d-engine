@@ -24,7 +24,7 @@ public:
 
     VoxelMapPointInserter() = default;
     void create(VulkanEngine& engine);
-    void insert(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud);
+    void insert(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer);
     
 private:
     VulkanEngine* engine = nullptr;

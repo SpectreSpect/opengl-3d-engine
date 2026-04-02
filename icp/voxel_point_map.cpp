@@ -21,5 +21,6 @@ void VoxelPointMap::create(VulkanEngine& engine, uint32_t num_hash_table_slots, 
     map_uniform_buffer.create(engine, sizeof(VoxelPointMapUniform));
     map_hash_table_buffer.create(engine, sizeof(VoxelHashSlotGpu) * num_hash_table_slots);
     map_point_buffer.create(engine, sizeof(PointInstance) * max_map_point_count);
+    map_normal_buffer.create(engine, sizeof(glm::vec4) * max_map_point_count);
     map_point_count_buffer.create(engine, sizeof(uint32_t));
 }

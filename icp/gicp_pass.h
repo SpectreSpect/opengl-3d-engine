@@ -11,6 +11,7 @@
 #include "../vulkan/command_pool.h"
 #include "../vulkan/command_buffer.h"
 #include "../point_cloud/point_cloud.h"
+#include "voxel_point_map.h"
 
 
 class GICPPass {
@@ -18,8 +19,9 @@ public:
     struct GICPPassUniform {
         glm::vec4 position;
         glm::vec4 rotation;
-        uint num_source_points;
-        uint num_target_points;
+        uint32_t num_source_points;
+        uint32_t num_target_points;
+        uint32_t num_hash_table_slots;
     };
 
     struct OutputBuffer {
@@ -30,7 +32,8 @@ public:
 
     GICPPass() = default;
     void create(VulkanEngine& engine);
-    void step(PointCloud& source_point_cloud, PointCloud& target_point_cloud, VideoBuffer& source_normal_buffer, VideoBuffer& target_normal_buffer);
+    // void step(PointCloud& source_point_cloud, PointCloud& target_point_cloud, VideoBuffer& source_normal_buffer, VideoBuffer& target_normal_buffer);
+    void step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer);
 private:
     VulkanEngine* engine = nullptr;
     ComputePipeline pipeline;

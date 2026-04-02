@@ -16,13 +16,21 @@ layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
     PointInstance points[];
 } source_point_buffer;
 
-layout(std430, set = 0, binding = 2) buffer MapPointCountBuffer {
+layout(std430, set = 0, binding = 2) readonly buffer SourceNormalBuffer {
+    vec4 normals[];
+} source_normal_buffer;
+
+layout(std430, set = 0, binding = 3) buffer MapPointCountBuffer {
     uint count;
 } map_point_count_buffer;
 
-layout(std430, set = 0, binding = 3) buffer MapPointBuffer {
+layout(std430, set = 0, binding = 4) buffer MapPointBuffer {
     PointInstance points[];
 } map_point_buffer;
+
+layout(std430, set = 0, binding = 5) buffer MapNormalBuffer {
+    vec4 normals[];
+} map_normal_buffer;
 
 // ============================================================
 // Configuration
@@ -32,10 +40,10 @@ layout(std430, set = 0, binding = 3) buffer MapPointBuffer {
 #define VOXEL_MAX_PROBES 128u
 #endif
 
-#define VOXEL_INVALID_ID    0xFFFFFFFFu
-#define VOXEL_SLOT_EMPTY    0xFFFFFFFFu
-#define VOXEL_SLOT_LOCKED   0xFFFFFFFEu
-#define VOXEL_SLOT_OCCUPIED 0xFFFFFFFCu
+#define VOXEL_INVALID_ID     0xFFFFFFFFu
+#define VOXEL_SLOT_EMPTY     0xFFFFFFFFu
+#define VOXEL_SLOT_LOCKED    0xFFFFFFFEu
+#define VOXEL_SLOT_OCCUPIED  0xFFFFFFFCu
 
 // ============================================================
 // Key helpers
@@ -79,7 +87,7 @@ struct VoxelHashSlot {
     uint  value;
 };
 
-layout(std430, set = 0, binding = 4) coherent buffer VoxelHashTableBuffer {
+layout(std430, set = 0, binding = 6) coherent buffer VoxelHashTableBuffer {
     VoxelHashSlot slots[];
 } voxel_table;
 
@@ -93,11 +101,11 @@ layout(std430, set = 0, binding = 4) coherent buffer VoxelHashTableBuffer {
 // - This shader only builds the map; it does not delete from it
 //
 // Behavior:
-// - First thread that claims a voxel inserts the point
+// - First thread that claims a voxel inserts the point and normal
 // - Later threads landing in same voxel do nothing
 //
 
-bool voxel_insert_point(ivec3 key, uint source_point_id)
+bool voxel_insert_point_and_normal(ivec3 key, uint source_point_id)
 {
     uint slot_count = params.num_hash_table_slots;
     if (slot_count == 0u)
@@ -109,12 +117,10 @@ bool voxel_insert_point(ivec3 key, uint source_point_id)
     for (uint probe = 0u; probe < max_probes; ++probe) {
         uint state = atomicAdd(voxel_table.slots[idx].state, 0u);
 
-        // Already occupied: either same voxel or keep probing
         if (state == VOXEL_SLOT_OCCUPIED) {
             memoryBarrierBuffer();
 
             if (voxel_key_equal(voxel_table.slots[idx].key, key)) {
-                // voxel already has a point, first writer wins
                 return true;
             }
 
@@ -122,7 +128,6 @@ bool voxel_insert_point(ivec3 key, uint source_point_id)
             continue;
         }
 
-        // Empty: try to claim it
         if (state == VOXEL_SLOT_EMPTY) {
             uint prev = atomicCompSwap(
                 voxel_table.slots[idx].state,
@@ -134,28 +139,25 @@ bool voxel_insert_point(ivec3 key, uint source_point_id)
                 uint map_point_id = atomicAdd(map_point_count_buffer.count, 1u);
 
                 if (map_point_id >= params.max_map_point_count) {
-                    // undo count increment
                     atomicAdd(map_point_count_buffer.count, 0xFFFFFFFFu);
-
-                    // release slot back to empty
                     atomicExchange(voxel_table.slots[idx].state, VOXEL_SLOT_EMPTY);
                     return false;
                 }
 
                 voxel_table.slots[idx].key = ivec4(key, 0);
                 voxel_table.slots[idx].value = map_point_id;
+
                 map_point_buffer.points[map_point_id] = source_point_buffer.points[source_point_id];
+                map_normal_buffer.normals[map_point_id] = source_normal_buffer.normals[source_point_id];
 
                 memoryBarrierBuffer();
                 atomicExchange(voxel_table.slots[idx].state, VOXEL_SLOT_OCCUPIED);
                 return true;
             }
 
-            // someone raced us; retry same/probed path
             continue;
         }
 
-        // Locked: do a bounded retry, never spin forever
         if (state == VOXEL_SLOT_LOCKED) {
             uint spin_count = 0u;
             while (spin_count < 1024u) {
@@ -169,7 +171,6 @@ bool voxel_insert_point(ivec3 key, uint source_point_id)
             continue;
         }
 
-        // Unknown state: skip
         idx = (idx + 1u) % slot_count;
     }
 
@@ -191,5 +192,5 @@ void main()
     vec3 source_pos = source_point_buffer.points[source_point_id].position.xyz;
     ivec3 key = voxel_key_from_world_pos(source_pos, voxel_size);
 
-    voxel_insert_point(key, source_point_id);
+    voxel_insert_point_and_normal(key, source_point_id);
 }

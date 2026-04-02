@@ -871,7 +871,7 @@ int main() {
     VoxelMapPointInserter voxel_map_point_inserter;
     voxel_map_point_inserter.create(engine);
 
-    voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud);
+    voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud, target_normal_buffer);
 
     GICPPass gicp_pass;
     gicp_pass.create(engine);
@@ -881,9 +881,6 @@ int main() {
     voxel_map_point_cloud.create(engine);
 
     voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
-
-
-    
 
     // for (int i = 0; i < 10; i++) {
     //     GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
@@ -928,7 +925,8 @@ int main() {
         if (ImGui::Button("GICP step")) {
             // GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
             // GICP::step_test(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
-            gicp_pass.step(source_point_cloud_frame.point_cloud, target_point_cloud_frame.point_cloud, source_normal_buffer, target_normal_buffer);
+            // gicp_pass.step(source_point_cloud_frame.point_cloud, target_point_cloud_frame.point_cloud, source_normal_buffer, target_normal_buffer);
+            gicp_pass.step(voxel_point_map, source_point_cloud_frame.point_cloud, source_normal_buffer);
 
             std::cout << "position: (";
             print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.position, 1.0f));
