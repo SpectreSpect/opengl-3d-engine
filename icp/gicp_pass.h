@@ -12,7 +12,7 @@
 #include "../vulkan/command_buffer.h"
 #include "../point_cloud/point_cloud.h"
 #include "voxel_point_map.h"
-
+#include "gicp_reductor.h"
 
 class GICPPass {
 public:
@@ -25,15 +25,22 @@ public:
     };
 
     struct OutputBuffer {
-        // glm::mat4 model;
         glm::vec4 position;
         glm::vec4 rotation;
     };
 
     GICPPass() = default;
+
     void create(VulkanEngine& engine);
-    // void step(PointCloud& source_point_cloud, PointCloud& target_point_cloud, VideoBuffer& source_normal_buffer, VideoBuffer& target_normal_buffer);
     void step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer);
+
+private:
+    static glm::mat3 euler_xyz_to_mat3(const glm::vec3& euler);
+    static glm::mat3 skew_matrix(const glm::vec3& v);
+    static bool solve_6x6(const double H_in[6][6], const double g_in[6], double delta_out[6]);
+    static glm::mat3 omega_to_mat3(const glm::vec3& omega);
+    static glm::vec3 mat3_to_euler_xyz(const glm::mat3& R);
+
 private:
     VulkanEngine* engine = nullptr;
     ComputePipeline pipeline;
@@ -41,17 +48,19 @@ private:
     Fence fence;
     VideoBuffer uniform_buffer;
     ShaderModule shader_module;
-    
-    uint32_t compute_queue_family_id;
-    VkQueue compute_queue;
+
+    uint32_t compute_queue_family_id = 0;
+    VkQueue compute_queue = VK_NULL_HANDLE;
 
     CommandPool command_pool;
     CommandBuffer command_buffer;
 
     VideoBuffer output_buffer;
 
-    // VideoBuffer map_uniform_buffer;
-    // VideoBuffer map_hash_table_buffer;
-    // VideoBuffer map_point_buffer;
-    // VideoBuffer map_point_count_buffer;
+    GICPReductor reductor;
+
+    VideoBuffer partial_src;
+    VideoBuffer partial_dst;
+
+    uint32_t max_partial_count = 100000;
 };

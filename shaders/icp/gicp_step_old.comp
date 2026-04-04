@@ -11,30 +11,61 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     vec4 rotation;
     uint num_source_points;
     uint num_target_points;
+    uint num_hash_table_slots;
 } ubo;
 
-layout(set = 0, binding = 1) coherent buffer SourcePointBuffer {
+layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
     PointInstance points[];
 } source_point_buffer;
 
-layout(set = 0, binding = 2) coherent buffer TargetPointBuffer {
-    PointInstance points[];
-} target_point_buffer;
-
-layout(set = 0, binding = 3) coherent buffer SourceNormalBuffer {
+layout(std430, set = 0, binding = 2) readonly buffer SourceNormalBuffer {
     vec4 normals[];
 } source_normal_buffer;
 
-layout(set = 0, binding = 4) coherent buffer TargetNormalBuffer {
-    vec4 normals[];
-} target_normal_buffer;
+layout(std430, set = 0, binding = 3) readonly buffer MapPointCountBuffer {
+    uint count;
+} map_point_count_buffer;
 
-layout(set = 0, binding = 5) coherent buffer OutputStorageBuffer {
+layout(std430, set = 0, binding = 4) readonly buffer MapPointBuffer {
+    PointInstance points[];
+} map_point_buffer;
+
+layout(std430, set = 0, binding = 5) readonly buffer MapNormalBuffer {
+    vec4 normals[];
+} map_normal_buffer;
+
+layout(std430, set = 0, binding = 6) coherent buffer OutputStorageBuffer {
     vec4 position;
     vec4 rotation;
 } output_buffer;
 
+// Added hash table buffer
+struct VoxelHashSlot {
+    uint  state;
+    ivec4 key;
+    uint  value;
+};
 
+layout(std430, set = 0, binding = 7) readonly buffer VoxelHashTableBuffer {
+    VoxelHashSlot slots[];
+} voxel_table;
+
+// ============================================================
+// Configuration
+// ============================================================
+
+#ifndef VOXEL_MAX_PROBES
+#define VOXEL_MAX_PROBES 128u
+#endif
+
+#define VOXEL_INVALID_ID    0xFFFFFFFFu
+#define VOXEL_SLOT_EMPTY    0xFFFFFFFFu
+#define VOXEL_SLOT_LOCKED   0xFFFFFFFEu
+#define VOXEL_SLOT_OCCUPIED 0xFFFFFFFCu
+
+// ============================================================
+// Transform helpers
+// ============================================================
 
 mat3 euler_xyz_to_mat3(vec3 euler)
 {
@@ -105,197 +136,148 @@ mat3 covariance_from_normal(vec3 raw_n, float eps)
     mat3 I = mat3(1.0);
     mat3 nnT = outerProduct(n, n);
 
-    // I - nn^T + eps * nn^T
     return I - (1.0 - eps) * nnT;
 }
 
+// ============================================================
+// Voxel hash helpers
+// ============================================================
 
-// uint find_closest_id(vec3 position, float max_dist_sq, float max_corr_dist)
-// {
-//     const uint pack_bits   = 21u;
-//     const uint pack_offset = 1048575u;
+ivec3 voxel_key_from_world_pos(vec3 world_pos, float voxel_size)
+{
+    return ivec3(floor(world_pos / voxel_size));
+}
 
-//     float voxel_size = 1.0;
-//     ivec3 voxel_pos = ivec3(floor(position / voxel_size));
+uint hash_voxel_key(ivec3 key)
+{
+    uvec3 k = uvec3(key);
 
-//     // int num_layers = 3;
-//     int num_layers = int(ceil(max_corr_dist / voxel_size)) + 1;
-    
-//     uint min_id = INVALID_ID;
-//     float min_dist = max_dist_sq;
+    uint h = 2166136261u;
+    h = (h ^ k.x) * 16777619u;
+    h = (h ^ k.y) * 16777619u;
+    h = (h ^ k.z) * 16777619u;
 
-//     for (int layer = 0; layer < num_layers; layer++) {
-//         const int dim = 1 + layer * 2;
+    h ^= h >> 16;
+    h *= 0x7feb352du;
+    h ^= h >> 15;
+    h *= 0x846ca68bu;
+    h ^= h >> 16;
 
-//         for (int y = 0; y < dim; y++) {
-//             const bool on_y_edge = (y == 0 || y == dim - 1);
+    return h;
+}
 
-//             for (int z = 0; z < dim; z++) {
-//                 const bool on_z_edge = (z == 0 || z == dim - 1);
+bool voxel_key_equal(ivec4 stored_key, ivec3 query_key)
+{
+    return all(equal(stored_key.xyz, query_key));
+}
 
-//                 int x = 0;
-//                 while (x < dim) {
-//                     ivec3 new_voxel_pos = voxel_pos + ivec3(x, y, z) - ivec3(layer);
+uint voxel_lookup_map_point_id(ivec3 key)
+{
+    uint slot_count = ubo.num_hash_table_slots;
+    if (slot_count == 0u)
+        return VOXEL_INVALID_ID;
 
-//                     uvec2 key = pack_key_uvec2(new_voxel_pos, pack_offset, pack_bits);
+    uint idx = hash_voxel_key(key) % slot_count;
+    uint max_probes = min(slot_count, VOXEL_MAX_PROBES);
 
-//                     uint map_point_id = lookup_chunk(key);
-                    
-//                     if (map_point_id != INVALID_ID) {
-//                         map_point_id = hash_table[map_point_id].hash_value;
+    for (uint probe = 0u; probe < max_probes; ++probe) {
+        uint state = voxel_table.slots[idx].state;
 
-//                         vec3 to_point = map_points[map_point_id].position.xyz - position;
-//                         float dist_sq = dot(to_point, to_point);
+        if (state == VOXEL_SLOT_EMPTY)
+            return VOXEL_INVALID_ID;
 
-//                         if (dist_sq < min_dist) {
-//                             min_dist = dist_sq;
-//                             min_id = map_point_id;
-//                         }
-//                     }
+        if (state == VOXEL_SLOT_OCCUPIED) {
+            if (voxel_key_equal(voxel_table.slots[idx].key, key))
+                return voxel_table.slots[idx].value;
+        }
 
-//                     if (on_y_edge || on_z_edge) {
-//                         x++;
-//                     } else {
-//                         x = (x == dim - 1) ? x + 1 : dim - 1;
-//                     }
-//                 }
-//             }
-//         }
+        // Skip locked/unknown states and keep probing.
+        idx = (idx + 1u) % slot_count;
+    }
 
-//         if (min_id != INVALID_ID)
-//             break;
-//     }
-//     return min_id;
-// }
+    return VOXEL_INVALID_ID;
+}
 
-// uint find_closest_id(
-//     vec3 position,
-//     vec4 normal4,
-//     float max_dist_sq,
-//     float max_corr_dist,
-//     float min_normal_dot
-// )
-// {
-//     const uint pack_bits   = 21u;
-//     const uint pack_offset = 1048575u;
-
-//     float voxel_size = 1.0;
-//     ivec3 voxel_pos = ivec3(floor(position / voxel_size));
-
-//     int num_layers = int(ceil(max_corr_dist / voxel_size)) + 1;
-
-//     uint min_id = INVALID_ID;
-//     float min_dist = max_dist_sq;
-
-//     vec3 query_normal = normal4.xyz;
-//     bool use_normal_check = dot(query_normal, query_normal) > 1e-12;
-
-//     if (use_normal_check) {
-//         query_normal = normalize(query_normal);
-//     }
-
-//     for (int layer = 0; layer < num_layers; layer++) {
-//         const int dim = 1 + layer * 2;
-
-//         for (int y = 0; y < dim; y++) {
-//             const bool on_y_edge = (y == 0 || y == dim - 1);
-
-//             for (int z = 0; z < dim; z++) {
-//                 const bool on_z_edge = (z == 0 || z == dim - 1);
-
-//                 int x = 0;
-//                 while (x < dim) {
-//                     ivec3 new_voxel_pos = voxel_pos + ivec3(x, y, z) - ivec3(layer);
-
-//                     uvec2 key = pack_key_uvec2(new_voxel_pos, pack_offset, pack_bits);
-
-//                     uint map_point_id = lookup_chunk(key);
-
-//                     if (map_point_id != INVALID_ID) {
-//                         map_point_id = hash_table[map_point_id].hash_value;
-
-//                         vec3 candidate_pos = map_points[map_point_id].position.xyz;
-//                         vec3 to_point = candidate_pos - position;
-//                         float dist_sq = dot(to_point, to_point);
-
-//                         if (dist_sq < min_dist) {
-//                             bool normal_ok = true;
-
-//                             if (use_normal_check) {
-//                                 vec3 candidate_normal = map_normals[map_point_id].normal.xyz;
-//                                 float nlen_sq = dot(candidate_normal, candidate_normal);
-
-//                                 if (nlen_sq < 1e-12) {
-//                                     normal_ok = false;
-//                                 } else {
-//                                     candidate_normal *= inversesqrt(nlen_sq);
-
-//                                     float ndot = dot(query_normal, candidate_normal);
-
-//                                     // If normal orientation may be flipped, use this instead:
-//                                     // ndot = abs(ndot);
-
-//                                     if (ndot < min_normal_dot) {
-//                                         normal_ok = false;
-//                                     }
-//                                 }
-//                             }
-
-//                             if (normal_ok) {
-//                                 min_dist = dist_sq;
-//                                 min_id = map_point_id;
-//                             }
-//                         }
-//                     }
-
-//                     if (on_y_edge || on_z_edge) {
-//                         x++;
-//                     } else {
-//                         x = (x == dim - 1) ? x + 1 : dim - 1;
-//                     }
-//                 }
-//             }
-//         }
-
-//         // if (min_id != INVALID_ID)
-//         //     break;
-//     }
-
-//     return min_id;
-// }
-
-
-uint find_closest_id_brute_force(
+uint find_closest_id_hash(
     vec3 position,
     vec4 normal4,
     float max_dist_sq,
     float max_corr_dist,
     float min_normal_dot
 ) {
-    if (ubo.num_target_points == 0u)
-        return 0xFFFFFFFFu; // equivalent of -1
+    if (map_point_count_buffer.count == 0u)
+        return VOXEL_INVALID_ID;
 
-    uint min_id = 0xFFFFFFFFu;
+    float voxel_size = 1.0;
+    ivec3 base_voxel = voxel_key_from_world_pos(position, voxel_size);
+
+    int num_layers = int(ceil(max_corr_dist / voxel_size));
+
+    uint min_id = VOXEL_INVALID_ID;
     float min_dist = max_dist_sq;
 
-    for (uint i = 0u; i < ubo.num_target_points; i++) {
-        vec3 target_normal = target_normal_buffer.normals[i].xyz;
+    vec3 query_normal = normal4.xyz;
+    bool use_normal_check = dot(query_normal, query_normal) > 1e-12;
 
-        // skip invalid normals
-        if (dot(target_normal, target_normal) < 1e-12)
-            continue;
+    if (use_normal_check)
+        query_normal = normalize(query_normal);
 
-        vec3 d = target_point_buffer.points[i].position.xyz - position;
-        float dist = dot(d, d); // squared distance
+    for (int layer = 0; layer <= num_layers; ++layer) {
+        for (int dx = -layer; dx <= layer; ++dx) {
+            for (int dy = -layer; dy <= layer; ++dy) {
+                for (int dz = -layer; dz <= layer; ++dz) {
+                    // Only check the shell of this layer
+                    if (layer > 0 &&
+                        abs(dx) < layer &&
+                        abs(dy) < layer &&
+                        abs(dz) < layer)
+                    {
+                        continue;
+                    }
 
-        if (dist < min_dist) {
-            min_dist = dist;
-            min_id = i;
+                    ivec3 voxel_key = base_voxel + ivec3(dx, dy, dz);
+                    uint candidate_id = voxel_lookup_map_point_id(voxel_key);
+
+                    if (candidate_id == VOXEL_INVALID_ID)
+                        continue;
+
+                    if (candidate_id >= map_point_count_buffer.count)
+                        continue;
+
+                    vec3 candidate_pos = map_point_buffer.points[candidate_id].position.xyz;
+                    vec3 to_point = candidate_pos - position;
+                    float dist_sq = dot(to_point, to_point);
+
+                    if (dist_sq >= min_dist)
+                        continue;
+
+                    vec3 candidate_normal = map_normal_buffer.normals[candidate_id].xyz;
+                    float nlen_sq = dot(candidate_normal, candidate_normal);
+
+                    if (nlen_sq < 1e-12)
+                        continue;
+
+                    if (use_normal_check && min_normal_dot > -1.0) {
+                        candidate_normal *= inversesqrt(nlen_sq);
+
+                        float ndot = dot(query_normal, candidate_normal);
+                        if (ndot < min_normal_dot)
+                            continue;
+                    }
+
+                    min_dist = dist_sq;
+                    min_id = candidate_id;
+                }
+            }
         }
     }
 
     return min_id;
 }
+
+// ============================================================
+// Math helpers
+// ============================================================
 
 mat3 skew_matrix(vec3 v)
 {
@@ -310,7 +292,7 @@ void add_mat3_block(inout double H[6][6], int row0, int col0, mat3 M)
 {
     for (int r = 0; r < 3; r++) {
         for (int c = 0; c < 3; c++) {
-            H[row0 + r][col0 + c] += double(M[c][r]); // mat3 is also [col][row]
+            H[row0 + r][col0 + c] += double(M[c][r]);
         }
     }
 }
@@ -326,7 +308,6 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
 {
     const double EPS = double(1.0e-12);
 
-    // Augmented matrix [H | g], size 6 x 7
     double a[6][7];
 
     for (int r = 0; r < 6; r++) {
@@ -336,9 +317,7 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
         a[r][6] = g_in[r];
     }
 
-    // Forward elimination with partial pivoting
     for (int col = 0; col < 6; col++) {
-        // Find pivot row
         int pivot_row = col;
         double max_abs = abs(a[col][col]);
 
@@ -350,12 +329,9 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
             }
         }
 
-        // Singular / degenerate check
-        if (max_abs < EPS) {
+        if (max_abs < EPS)
             return false;
-        }
 
-        // Swap rows if needed
         if (pivot_row != col) {
             for (int c = col; c < 7; c++) {
                 double tmp = a[col][c];
@@ -364,7 +340,6 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
             }
         }
 
-        // Eliminate rows below
         for (int r = col + 1; r < 6; r++) {
             double factor = a[r][col] / a[col][col];
 
@@ -374,7 +349,6 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
         }
     }
 
-    // Back substitution
     for (int r = 5; r >= 0; r--) {
         double sum = a[r][6];
 
@@ -382,9 +356,8 @@ bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
             sum -= a[r][c] * delta_out[c];
         }
 
-        if (abs(a[r][r]) < EPS) {
+        if (abs(a[r][r]) < EPS)
             return false;
-        }
 
         delta_out[r] = sum / a[r][r];
     }
@@ -402,7 +375,6 @@ mat3 omega_to_mat3(vec3 omega)
     vec3 axis = omega / theta;
     mat3 K = skew_matrix(axis);
 
-    // Rodrigues rotation formula
     return mat3(1.0) + sin(theta) * K + (1.0 - cos(theta)) * (K * K);
 }
 
@@ -413,18 +385,14 @@ vec3 mat3_to_euler_xyz(mat3 R)
 
     float x, y, z;
 
-    // For R = Rz(z) * Ry(y) * Rx(x):
-    // R[0][2] = -sin(y)   because mat[col][row]
     float sy = clamp(-R[0][2], -1.0, 1.0);
 
     if (sy >= 1.0 - EPS) {
-        // y = +pi/2 : gimbal lock
         y = HALF_PI;
         z = 0.0;
         x = atan(R[1][0], R[1][1]);
     }
     else if (sy <= -1.0 + EPS) {
-        // y = -pi/2 : gimbal lock
         y = -HALF_PI;
         z = 0.0;
         x = atan(-R[1][0], R[1][1]);
@@ -438,15 +406,19 @@ vec3 mat3_to_euler_xyz(mat3 R)
     return vec3(x, y, z);
 }
 
+// ============================================================
+// GICP step
+// ============================================================
+
 double step()
 {
     const float max_corr_dist    = 10.0;
-    const float max_corr_dist_sq  = max_corr_dist * max_corr_dist;
-    const float max_rot           = radians(5.0);
-    const float max_trans         = 5.0;
-    const float gicp_eps          = 1e-3;
-    const float min_normal_dot    = -1.0;
-    const vec3  source_scale      = vec3(1.0);
+    const float max_corr_dist_sq = max_corr_dist * max_corr_dist;
+    const float max_rot          = radians(5.0);
+    const float max_trans        = 5.0;
+    const float gicp_eps         = 1e-3;
+    const float min_normal_dot   = -1.0;
+    const vec3  source_scale     = vec3(1.0);
 
     vec3 source_position = ubo.position.xyz;
     vec3 source_rotation = ubo.rotation.xyz;
@@ -474,43 +446,19 @@ double step()
         if (dot(n_src_world, n_src_world) < 1e-12)
             continue;
 
-        int target_id = -1;
-        float best_dist_sq = max_corr_dist_sq;
+        uint target_id = find_closest_id_hash(
+            x,
+            vec4(n_src_world, 0.0),
+            max_corr_dist_sq,
+            max_corr_dist,
+            min_normal_dot
+        );
 
-        for (uint j = 0u; j < ubo.num_target_points; ++j) {
-            vec3 n_tgt_world = target_normal_buffer.normals[j].xyz;
-
-            if (dot(n_tgt_world, n_tgt_world) < 1e-12)
-                continue;
-
-            vec3 q = target_point_buffer.points[j].position.xyz;
-            vec3 diff = q - x;
-            float dist_sq = dot(diff, diff);
-
-            if (dist_sq >= best_dist_sq)
-                continue;
-
-            if (min_normal_dot > -1.0) {
-                float src_len = length(n_src_world);
-                float tgt_len = length(n_tgt_world);
-
-                if (src_len < 1e-12 || tgt_len < 1e-12)
-                    continue;
-
-                float ndot = dot(n_src_world / src_len, n_tgt_world / tgt_len);
-                if (ndot < min_normal_dot)
-                    continue;
-            }
-
-            best_dist_sq = dist_sq;
-            target_id = int(j);
-        }
-
-        if (target_id < 0)
+        if (target_id == VOXEL_INVALID_ID)
             continue;
 
-        vec3 q = target_point_buffer.points[uint(target_id)].position.xyz;
-        vec3 n_tgt_world = target_normal_buffer.normals[uint(target_id)].xyz;
+        vec3 q = map_point_buffer.points[target_id].position.xyz;
+        vec3 n_tgt_world = map_normal_buffer.normals[target_id].xyz;
 
         mat3 C_A = covariance_from_normal(n_src_world, gicp_eps);
         mat3 C_B = covariance_from_normal(n_tgt_world, gicp_eps);
@@ -552,7 +500,8 @@ double step()
     }
 
     double delta[6];
-    for (int i = 0; i < 6; ++i) delta[i] = 0.0;
+    for (int i = 0; i < 6; ++i)
+        delta[i] = 0.0;
 
     if (!solve_6x6(H, g, delta))
         return -1.0;
@@ -582,15 +531,8 @@ double step()
 
 void main()
 {
-    uint x_id = gl_GlobalInvocationID.x;
-
-    // if (x_id >= ubo.num_source_points)  return;
-    if (x_id != 0)  return;
+    if (gl_GlobalInvocationID.x != 0u)
+        return;
 
     step();
-
-    // output_buffer.test_output.x = 10;
-    // output_buffer.test_output.y = 15;
-    // output_buffer.test_output.z = 20;
-    // output_buffer.test_output.w = 25;
 }

@@ -1,0 +1,71 @@
+#version 460
+layout(local_size_x = 64) in;
+
+struct GICPPartial {
+    double H[6][6];
+    double g[6];
+    double total_weighted_sq_error;
+    uint valid_count;
+};
+
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+    uint input_count;
+} ubo;
+
+layout(std430, set = 0, binding = 1) readonly buffer SourcePartialBuffer {
+    GICPPartial partials[];
+} source_partial_buffer;
+
+layout(std430, set = 0, binding = 2) writeonly buffer OutputPartialBuffer {
+    GICPPartial partials[];
+} output_partial_buffer;
+
+shared GICPPartial scratch[64];
+
+void add_to_first(inout GICPPartial a, in GICPPartial b) {
+    for (int r = 0; r < 6; ++r) {
+        a.g[r] += b.g[r];
+        for (int c = 0; c < 6; ++c) {
+            a.H[r][c] += b.H[r][c];
+        }
+    }
+    a.total_weighted_sq_error += b.total_weighted_sq_error;
+    a.valid_count += b.valid_count;
+}
+
+GICPPartial zero_partial() {
+    GICPPartial p;
+    for (int r = 0; r < 6; ++r) {
+        p.g[r] = 0.0;
+        for (int c = 0; c < 6; ++c) {
+            p.H[r][c] = 0.0;
+        }
+    }
+    p.total_weighted_sq_error = 0.0;
+    p.valid_count = 0u;
+    return p;
+}
+
+void main() {
+    uint lid  = gl_LocalInvocationID.x;
+    uint gid  = gl_WorkGroupID.x;
+    uint base = gid * gl_WorkGroupSize.x;
+    uint idx  = base + lid;
+
+    scratch[lid] = (idx < ubo.input_count)
+        ? source_partial_buffer.partials[idx]
+        : zero_partial();
+
+    barrier();
+
+    for (uint stride = gl_WorkGroupSize.x >> 1; stride > 0; stride >>= 1) {
+        if (lid < stride) {
+            add_to_first(scratch[lid], scratch[lid + stride]);
+        }
+        barrier();
+    }
+
+    if (lid == 0) {
+        output_partial_buffer.partials[gid] = scratch[0];
+    }
+}

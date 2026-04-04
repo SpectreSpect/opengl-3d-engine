@@ -1,4 +1,5 @@
 #pragma once
+#include <utility>
 #include <vulkan/vulkan.h>
 #include <stdexcept>
 
@@ -13,6 +14,12 @@ public:
 
     CommandPool() = default;
     CommandPool(VkDevice& device, VkPhysicalDevice& physical_device, uint32_t queue_family_id, VkQueue queue);
+
+    CommandPool(const CommandPool&) = delete;
+    CommandPool& operator=(const CommandPool&) = delete;
+
+    CommandPool(CommandPool&& other) noexcept;
+    CommandPool& operator=(CommandPool&& other) noexcept;
 
     void create(VkDevice& device, VkPhysicalDevice& physical_device, uint32_t queue_family_id, VkQueue queue);
     void destroy();

@@ -28,6 +28,12 @@ public:
     CommandBuffer() = default;
     CommandBuffer(CommandPool& command_pool);
 
+    CommandBuffer(const CommandBuffer&) = delete;
+    CommandBuffer& operator=(const CommandBuffer&) = delete;
+
+    CommandBuffer(CommandBuffer&& other) noexcept = default;
+    CommandBuffer& operator=(CommandBuffer&& other) noexcept = default;
+
     void create(CommandPool& command_pool);
     void begin();
     void end();

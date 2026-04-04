@@ -1,6 +1,5 @@
 #include "descriptor_set_layout.h"
 
-
 void DescriptorSetLayout::add_uniform_buffer(uint32_t binding, VkShaderStageFlags shader_stage_flags) {
     VkDescriptorSetLayoutBinding descriptor_set_binding{};
     descriptor_set_binding.binding = binding;
@@ -44,7 +43,6 @@ void DescriptorSetLayout::add_image_storage(uint32_t binding, VkShaderStageFlags
 
     descriptor_set_bindings.push_back(descriptor_set_binding);
 }
-
 
 void DescriptorSetLayout::create(VkDevice& device) {
     VkDescriptorSetLayoutCreateInfo layoutInfo{};

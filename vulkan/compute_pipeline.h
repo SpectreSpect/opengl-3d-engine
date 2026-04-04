@@ -17,6 +17,13 @@ class ComputePipeline : public Pipeline {
 public:
     ComputePipeline() = default;
     ComputePipeline(VkDevice& device, DescriptorSetBundle& descriptor_set_bundle, ShaderModule& compute_shader);
+
+    ComputePipeline(const ComputePipeline&) = delete;
+    ComputePipeline& operator=(const ComputePipeline&) = delete;
+
+    ComputePipeline(ComputePipeline&& other) noexcept = default;
+    ComputePipeline& operator=(ComputePipeline&& other) noexcept = default;
+
     void create(VkDevice& device, DescriptorSetBundle& descriptor_set_bundle, ShaderModule& compute_shader);
     VkPipelineBindPoint get_bind_point() const override {
         return VK_PIPELINE_BIND_POINT_COMPUTE;

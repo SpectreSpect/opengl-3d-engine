@@ -709,6 +709,30 @@ int main() {
 
     ui::init(window.window, ui_info);
 
+
+    // VkPhysicalDeviceFeatures supported{};
+    // vkGetPhysicalDeviceFeatures(engine.physicalDevice, &supported);
+
+    // if (!supported.shaderFloat64) {
+    //     throw std::runtime_error("GPU does not support shaderFloat64");
+    // }
+
+    // VkPhysicalDeviceFeatures enabled{};
+    // enabled.shaderFloat64 = VK_TRUE;
+
+    // VkDeviceCreateInfo createInfo{};
+    // createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    // createInfo.pEnabledFeatures = &enabled;
+
+    // // fill queue infos, extensions, etc.
+
+    // VkDevice device = VK_NULL_HANDLE;
+    // VkResult res = vkCreateDevice(engine.physicalDevice, &createInfo, nullptr, &device);
+    // if (res != VK_SUCCESS) {
+    //     throw std::runtime_error("vkCreateDevice failed");
+    // }
+
+
     Camera camera = Camera();
     window.set_camera(&camera);
 
@@ -802,8 +826,8 @@ int main() {
     std::vector<glm::vec4> target_normals{};
     std::vector<glm::vec4> source_normals{};
 
-    for (int x = 0; x < 10; x++)
-        for (int z = 0; z < 10; z++) {
+    for (int x = 0; x < 100; x++)
+        for (int z = 0; z < 100; z++) {
             PointInstance point;
             glm::vec4 normal = glm::vec4(0, 1, 0, 1);
 
@@ -848,8 +872,6 @@ int main() {
         source_point_cloud_frame.points[i].color = glm::vec4(1, 0, 0, 1);
     }
     source_point_cloud_frame.point_cloud.set_points(source_point_cloud_frame.points);
-
-
 
     VideoBuffer target_normal_buffer;
     VideoBuffer source_normal_buffer;

@@ -17,6 +17,14 @@ public:
     DescriptorPool descriptor_pool;
     DescriptorSet descriptor_set;
 
+    DescriptorSetBundle() = default;
+
+    DescriptorSetBundle(const DescriptorSetBundle&) = delete;
+    DescriptorSetBundle& operator=(const DescriptorSetBundle&) = delete;
+
+    DescriptorSetBundle(DescriptorSetBundle&& other) noexcept = default;
+    DescriptorSetBundle& operator=(DescriptorSetBundle&& other) noexcept = default;
+
     void bind_uniform_buffer(uint32_t binding, VideoBuffer& buffer);
     void bind_combined_image_sampler(uint32_t binding, Texture2D& texture);
     void bind_combined_image_sampler(uint32_t binding, Cubemap& texture);
@@ -24,8 +32,6 @@ public:
     void bind_image_storage(uint32_t binding, Cubemap& texture);
     void bind_image_storage(uint32_t binding, Texture2D& texture);
     void bind_image_storage(uint32_t binding, ImageView& image_view);
-
-    DescriptorSetBundle() = default;
 };
 
 class DescriptorSetBundleBuilder {

@@ -57,6 +57,7 @@ add_executable(app
   icp/voxel_point_map.cpp
   icp/voxel_map_point_inserter.cpp
   icp/voxel_point_map_reseter.cpp
+  icp/gicp_reductor.cpp
 )
 
 target_link_libraries(app PRIVATE

@@ -1,6 +1,5 @@
 #include "compute_pipeline.h"
 
-
 ComputePipeline::ComputePipeline(VkDevice& device, DescriptorSetBundle& descriptor_set_bundle, ShaderModule& compute_shader) {
     create(device, descriptor_set_bundle, compute_shader);
 }

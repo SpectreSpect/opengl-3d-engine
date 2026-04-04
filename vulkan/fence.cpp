@@ -4,6 +4,23 @@ Fence::Fence(VkDevice& device, bool signaled) {
     create(device, signaled);
 }
 
+Fence::Fence(Fence&& other) noexcept
+    : device(std::exchange(other.device, nullptr)),
+      fence(std::exchange(other.fence, VK_NULL_HANDLE)) {}
+
+Fence& Fence::operator=(Fence&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    destroy();
+
+    device = std::exchange(other.device, nullptr);
+    fence = std::exchange(other.fence, VK_NULL_HANDLE);
+
+    return *this;
+}
+
 void Fence::create(VkDevice& device, bool signaled) {
     destroy();
 

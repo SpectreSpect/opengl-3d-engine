@@ -12,6 +12,12 @@ public:
 
     DescriptorSetLayout() = default;
 
+    DescriptorSetLayout(const DescriptorSetLayout&) = delete;
+    DescriptorSetLayout& operator=(const DescriptorSetLayout&) = delete;
+
+    DescriptorSetLayout(DescriptorSetLayout&& other) noexcept = default;
+    DescriptorSetLayout& operator=(DescriptorSetLayout&& other) noexcept = default;
+
     void add_uniform_buffer(uint32_t binding, VkShaderStageFlags shader_stage_flags);
     void add_storage_buffer(uint32_t binding, VkShaderStageFlags shader_stage_flags);
     void add_combined_image_sampler(uint32_t binding, VkShaderStageFlags shader_stage_flags);

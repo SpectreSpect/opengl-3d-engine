@@ -1,6 +1,5 @@
 #include "descriptor_pool.h"
 
-
 void DescriptorPool::create(VkDevice& device, DescriptorSetLayout& layout, uint32_t num_sets) {
     std::unordered_map<VkDescriptorType, uint32_t> counts;
 

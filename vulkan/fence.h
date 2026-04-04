@@ -1,4 +1,5 @@
 #pragma once
+#include <utility>
 #include <vulkan/vulkan.h>
 #include <stdexcept>
 
@@ -9,6 +10,12 @@ public:
 
     Fence() = default;
     Fence(VkDevice& device, bool signaled = false);
+
+    Fence(const Fence&) = delete;
+    Fence& operator=(const Fence&) = delete;
+
+    Fence(Fence&& other) noexcept;
+    Fence& operator=(Fence&& other) noexcept;
 
     void create(VkDevice& device, bool signaled = false);
     void destroy();

@@ -16,6 +16,12 @@ public:
 
     DescriptorSet() = default;
 
+    DescriptorSet(const DescriptorSet&) = delete;
+    DescriptorSet& operator=(const DescriptorSet&) = delete;
+
+    DescriptorSet(DescriptorSet&& other) noexcept = default;
+    DescriptorSet& operator=(DescriptorSet&& other) noexcept = default;
+
     void create(VkDevice& device, DescriptorSetLayout& layout, DescriptorPool& pool);
     void write_uniform_buffer(uint32_t binding, VideoBuffer& buffer);
     void write_combined_image_sampler(uint32_t binding, Texture2D& texture);

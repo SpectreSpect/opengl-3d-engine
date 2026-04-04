@@ -5,6 +5,29 @@ CommandPool::CommandPool(VkDevice& device, VkPhysicalDevice& physical_device, ui
     create(device, physical_device, queue_family_id, queue);
 }
 
+CommandPool::CommandPool(CommandPool&& other) noexcept
+    : device(std::exchange(other.device, nullptr)),
+      physical_device(std::exchange(other.physical_device, nullptr)),
+      pool(std::exchange(other.pool, VK_NULL_HANDLE)),
+      queue_family_id(std::exchange(other.queue_family_id, 0)),
+      queue(std::exchange(other.queue, VK_NULL_HANDLE)) {}
+
+CommandPool& CommandPool::operator=(CommandPool&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    destroy();
+
+    device = std::exchange(other.device, nullptr);
+    physical_device = std::exchange(other.physical_device, nullptr);
+    pool = std::exchange(other.pool, VK_NULL_HANDLE);
+    queue_family_id = std::exchange(other.queue_family_id, 0);
+    queue = std::exchange(other.queue, VK_NULL_HANDLE);
+
+    return *this;
+}
+
 void CommandPool::create(VkDevice& device, VkPhysicalDevice& physical_device, uint32_t queue_family_id, VkQueue queue) {
     destroy();
 
