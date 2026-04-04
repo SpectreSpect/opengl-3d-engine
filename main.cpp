@@ -795,11 +795,9 @@ int main() {
     // light_source.position = glm::vec4(0, 2, 0, 10);
     // light_source.color = glm::vec4(1, 0, 0, 1);
 
-
     lighting_system.set_light_source(0, red_light_source);
     lighting_system.set_light_source(1, green_light_source);
     lighting_system.set_light_source(2, blue_light_source);
-
 
     PointCloudPass point_cloud_pass;
     point_cloud_pass.create(engine);
@@ -826,8 +824,8 @@ int main() {
     std::vector<glm::vec4> target_normals{};
     std::vector<glm::vec4> source_normals{};
 
-    for (int x = 0; x < 100; x++)
-        for (int z = 0; z < 100; z++) {
+    for (int x = 0; x < 316; x++)
+        for (int z = 0; z < 316; z++) {
             PointInstance point;
             glm::vec4 normal = glm::vec4(0, 1, 0, 1);
 
@@ -883,7 +881,7 @@ int main() {
     source_normal_buffer.update_data(source_normals.data(), source_normals.size() * sizeof(glm::vec4));
 
     VoxelPointMap voxel_point_map;
-    voxel_point_map.create(engine, 1000, 1000);
+    voxel_point_map.create(engine, 1500000, 1500000);
 
     VoxelPointMapReseter voxel_point_map_reseter;
     voxel_point_map_reseter.create(engine);

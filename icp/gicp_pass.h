@@ -62,5 +62,5 @@ private:
     VideoBuffer partial_src;
     VideoBuffer partial_dst;
 
-    uint32_t max_partial_count = 100000;
+    uint32_t max_partial_count = 1000000;
 };

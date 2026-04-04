@@ -1,5 +1,5 @@
 #version 460
-layout(local_size_x = 256) in;
+layout(local_size_x = 32) in;
 
 struct PointInstance {
     vec4 position;
@@ -46,7 +46,6 @@ layout(std430, set = 0, binding = 6) coherent buffer OutputStorageBuffer {
     vec4 rotation;
 } output_buffer;
 
-// Added hash table buffer
 struct VoxelHashSlot {
     uint  state;
     ivec4 key;
@@ -61,10 +60,6 @@ layout(std430, set = 0, binding = 8) writeonly buffer OutputPartialBuffer {
     GICPPartial partials[];
 } output_partial_buffer;
 
-// ============================================================
-// Configuration
-// ============================================================
-
 #ifndef VOXEL_MAX_PROBES
 #define VOXEL_MAX_PROBES 128u
 #endif
@@ -74,9 +69,7 @@ layout(std430, set = 0, binding = 8) writeonly buffer OutputPartialBuffer {
 #define VOXEL_SLOT_LOCKED   0xFFFFFFFEu
 #define VOXEL_SLOT_OCCUPIED 0xFFFFFFFCu
 
-// ============================================================
-// Transform helpers
-// ============================================================
+shared GICPPartial scratch[32];
 
 mat3 euler_xyz_to_mat3(vec3 euler)
 {
@@ -110,12 +103,8 @@ mat3 euler_xyz_to_mat3(vec3 euler)
     return rz * ry * rx;
 }
 
-vec3 transform_normal_world(vec3 cloud_rotation,
-                            vec3 cloud_scale,
-                            vec3 local_n)
+vec3 transform_normal_world(mat3 R, vec3 cloud_scale, vec3 local_n)
 {
-    mat3 R = euler_xyz_to_mat3(cloud_rotation);
-
     mat3 S = mat3(1.0);
     S[0][0] = cloud_scale.x;
     S[1][1] = cloud_scale.y;
@@ -127,12 +116,8 @@ vec3 transform_normal_world(vec3 cloud_rotation,
     return normalize(normal_matrix * local_n);
 }
 
-vec3 transform_point_world(vec3 cloud_rotation,
-                           vec3 cloud_scale,
-                           vec3 cloud_position,
-                           vec3 local_p)
+vec3 transform_point_world(mat3 R, vec3 cloud_scale, vec3 cloud_position, vec3 local_p)
 {
-    mat3 R = euler_xyz_to_mat3(cloud_rotation);
     vec3 scaled = local_p * cloud_scale;
     return R * scaled + cloud_position;
 }
@@ -149,10 +134,6 @@ mat3 covariance_from_normal(vec3 raw_n, float eps)
 
     return I - (1.0 - eps) * nnT;
 }
-
-// ============================================================
-// Voxel hash helpers
-// ============================================================
 
 ivec3 voxel_key_from_world_pos(vec3 world_pos, float voxel_size)
 {
@@ -202,7 +183,6 @@ uint voxel_lookup_map_point_id(ivec3 key)
                 return voxel_table.slots[idx].value;
         }
 
-        // Skip locked/unknown states and keep probing.
         idx = (idx + 1u) % slot_count;
     }
 
@@ -237,7 +217,6 @@ uint find_closest_id_hash(
         for (int dx = -layer; dx <= layer; ++dx) {
             for (int dy = -layer; dy <= layer; ++dy) {
                 for (int dz = -layer; dz <= layer; ++dz) {
-                    // Only check the shell of this layer
                     if (layer > 0 &&
                         abs(dx) < layer &&
                         abs(dy) < layer &&
@@ -286,10 +265,6 @@ uint find_closest_id_hash(
     return min_id;
 }
 
-// ============================================================
-// Math helpers
-// ============================================================
-
 mat3 skew_matrix(vec3 v)
 {
     return mat3(
@@ -315,266 +290,46 @@ void add_vec3_block(inout double g[6], int row0, vec3 v)
     }
 }
 
-bool solve_6x6(in double H_in[6][6], in double g_in[6], out double delta_out[6])
+void add_to_first(inout GICPPartial a, in GICPPartial b)
 {
-    const double EPS = double(1.0e-12);
-
-    double a[6][7];
-
-    for (int r = 0; r < 6; r++) {
-        for (int c = 0; c < 6; c++) {
-            a[r][c] = H_in[r][c];
-        }
-        a[r][6] = g_in[r];
-    }
-
-    for (int col = 0; col < 6; col++) {
-        int pivot_row = col;
-        double max_abs = abs(a[col][col]);
-
-        for (int r = col + 1; r < 6; r++) {
-            double v = abs(a[r][col]);
-            if (v > max_abs) {
-                max_abs = v;
-                pivot_row = r;
-            }
-        }
-
-        if (max_abs < EPS)
-            return false;
-
-        if (pivot_row != col) {
-            for (int c = col; c < 7; c++) {
-                double tmp = a[col][c];
-                a[col][c] = a[pivot_row][c];
-                a[pivot_row][c] = tmp;
-            }
-        }
-
-        for (int r = col + 1; r < 6; r++) {
-            double factor = a[r][col] / a[col][col];
-
-            for (int c = col; c < 7; c++) {
-                a[r][c] -= factor * a[col][c];
-            }
+    for (int r = 0; r < 6; ++r) {
+        a.g[r] += b.g[r];
+        for (int c = 0; c < 6; ++c) {
+            a.H[r][c] += b.H[r][c];
         }
     }
-
-    for (int r = 5; r >= 0; r--) {
-        double sum = a[r][6];
-
-        for (int c = r + 1; c < 6; c++) {
-            sum -= a[r][c] * delta_out[c];
-        }
-
-        if (abs(a[r][r]) < EPS)
-            return false;
-
-        delta_out[r] = sum / a[r][r];
-    }
-
-    return true;
+    a.total_weighted_sq_error += b.total_weighted_sq_error;
+    a.valid_count += b.valid_count;
 }
 
-mat3 omega_to_mat3(vec3 omega)
+GICPPartial zero_partial()
 {
-    float theta = length(omega);
-
-    if (theta < 1e-12)
-        return mat3(1.0);
-
-    vec3 axis = omega / theta;
-    mat3 K = skew_matrix(axis);
-
-    return mat3(1.0) + sin(theta) * K + (1.0 - cos(theta)) * (K * K);
+    GICPPartial p;
+    for (int r = 0; r < 6; ++r) {
+        p.g[r] = 0.0;
+        for (int c = 0; c < 6; ++c) {
+            p.H[r][c] = 0.0;
+        }
+    }
+    p.total_weighted_sq_error = 0.0;
+    p.valid_count = 0u;
+    return p;
 }
 
-vec3 mat3_to_euler_xyz(mat3 R)
+GICPPartial get_gicp_partial(uint source_point_id, mat3 R_src, vec3 source_position, vec3 source_scale)
 {
-    const float EPS = 1e-6;
-    const float HALF_PI = 1.57079632679;
-
-    float x, y, z;
-
-    float sy = clamp(-R[0][2], -1.0, 1.0);
-
-    if (sy >= 1.0 - EPS) {
-        y = HALF_PI;
-        z = 0.0;
-        x = atan(R[1][0], R[1][1]);
-    }
-    else if (sy <= -1.0 + EPS) {
-        y = -HALF_PI;
-        z = 0.0;
-        x = atan(-R[1][0], R[1][1]);
-    }
-    else {
-        y = asin(sy);
-        x = atan(R[1][2], R[2][2]);
-        z = atan(R[0][1], R[0][0]);
-    }
-
-    return vec3(x, y, z);
-}
-
-// ============================================================
-// GICP step
-// ============================================================
-
-double step()
-{
-    const float max_corr_dist    = 10.0;
+    const float max_corr_dist    = 5.0;
     const float max_corr_dist_sq = max_corr_dist * max_corr_dist;
-    const float max_rot          = radians(5.0);
-    const float max_trans        = 5.0;
     const float gicp_eps         = 1e-3;
     const float min_normal_dot   = -1.0;
-    const vec3  source_scale     = vec3(1.0);
 
-    vec3 source_position = ubo.position.xyz;
-    vec3 source_rotation = ubo.rotation.xyz;
+    GICPPartial partial = zero_partial();
 
-    double H[6][6];
-    double g[6];
-
-    for (int r = 0; r < 6; ++r) {
-        g[r] = 0.0;
-        for (int c = 0; c < 6; ++c) {
-            H[r][c] = 0.0;
-        }
-    }
-
-    double total_weighted_sq_error = 0.0;
-    int valid_count = 0;
-
-    for (uint i = 0u; i < ubo.num_source_points; ++i) {
-        vec3 p_local     = source_point_buffer.points[i].position.xyz;
-        vec3 n_src_local = source_normal_buffer.normals[i].xyz;
-
-        vec3 x = transform_point_world(source_rotation, source_scale, source_position, p_local);
-        vec3 n_src_world = transform_normal_world(source_rotation, source_scale, n_src_local);
-
-        if (dot(n_src_world, n_src_world) < 1e-12)
-            continue;
-
-        uint target_id = find_closest_id_hash(
-            x,
-            vec4(n_src_world, 0.0),
-            max_corr_dist_sq,
-            max_corr_dist,
-            min_normal_dot
-        );
-
-        if (target_id == VOXEL_INVALID_ID)
-            continue;
-
-        vec3 q = map_point_buffer.points[target_id].position.xyz;
-        vec3 n_tgt_world = map_normal_buffer.normals[target_id].xyz;
-
-        mat3 C_A = covariance_from_normal(n_src_world, gicp_eps);
-        mat3 C_B = covariance_from_normal(n_tgt_world, gicp_eps);
-
-        mat3 Sigma = C_A + C_B;
-        mat3 M = inverse(Sigma);
-
-        vec3 d = q - x;
-        mat3 B = skew_matrix(x);
-
-        mat3 H00 = transpose(B) * M * B;
-        mat3 H01 = -transpose(B) * M;
-        mat3 H10 = -M * B;
-        mat3 H11 = M;
-
-        vec3 g0 = -transpose(B) * M * d;
-        vec3 g1 = M * d;
-
-        add_mat3_block(H, 0, 0, H00);
-        add_mat3_block(H, 0, 3, H01);
-        add_mat3_block(H, 3, 0, H10);
-        add_mat3_block(H, 3, 3, H11);
-
-        add_vec3_block(g, 0, g0);
-        add_vec3_block(g, 3, g1);
-
-        total_weighted_sq_error += double(dot(d, M * d));
-        valid_count++;
-    }
-
-    if (valid_count < 6)
-        return -1.0;
-
-    double rmse = sqrt(total_weighted_sq_error / double(valid_count));
-
-    const double lambda = 1e-6;
-    for (int i = 0; i < 6; ++i) {
-        H[i][i] += lambda;
-    }
-
-    double delta[6];
-    for (int i = 0; i < 6; ++i)
-        delta[i] = 0.0;
-
-    if (!solve_6x6(H, g, delta))
-        return -1.0;
-
-    vec3 omega = vec3(float(delta[0]), float(delta[1]), float(delta[2]));
-    vec3 v     = vec3(float(delta[3]), float(delta[4]), float(delta[5]));
-
-    float omega_len = length(omega);
-    if (omega_len > max_rot)
-        omega *= max_rot / omega_len;
-
-    float v_len = length(v);
-    if (v_len > max_trans)
-        v *= max_trans / v_len;
-
-    mat3 dR = omega_to_mat3(omega);
-
-    mat3 R_src     = euler_xyz_to_mat3(source_rotation);
-    mat3 R_src_new = dR * R_src;
-    vec3 t_src_new = dR * source_position + v;
-
-    output_buffer.position = vec4(t_src_new, float(rmse));
-    output_buffer.rotation = vec4(mat3_to_euler_xyz(R_src_new), 0.0);
-
-    return rmse;
-}
-
-GICPPartial get_gicp_partial(uint source_point_id)
-{
-    const float max_corr_dist    = 10.0;
-    const float max_corr_dist_sq = max_corr_dist * max_corr_dist;
-    const float max_rot          = radians(5.0);
-    const float max_trans        = 5.0;
-    const float gicp_eps         = 1e-3;
-    const float min_normal_dot   = -1.0;
-    const vec3  source_scale     = vec3(1.0);
-
-    vec3 source_position = ubo.position.xyz;
-    vec3 source_rotation = ubo.rotation.xyz;
-
-    // double H[6][6];
-    // double g[6];
-
-    GICPPartial partial;
-
-    for (int r = 0; r < 6; ++r) {
-        partial.g[r] = 0.0;
-        for (int c = 0; c < 6; ++c) {
-            partial.H[r][c] = 0.0;
-        }
-    }
-
-    partial.total_weighted_sq_error = 0.0;
-    partial.valid_count = 0;
-    // int valid_count = 0;
-
-    // for (uint i = 0u; i < ubo.num_source_points; ++i) {
     vec3 p_local     = source_point_buffer.points[source_point_id].position.xyz;
     vec3 n_src_local = source_normal_buffer.normals[source_point_id].xyz;
 
-    vec3 x = transform_point_world(source_rotation, source_scale, source_position, p_local);
-    vec3 n_src_world = transform_normal_world(source_rotation, source_scale, n_src_local);
+    vec3 x = transform_point_world(R_src, source_scale, source_position, p_local);
+    vec3 n_src_world = transform_normal_world(R_src, source_scale, n_src_local);
 
     if (dot(n_src_world, n_src_world) < 1e-12)
         return partial;
@@ -618,63 +373,39 @@ GICPPartial get_gicp_partial(uint source_point_id)
     add_vec3_block(partial.g, 0, g0);
     add_vec3_block(partial.g, 3, g1);
 
-    partial.total_weighted_sq_error += double(dot(d, M * d));
-    partial.valid_count = 1;
+    partial.total_weighted_sq_error = double(dot(d, M * d));
+    partial.valid_count = 1u;
 
     return partial;
-
-
-
-    //     valid_count++;
-    // }
-
-    // if (valid_count < 6)
-    //     return -1.0;
-
-    // double rmse = sqrt(total_weighted_sq_error / double(valid_count));
-
-    // const double lambda = 1e-6;
-    // for (int i = 0; i < 6; ++i) {
-    //     H[i][i] += lambda;
-    // }
-
-    // double delta[6];
-    // for (int i = 0; i < 6; ++i)
-    //     delta[i] = 0.0;
-
-    // if (!solve_6x6(H, g, delta))
-    //     return -1.0;
-
-    // vec3 omega = vec3(float(delta[0]), float(delta[1]), float(delta[2]));
-    // vec3 v     = vec3(float(delta[3]), float(delta[4]), float(delta[5]));
-
-    // float omega_len = length(omega);
-    // if (omega_len > max_rot)
-    //     omega *= max_rot / omega_len;
-
-    // float v_len = length(v);
-    // if (v_len > max_trans)
-    //     v *= max_trans / v_len;
-
-    // mat3 dR = omega_to_mat3(omega);
-
-    // mat3 R_src     = euler_xyz_to_mat3(source_rotation);
-    // mat3 R_src_new = dR * R_src;
-    // vec3 t_src_new = dR * source_position + v;
-
-    // output_buffer.position = vec4(t_src_new, float(rmse));
-    // output_buffer.rotation = vec4(mat3_to_euler_xyz(R_src_new), 0.0);
-
 }
 
 void main()
 {
+    uint lid = gl_LocalInvocationID.x;
     uint gid = gl_GlobalInvocationID.x;
-    if (gid >= ubo.num_source_points)
-        return;
-    
-    GICPPartial partial = get_gicp_partial(gid);
+    uint wg  = gl_WorkGroupID.x;
 
-    output_partial_buffer.partials[gid] = partial;
-    // step();
+    vec3 source_position = ubo.position.xyz;
+    vec3 source_rotation = ubo.rotation.xyz;
+    vec3 source_scale    = vec3(1.0);
+    mat3 R_src = euler_xyz_to_mat3(source_rotation);
+
+    if (gid < ubo.num_source_points) {
+        scratch[lid] = get_gicp_partial(gid, R_src, source_position, source_scale);
+    } else {
+        scratch[lid] = zero_partial();
+    }
+
+    barrier();
+
+    for (uint stride = gl_WorkGroupSize.x >> 1; stride > 0; stride >>= 1) {
+        if (lid < stride) {
+            add_to_first(scratch[lid], scratch[lid + stride]);
+        }
+        barrier();
+    }
+
+    if (lid == 0) {
+        output_partial_buffer.partials[wg] = scratch[0];
+    }
 }

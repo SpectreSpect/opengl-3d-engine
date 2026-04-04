@@ -209,8 +209,8 @@ void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_clo
 
     command_buffer.submit_and_wait(compute_queue, fence);
 
-    GICPReductor::GICPPartial result =
-        reductor.reduce(partial_src, partial_dst, source_point_cloud.num_instances);
+    uint32_t partial_count = vulkan_utils::div_up_u32(source_point_cloud.num_instances, 32);
+    GICPReductor::GICPPartial result = reductor.reduce(partial_src, partial_dst, partial_count);
 
     const float max_rot = glm::radians(5.0f);
     const float max_trans = 5.0f;
