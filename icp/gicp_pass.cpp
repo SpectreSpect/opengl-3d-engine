@@ -200,7 +200,7 @@ void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_clo
     descriptor_set_bundle.bind_storage_buffer(7, voxel_point_map.map_hash_table_buffer);
     descriptor_set_bundle.bind_storage_buffer(8, partial_src);
 
-    uint32_t x_groups = vulkan_utils::div_up_u32(source_point_cloud.num_instances, 256);
+    uint32_t x_groups = vulkan_utils::div_up_u32(source_point_cloud.num_instances, 32);
 
     command_buffer.begin();
     command_buffer.bind_pipeline(pipeline);

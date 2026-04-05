@@ -107,13 +107,16 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
 
     get_normals(points, normals);
     remove_invalid_points_and_normals(points, normals);
-    drop_out_points_and_normals(points, normals, 2500);
+    // drop_out_points_and_normals(points, normals, 2500);
 
     remove_points_near_origin(points, normals, 3);
 
     // // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
     point_cloud.create(engine);
     point_cloud.set_points(std::move(points));
+    normal_buffer.create(engine, normals.size() * sizeof(glm::vec4));
+    normal_buffer.update_data(normals.data(), normals.size() * sizeof(glm::vec4));
+
     // point_cloud.get_normals_ssbo(normals, normals_ssbo);
 }
 

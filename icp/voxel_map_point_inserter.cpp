@@ -36,6 +36,7 @@ void VoxelMapPointInserter::insert(VoxelPointMap& voxel_point_map, PointCloud& s
     uniform_data.max_map_point_count = voxel_point_map.max_map_point_count;
     uniform_data.source_point_count = source_point_cloud.num_instances;
     uniform_data.num_hash_table_slots = voxel_point_map.num_hash_table_slots;
+    uniform_data.source_model = source_point_cloud.get_model_matrix();
     uniform_buffer.update_data(&uniform_data, sizeof(InserterUniform));
 
     descriptor_set_bundle.bind_storage_buffer(1, source_point_cloud.get_instance_buffer());

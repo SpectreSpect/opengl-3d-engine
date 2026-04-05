@@ -10,6 +10,7 @@ layout(std140, set = 0, binding = 0) uniform ParamsBuffer {
     uint source_point_count;
     uint max_map_point_count;
     uint num_hash_table_slots;
+    mat4 source_model;
 } params;
 
 layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
@@ -32,10 +33,6 @@ layout(std430, set = 0, binding = 5) buffer MapNormalBuffer {
     vec4 normals[];
 } map_normal_buffer;
 
-// ============================================================
-// Configuration
-// ============================================================
-
 #ifndef VOXEL_MAX_PROBES
 #define VOXEL_MAX_PROBES 128u
 #endif
@@ -44,10 +41,6 @@ layout(std430, set = 0, binding = 5) buffer MapNormalBuffer {
 #define VOXEL_SLOT_EMPTY     0xFFFFFFFFu
 #define VOXEL_SLOT_LOCKED    0xFFFFFFFEu
 #define VOXEL_SLOT_OCCUPIED  0xFFFFFFFCu
-
-// ============================================================
-// Key helpers
-// ============================================================
 
 ivec3 voxel_key_from_world_pos(vec3 world_pos, float voxel_size)
 {
@@ -77,10 +70,6 @@ bool voxel_key_equal(ivec4 stored_key, ivec3 query_key)
     return all(equal(stored_key.xyz, query_key));
 }
 
-// ============================================================
-// Storage
-// ============================================================
-
 struct VoxelHashSlot {
     uint  state;
     ivec4 key;
@@ -91,22 +80,12 @@ layout(std430, set = 0, binding = 6) coherent buffer VoxelHashTableBuffer {
     VoxelHashSlot slots[];
 } voxel_table;
 
-// ============================================================
-// Insert into empty-or-existing voxel map
-// ============================================================
-//
-// Assumptions:
-// - The table was reset before this dispatch
-// - Reset sets every slot.state = VOXEL_SLOT_EMPTY
-// - This shader only builds the map; it does not delete from it
-//
-// Behavior:
-// - First thread that claims a voxel inserts the point and normal
-// - Later threads landing in same voxel do nothing
-//
-
-bool voxel_insert_point_and_normal(ivec3 key, uint source_point_id)
-{
+bool voxel_insert_point_and_normal(
+    ivec3 key,
+    vec4 world_position,
+    vec4 world_normal,
+    vec4 color
+) {
     uint slot_count = params.num_hash_table_slots;
     if (slot_count == 0u)
         return false;
@@ -147,8 +126,9 @@ bool voxel_insert_point_and_normal(ivec3 key, uint source_point_id)
                 voxel_table.slots[idx].key = ivec4(key, 0);
                 voxel_table.slots[idx].value = map_point_id;
 
-                map_point_buffer.points[map_point_id] = source_point_buffer.points[source_point_id];
-                map_normal_buffer.normals[map_point_id] = source_normal_buffer.normals[source_point_id];
+                map_point_buffer.points[map_point_id].position = world_position;
+                map_point_buffer.points[map_point_id].color = color;
+                map_normal_buffer.normals[map_point_id] = world_normal;
 
                 memoryBarrierBuffer();
                 atomicExchange(voxel_table.slots[idx].state, VOXEL_SLOT_OCCUPIED);
@@ -177,10 +157,6 @@ bool voxel_insert_point_and_normal(ivec3 key, uint source_point_id)
     return false;
 }
 
-// ============================================================
-// Main
-// ============================================================
-
 void main()
 {
     uint source_point_id = gl_GlobalInvocationID.x;
@@ -189,8 +165,20 @@ void main()
         return;
 
     float voxel_size = 1.0;
-    vec3 source_pos = source_point_buffer.points[source_point_id].position.xyz;
-    ivec3 key = voxel_key_from_world_pos(source_pos, voxel_size);
 
-    voxel_insert_point_and_normal(key, source_point_id);
+    vec3 p_local = source_point_buffer.points[source_point_id].position.xyz;
+    vec3 p_world = (params.source_model * vec4(p_local, 1.0)).xyz;
+
+    mat3 normal_matrix = transpose(inverse(mat3(params.source_model)));
+    vec3 n_local = source_normal_buffer.normals[source_point_id].xyz;
+    vec3 n_world = normalize(normal_matrix * n_local);
+
+    ivec3 key = voxel_key_from_world_pos(p_world, voxel_size);
+
+    voxel_insert_point_and_normal(
+        key,
+        vec4(p_world, 1.0),
+        vec4(n_world, 0.0),
+        source_point_buffer.points[source_point_id].color
+    );
 }

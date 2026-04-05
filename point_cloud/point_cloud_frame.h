@@ -15,7 +15,7 @@ public:
     PointCloud point_cloud;
     std::vector<glm::vec4> normals;
     std::vector<PointInstance> points;
-    VideoBuffer normals_ssbo;
+    VideoBuffer normal_buffer;
 
     glm::vec3 car_pos;
     glm::vec3 car_rotation;

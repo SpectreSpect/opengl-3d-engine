@@ -686,6 +686,271 @@ void print_vec4(glm::vec4 input_vec) {
     std::cout << input_vec.x << " " << input_vec.y << " " << input_vec.z << " " << input_vec.w;
 }
 
+#include <vector>
+#include <glm/glm.hpp>
+#include <cmath>
+#include <random>
+
+#include <random>
+
+#include <vector>
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <cmath>
+#include <cstdint>
+
+
+static void push_point_with_normal(
+    std::vector<PointInstance>& points,
+    std::vector<glm::vec4>& normals,
+    const glm::vec3& p,
+    const glm::vec3& n,
+    const glm::vec4& color
+) {
+    PointInstance point;
+    point.pos = glm::vec4(p, 1.0f);
+    point.color = color;
+    points.push_back(point);
+    normals.push_back(glm::vec4(glm::normalize(n), 0.0f));
+}
+
+static float lerp_f(float a, float b, float t) {
+    return a + (b - a) * t;
+}
+
+static float smooth_f(float t) {
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static uint32_t hash_u32(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+
+static float hash_2d(int x, int y, uint32_t seed) {
+    uint32_t h = seed;
+    h ^= hash_u32(static_cast<uint32_t>(x) + 0x9e3779b9U);
+    h ^= hash_u32(static_cast<uint32_t>(y) + 0x85ebca6bU);
+    h = hash_u32(h);
+    return float(h) / float(0xFFFFFFFFu);
+}
+
+static float value_noise_2d(const glm::vec2& p, uint32_t seed) {
+    int x0 = int(std::floor(p.x));
+    int y0 = int(std::floor(p.y));
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+
+    float tx = p.x - float(x0);
+    float ty = p.y - float(y0);
+
+    float sx = smooth_f(tx);
+    float sy = smooth_f(ty);
+
+    float v00 = hash_2d(x0, y0, seed);
+    float v10 = hash_2d(x1, y0, seed);
+    float v01 = hash_2d(x0, y1, seed);
+    float v11 = hash_2d(x1, y1, seed);
+
+    float a = lerp_f(v00, v10, sx);
+    float b = lerp_f(v01, v11, sx);
+    return lerp_f(a, b, sy);
+}
+
+static float fbm_2d(glm::vec2 p, uint32_t seed) {
+    float value = 0.0f;
+    float amplitude = 0.5f;
+    float frequency = 1.0f;
+
+    for (int i = 0; i < 5; ++i) {
+        value += amplitude * value_noise_2d(p * frequency, seed + uint32_t(i * 37));
+        frequency *= 2.03f;
+        amplitude *= 0.5f;
+    }
+
+    return value;
+}
+
+static float non_repeating_wave(const glm::vec2& uv, float wave_height, uint32_t seed) {
+    glm::vec2 q = uv * 0.045f;
+
+    glm::vec2 warp(
+        fbm_2d(q + glm::vec2(17.3f, -9.1f), seed + 11u),
+        fbm_2d(q + glm::vec2(-4.7f, 23.8f), seed + 29u)
+    );
+
+    q += 1.75f * (warp - glm::vec2(0.5f));
+
+    float n1 = fbm_2d(q, seed + 101u);
+    float n2 = fbm_2d(q * 1.91f + glm::vec2(8.2f, -3.7f), seed + 211u);
+
+    float s1 = std::sin(uv.x * 0.173f + uv.y * 0.117f + 0.3f);
+    float s2 = std::sin(uv.x * 0.071f - uv.y * 0.191f + 1.7f);
+    float s3 = std::sin(std::sqrt(uv.x * uv.x + uv.y * uv.y) * 0.113f + 0.8f);
+
+    float noise_part = ((n1 * 2.0f - 1.0f) * 0.65f) + ((n2 * 2.0f - 1.0f) * 0.35f);
+    float wave_part = 0.45f * s1 + 0.35f * s2 + 0.20f * s3;
+
+    return wave_height * (0.75f * noise_part + 0.25f * wave_part);
+}
+
+static void add_wavy_surface(
+    std::vector<PointInstance>& target_points,
+    std::vector<glm::vec4>& target_normals,
+    std::vector<PointInstance>& source_points,
+    std::vector<glm::vec4>& source_normals,
+    const glm::vec3& origin,
+    const glm::vec3& axis_u,
+    const glm::vec3& axis_v,
+    const glm::vec3& base_normal,
+    float u_max,
+    float v_max,
+    float step,
+    float wave_height,
+    uint32_t seed,
+    const glm::vec4& target_color,
+    const glm::vec4& source_color
+) {
+    const float eps = step * 0.5f;
+
+    for (float u = 0.0f; u <= u_max; u += step) {
+        for (float v = 0.0f; v <= v_max; v += step) {
+            glm::vec2 uv(u, v);
+
+            float d  = non_repeating_wave(uv, wave_height, seed);
+            float du = non_repeating_wave(glm::vec2(u + eps, v), wave_height, seed) - d;
+            float dv = non_repeating_wave(glm::vec2(u, v + eps), wave_height, seed) - d;
+
+            glm::vec3 p = origin + axis_u * u + axis_v * v + base_normal * d;
+
+            glm::vec3 tangent_u = axis_u + base_normal * (du / eps);
+            glm::vec3 tangent_v = axis_v + base_normal * (dv / eps);
+
+            glm::vec3 n = glm::normalize(glm::cross(tangent_u, tangent_v));
+            if (glm::dot(n, base_normal) < 0.0f) {
+                n = -n;
+            }
+
+            push_point_with_normal(target_points, target_normals, p, n, target_color);
+            push_point_with_normal(source_points, source_normals, p, n, source_color);
+        }
+    }
+}
+
+void generate_half_box_with_sphere(
+    std::vector<PointInstance>& target_points,
+    std::vector<PointInstance>& source_points,
+    std::vector<glm::vec4>& target_normals,
+    std::vector<glm::vec4>& source_normals,
+    float wave_height = 3.0f
+) {
+    target_points.clear();
+    source_points.clear();
+    target_normals.clear();
+    source_normals.clear();
+
+    const float box_size = 300.0f;
+    const float wall_height = box_size * 0.5f;
+    const float step = 2.0f;
+
+    const glm::vec4 target_box_color(0, 0, 1, 1);
+    const glm::vec4 source_box_color(1, 0, 0, 1);
+
+    const glm::vec4 target_sphere_color(0, 1, 1, 1);
+    const glm::vec4 source_sphere_color(1, 1, 0, 1);
+
+    // Floor
+    // add_wavy_surface(
+    //     target_points, target_normals,
+    //     source_points, source_normals,
+    //     glm::vec3(0.0f, 0.0f, 0.0f),
+    //     glm::vec3(1.0f, 0.0f, 0.0f),
+    //     glm::vec3(0.0f, 0.0f, 1.0f),
+    //     glm::vec3(0.0f, 1.0f, 0.0f),
+    //     box_size, box_size, step, wave_height, 1001u,
+    //     target_box_color, source_box_color
+    // );
+
+    // // Left wall (x = 0, inward normal +X)
+    // add_wavy_surface(
+    //     target_points, target_normals,
+    //     source_points, source_normals,
+    //     glm::vec3(0.0f, 0.0f, 0.0f),
+    //     glm::vec3(0.0f, 1.0f, 0.0f),
+    //     glm::vec3(0.0f, 0.0f, 1.0f),
+    //     glm::vec3(1.0f, 0.0f, 0.0f),
+    //     wall_height, box_size, step, wave_height, 2001u,
+    //     target_box_color, source_box_color
+    // );
+
+    // // Right wall (x = box_size, inward normal -X)
+    // add_wavy_surface(
+    //     target_points, target_normals,
+    //     source_points, source_normals,
+    //     glm::vec3(box_size, 0.0f, 0.0f),
+    //     glm::vec3(0.0f, 1.0f, 0.0f),
+    //     glm::vec3(0.0f, 0.0f, 1.0f),
+    //     glm::vec3(-1.0f, 0.0f, 0.0f),
+    //     wall_height, box_size, step, wave_height, 3001u,
+    //     target_box_color, source_box_color
+    // );
+
+    // // Front wall (z = 0, inward normal +Z)
+    // add_wavy_surface(
+    //     target_points, target_normals,
+    //     source_points, source_normals,
+    //     glm::vec3(0.0f, 0.0f, 0.0f),
+    //     glm::vec3(1.0f, 0.0f, 0.0f),
+    //     glm::vec3(0.0f, 1.0f, 0.0f),
+    //     glm::vec3(0.0f, 0.0f, 1.0f),
+    //     box_size, wall_height, step, wave_height, 4001u,
+    //     target_box_color, source_box_color
+    // );
+
+    // // Back wall (z = box_size, inward normal -Z)
+    // add_wavy_surface(
+    //     target_points, target_normals,
+    //     source_points, source_normals,
+    //     glm::vec3(0.0f, 0.0f, box_size),
+    //     glm::vec3(1.0f, 0.0f, 0.0f),
+    //     glm::vec3(0.0f, 1.0f, 0.0f),
+    //     glm::vec3(0.0f, 0.0f, -1.0f),
+    //     box_size, wall_height, step, wave_height, 5001u,
+    //     target_box_color, source_box_color
+    // );
+
+    // Sphere inside
+    const glm::vec3 sphere_center(box_size * 0.5f, wall_height * 0.5f, box_size * 0.5f);
+    const float sphere_radius = box_size * 0.18f;
+
+    const int lat_steps = 48;
+    const int lon_steps = 96;
+
+    for (int lat = 0; lat <= lat_steps; ++lat) {
+        float v = float(lat) / float(lat_steps);
+        float theta = glm::pi<float>() * v;
+
+        for (int lon = 0; lon < lon_steps; ++lon) {
+            float u = float(lon) / float(lon_steps);
+            float phi = 2.0f * glm::pi<float>() * u;
+
+            glm::vec3 n;
+            n.x = std::sin(theta) * std::cos(phi);
+            n.y = std::cos(theta);
+            n.z = std::sin(theta) * std::sin(phi);
+
+            glm::vec3 p = sphere_center + sphere_radius * n;
+
+            push_point_with_normal(target_points, target_normals, p, n, target_sphere_color);
+            push_point_with_normal(source_points, source_normals, p, n, source_sphere_color);
+        }
+    }
+}
+
 
 int main() {
     VulkanEngine engine;
@@ -824,61 +1089,65 @@ int main() {
     std::vector<glm::vec4> target_normals{};
     std::vector<glm::vec4> source_normals{};
 
-    for (int x = 0; x < 316; x++)
-        for (int z = 0; z < 316; z++) {
-            PointInstance point;
-            glm::vec4 normal = glm::vec4(0, 1, 0, 1);
+    // for (int x = 0; x < 316; x++)
+    //     for (int z = 0; z < 316; z++) {
+    //         PointInstance point;
+    //         glm::vec4 normal = glm::vec4(0, 1, 0, 1);
 
-            point.pos = glm::vec4(x, 0, z, 1.0f);
-            point.color = glm::vec4(0, 0, 1, 1);
+    //         point.pos = glm::vec4(x, 0, z, 1.0f);
+    //         point.color = glm::vec4(0, 0, 1, 1);
 
-            target_points.push_back(point);
+    //         target_points.push_back(point);
 
-            point.color = glm::vec4(1, 0, 0, 1);
+    //         point.color = glm::vec4(1, 0, 0, 1);
 
-            source_points.push_back(point);
+    //         source_points.push_back(point);
             
-            target_normals.push_back(normal);
-            source_normals.push_back(normal);
-        }
+    //         target_normals.push_back(normal);
+    //         source_normals.push_back(normal);
+    //     }
+
+    // generate_half_box_with_sphere(target_points, source_points, target_normals, source_normals, 30.0f);
+
+
     
-    PointCloudFrame source_point_cloud_frame;
-    PointCloudFrame target_point_cloud_frame;
+    // PointCloudFrame source_point_cloud_frame;
+    // PointCloudFrame target_point_cloud_frame;
 
-    target_point_cloud_frame.points = target_points;
-    source_point_cloud_frame.points = source_points;
+    // target_point_cloud_frame.points = target_points;
+    // source_point_cloud_frame.points = source_points;
 
-    target_point_cloud_frame.normals = target_normals;
-    source_point_cloud_frame.normals = source_normals;
+    // target_point_cloud_frame.normals = target_normals;
+    // source_point_cloud_frame.normals = source_normals;
 
-    target_point_cloud_frame.point_cloud.create(engine);
-    source_point_cloud_frame.point_cloud.create(engine);
+    // target_point_cloud_frame.point_cloud.create(engine);
+    // source_point_cloud_frame.point_cloud.create(engine);
 
-    target_point_cloud_frame.point_cloud.set_points(target_points);
-    source_point_cloud_frame.point_cloud.set_points(source_points);
+    // target_point_cloud_frame.point_cloud.set_points(target_points);
+    // source_point_cloud_frame.point_cloud.set_points(source_points);
 
-    // PointCloudVideo point_cloud_video = PointCloudVideo();
-    // point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
+    PointCloudVideo point_cloud_video = PointCloudVideo();
+    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 5);
 
-    // PointCloudFrame& source_point_cloud_frame = point_cloud_video.frames[0];
-    // PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[1];
+    PointCloudFrame& source_point_cloud_frame = point_cloud_video.frames[0];
+    PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[1];
 
     source_point_cloud_frame.point_cloud.position += glm::vec3(3, 3, 0);
-    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0.2, 0, 0);
+    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0.2f, 0, 0);
 
     for (int i = 0; i < source_point_cloud_frame.points.size(); i++) {
         source_point_cloud_frame.points[i].color = glm::vec4(1, 0, 0, 1);
     }
     source_point_cloud_frame.point_cloud.set_points(source_point_cloud_frame.points);
 
-    VideoBuffer target_normal_buffer;
-    VideoBuffer source_normal_buffer;
+    // VideoBuffer target_normal_buffer;
+    // VideoBuffer source_normal_buffer;
 
-    target_normal_buffer.create(engine, target_normals.size() * sizeof(glm::vec4));
-    source_normal_buffer.create(engine, source_normals.size() * sizeof(glm::vec4));
+    // target_normal_buffer.create(engine, target_normals.size() * sizeof(glm::vec4));
+    // source_normal_buffer.create(engine, source_normals.size() * sizeof(glm::vec4));
 
-    target_normal_buffer.update_data(target_normals.data(), target_normals.size() * sizeof(glm::vec4));
-    source_normal_buffer.update_data(source_normals.data(), source_normals.size() * sizeof(glm::vec4));
+    // target_normal_buffer.update_data(target_normals.data(), target_normals.size() * sizeof(glm::vec4));
+    // source_normal_buffer.update_data(source_normals.data(), source_normals.size() * sizeof(glm::vec4));
 
     VoxelPointMap voxel_point_map;
     voxel_point_map.create(engine, 1500000, 1500000);
@@ -891,7 +1160,10 @@ int main() {
     VoxelMapPointInserter voxel_map_point_inserter;
     voxel_map_point_inserter.create(engine);
 
-    voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud, target_normal_buffer);
+    target_point_cloud_frame.point_cloud.position -= glm::vec3(0, 0, 0);
+    target_point_cloud_frame.point_cloud.rotation = glm::vec3(0.0f, 0, 0);
+
+    voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud, target_point_cloud_frame.normal_buffer);
 
     GICPPass gicp_pass;
     gicp_pass.create(engine);
@@ -946,7 +1218,7 @@ int main() {
             // GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
             // GICP::step_test(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
             // gicp_pass.step(source_point_cloud_frame.point_cloud, target_point_cloud_frame.point_cloud, source_normal_buffer, target_normal_buffer);
-            gicp_pass.step(voxel_point_map, source_point_cloud_frame.point_cloud, source_normal_buffer);
+            gicp_pass.step(voxel_point_map, source_point_cloud_frame.point_cloud, source_point_cloud_frame.normal_buffer);
 
             std::cout << "position: (";
             print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.position, 1.0f));

@@ -20,7 +20,11 @@ public:
         uint32_t source_point_count;
         uint32_t max_map_point_count;
         uint32_t num_hash_table_slots;
+        uint32_t _pad0;
+        alignas(16) glm::mat4 source_model;
     };
+
+    static_assert(sizeof(InserterUniform) == 80);
 
     VoxelMapPointInserter() = default;
     void create(VulkanEngine& engine);
