@@ -177,7 +177,7 @@ void GICPPass::create(VulkanEngine& engine) {
     reductor = GICPReductor(engine);
 }
 
-void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer) {
+double GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer) {
     if (!this->engine) {
         throw std::runtime_error("engine was null");
     }
@@ -217,7 +217,7 @@ void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_clo
 
     if (result.valid_count < 6) {
         std::cout << "valid_count was less than 6" << std::endl;
-        return;
+        return 99999;
     }
 
     double rmse = std::sqrt(result.total_weighted_sq_error / double(result.valid_count));
@@ -234,7 +234,7 @@ void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_clo
 
     if (!solve_6x6(result.H, result.g, delta)) {
         std::cout << "solve_6x6 failed" << std::endl;
-        return;
+        return 9999;
     }
 
     glm::vec3 omega = glm::vec3((float)delta[0], (float)delta[1], (float)delta[2]);
@@ -260,9 +260,27 @@ void GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_clo
     source_point_cloud.position = t_src_new;
     source_point_cloud.rotation = mat3_to_euler_xyz(R_src_new);
 
-    std::cout << "valid_count = " << result.valid_count
-              << ", weighted_rmse = " << rmse
-              << ", |omega| = " << glm::length(omega)
-              << ", |v| = " << glm::length(v)
-              << "\n";
+    // std::cout << "valid_count = " << result.valid_count
+    //           << ", weighted_rmse = " << rmse
+    //           << ", |omega| = " << glm::length(omega)
+    //           << ", |v| = " << glm::length(v)
+    //           << "\n";
+
+    return rmse;
+}
+
+
+double GICPPass::fit(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer, uint32_t max_steps) {
+    double rmse = 0;
+    for (int i = 0; i < max_steps; i++) {
+        rmse = step(voxel_point_map, source_point_cloud, source_normal_buffer);
+        if (rmse < 0.5) {
+            std::cout << "BREAK" << std::endl;
+            break;
+        }
+            
+    }
+    std::cout << rmse << std::endl;
+
+    return rmse;
 }

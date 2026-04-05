@@ -164,7 +164,7 @@ void main()
     if (source_point_id >= params.source_point_count)
         return;
 
-    float voxel_size = 1.0;
+    float voxel_size = 0.5;
 
     vec3 p_local = source_point_buffer.points[source_point_id].position.xyz;
     vec3 p_world = (params.source_model * vec4(p_local, 1.0)).xyz;

@@ -24,6 +24,7 @@ public:
     };
 
     struct PointCloudPushConstants {
+        glm::vec4 color;
         glm::mat4 model;
         float point_size_px;
         float point_size_world;

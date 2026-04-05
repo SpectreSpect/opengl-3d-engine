@@ -35,7 +35,8 @@ public:
     GICPPass() = default;
 
     void create(VulkanEngine& engine);
-    void step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer);
+    double step(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer);
+    double fit(VoxelPointMap& voxel_point_map, PointCloud& source_point_cloud, VideoBuffer& source_normal_buffer, uint32_t max_steps);
 
 private:
     static glm::mat3 euler_xyz_to_mat3(const glm::vec3& euler);

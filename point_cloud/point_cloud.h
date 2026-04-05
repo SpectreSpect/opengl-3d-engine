@@ -36,6 +36,7 @@ public:
     uint32_t point_size_px = 2;
     uint32_t point_size_world = 2;
     uint32_t screen_space_size = 1;
+    glm::vec4 color = {1, 1, 1, 1};
     // DescriptorSetBundle descriptor_set_bundle;
 
     PointCloud() = default;

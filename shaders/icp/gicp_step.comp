@@ -199,7 +199,7 @@ uint find_closest_id_hash(
     if (map_point_count_buffer.count == 0u)
         return VOXEL_INVALID_ID;
 
-    float voxel_size = 1.0;
+    float voxel_size = 0.5;
     ivec3 base_voxel = voxel_key_from_world_pos(position, voxel_size);
 
     int num_layers = int(ceil(max_corr_dist / voxel_size));

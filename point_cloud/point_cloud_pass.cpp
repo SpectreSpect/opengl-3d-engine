@@ -72,6 +72,7 @@ void PointCloudPass::render(PointCloud& point_cloud, Camera& camera) {
     pc.point_size_px = point_cloud.point_size_px;
     pc.point_size_world = point_cloud.point_size_world;
     pc.screen_space_size = point_cloud.screen_space_size;
+    pc.color = point_cloud.color;
 
     vkCmdPushConstants(
         engine->currentCommandBuffer,

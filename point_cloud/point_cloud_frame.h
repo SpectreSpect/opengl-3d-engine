@@ -19,6 +19,8 @@ public:
 
     glm::vec3 car_pos;
     glm::vec3 car_rotation;
+    glm::vec3 position_change;
+    glm::vec3 rotation_change;
 
     PointCloudFrame() = default;
     PointCloudFrame(VulkanEngine& engine, const std::filesystem::path& path);

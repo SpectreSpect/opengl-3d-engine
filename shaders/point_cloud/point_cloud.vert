@@ -32,6 +32,7 @@ layout(std140, set = 0, binding = 0) uniform PBRUniformBuffer {
 } ubo;
 
 layout(push_constant) uniform ObjectPushConstants {
+    vec4 color;
     mat4 model;
     float point_size_px;
     float point_size_world;
@@ -41,7 +42,8 @@ layout(push_constant) uniform ObjectPushConstants {
 
 void main() {
     vLocal = aCorner;
-    vColor = aColor;
+    // vColor = aColor;
+    vColor = pc.color;
 
     vec4 centerW4 = pc.model * vec4(aPos.xyz, 1.0);
 

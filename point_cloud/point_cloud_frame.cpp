@@ -107,7 +107,7 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
 
     get_normals(points, normals);
     remove_invalid_points_and_normals(points, normals);
-    // drop_out_points_and_normals(points, normals, 2500);
+    drop_out_points_and_normals(points, normals, 10000);
 
     remove_points_near_origin(points, normals, 3);
 
