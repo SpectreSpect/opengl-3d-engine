@@ -567,8 +567,8 @@ int main() {
 
         // point_cloud_video.update(delta_time);
         // point_cloud_pass.render(point_cloud_video.frames[point_cloud_video.current_frame].point_cloud, camera);
-        point_cloud_pass.render(original_scan, camera);
-        point_cloud_pass.render(fitted_scan, camera);
+        // point_cloud_pass.render(original_scan, camera);
+        // point_cloud_pass.render(fitted_scan, camera);
         
 
         bool skip = false;

@@ -21,7 +21,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
     uint num_hash_table_slots;
 } ubo;
 
-layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
+// layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
+layout(std430, set = 0, binding = 1) buffer SourcePointBuffer {
     PointInstance points[];
 } source_point_buffer;
 
@@ -316,6 +317,17 @@ GICPPartial zero_partial()
     return p;
 }
 
+vec3 heatmap(float t)
+{
+    t = clamp(t, 0.0, 1.0);
+
+    float r = clamp(1.5 - abs(4.0 * t - 3.0), 0.0, 1.0);
+    float g = clamp(1.5 - abs(4.0 * t - 2.0), 0.0, 1.0);
+    float b = clamp(1.5 - abs(4.0 * t - 1.0), 0.0, 1.0);
+
+    return vec3(r, g, b);
+}
+
 GICPPartial get_gicp_partial(uint source_point_id, mat3 R_src, vec3 source_position, vec3 source_scale)
 {
     const float max_corr_dist    = 5.0;
@@ -344,9 +356,13 @@ GICPPartial get_gicp_partial(uint source_point_id, mat3 R_src, vec3 source_posit
 
     if (target_id == VOXEL_INVALID_ID)
         return partial;
+    
+    
 
     vec3 q = map_point_buffer.points[target_id].position.xyz;
     vec3 n_tgt_world = map_normal_buffer.normals[target_id].xyz;
+
+    float dist_to_target = length(x - q);
 
     mat3 C_A = covariance_from_normal(n_src_world, gicp_eps);
     mat3 C_B = covariance_from_normal(n_tgt_world, gicp_eps);
@@ -375,6 +391,11 @@ GICPPartial get_gicp_partial(uint source_point_id, mat3 R_src, vec3 source_posit
 
     partial.total_weighted_sq_error = double(dot(d, M * d));
     partial.valid_count = 1u;
+
+    float t = clamp(0, 1, dist_to_target / 5.0);
+
+
+    source_point_buffer.points[source_point_id].color = vec4(heatmap(t), 1.0);
 
     return partial;
 }
