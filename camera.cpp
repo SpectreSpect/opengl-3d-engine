@@ -1,27 +1,23 @@
 # include "camera.h"
 
+
+Camera::Camera(glm::vec3 pos, glm::vec3 up_vec, float fov_deg)
+{
+    this->position = pos;
+    this->up = up_vec;
+    this->fov = fov_deg;
+    // front = {0.0f, 0.0f, 1.0f};
+    front = {0.0f, 0.0f, -1.0f};
+
+    // create_clusters(clusters, num_clusters, glm::radians(this->fov), 1280.0f / 720.0f, near, far);
+}
+
 glm::mat4 Camera::get_view_matrix() const {
     return glm::lookAt(position, position + front, up);
 }
 
 glm::mat4 Camera::get_projection_matrix(float aspect_ratio) const {
-    return glm::perspective(glm::radians(fov), aspect_ratio, near, far);
+    glm::mat4 proj = glm::perspective(glm::radians(fov), aspect_ratio, near_plane, far_plane);
+    proj[1][1] *= -1.0f;
+    return proj;
 }
-
-// void Camera::processMouseMovement(float xoffset, float yoffset) {
-//     float sensitivity = 0.15f;
-//     xoffset *= sensitivity;
-//     yoffset *= sensitivity;
-
-//     yaw += xoffset;
-//     pitch += yoffset;
-
-//     if (pitch > 89.0f) pitch = 89.0f;
-//     if (pitch < -89.0f) pitch = -89.0f;
-
-//     glm::vec3 front;
-//     front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-//     front.y = sin(glm::radians(pitch));
-//     front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-//     this->front = glm::normalize(front);
-// }

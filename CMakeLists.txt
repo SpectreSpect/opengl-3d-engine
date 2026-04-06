@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.10)
-project(app)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_STANDARD 17)
+project(app LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Optional: silence OpenGL CMP0072 warning on Ubuntu
@@ -15,105 +17,156 @@ find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(glm REQUIRED)
+find_package(Vulkan REQUIRED)
 
 add_executable(app
   main.cpp
-  engine3d.cpp
-  window.cpp
-  vao.cpp
-  vertex_shader.cpp
-  fragment_shader.cpp
-  program.cpp
-  shader.cpp
-  vertex_layout.cpp
   camera.cpp
   mesh.cpp
   transformable.cpp
-  cube.cpp
   fps_camera_controller.cpp
   imgui_layer.cpp
-  voxel_engine/voxel.cpp
-  voxel_engine/chunk.cpp
-  voxel_engine/voxel_grid.cpp
-  imgui_layer.cpp
-  voxel_rastorizator.cpp
-  ui_elements/triangle_controller.cpp
-  triangle.cpp
-  voxel_engine/voxel_editor.cpp
-  vtk_mesh_loader.cpp
-  compute_shader.cpp
-  vf_program.cpp
-  compute_program.cpp
-  voxel_rasterizator_gpu.cpp
-  voxel_grid_gpu.cpp
-  shader_manager.cpp
-  dispatch_arg.cpp
-  buffer_dispatch_arg.cpp
-  value_dispatch_arg.cpp
-  glsl_preprocessor.cpp
-  buffer_object.cpp
-  voxel_grid_gpu_debugger.cpp
-  gpu_timestamp.cpp
-  torus.cpp
-  shader_helper.cpp
-)
-
-
-# Copy assets next to the built executable (works for Debug/Release and all generators)
-add_custom_command(TARGET app POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/shaders"
-          "$<TARGET_FILE_DIR:app>/shaders"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/models"
-          "$<TARGET_FILE_DIR:app>/models"
-  COMMENT "Copying shaders/models next to app"
+  vulkan_engine.cpp
+  vulkan_window.cpp
+  vulkan/shader_module.cpp
+  vulkan/video_buffer.cpp
+  vulkan/vulkan_vertex_layout.cpp
+  vulkan/graphics_pipeline.cpp
+  vulkan/pbr_renderer.cpp
+  vulkan/image/texture2d.cpp
+  vulkan/descriptor_set_layout.cpp
+  vulkan/descriptor_pool.cpp
+  vulkan/descriptor_set.cpp
+  vulkan/descriptor_set_bundle.cpp
+  vulkan/render_pass.cpp
+  vulkan/render_target_2d.cpp
+  vulkan/pbr/equirect_to_cubemap_pass.cpp
+  vulkan/image/cubemap.cpp
+  vulkan/command_pool.cpp
+  vulkan/command_buffer.cpp
+  vulkan/compute_pipeline.cpp
+  vulkan/fence.cpp
+  vulkan/resource_loader.cpp
+  vulkan/image/image_resource.cpp
+  vulkan/image/image_view.cpp
+  vulkan/image/sampler.cpp
+  skybox/skybox_pass.cpp
+  vulkan/pbr/brdf_lut_generator.cpp
+  vulkan/pbr/irradiance_map_generator.cpp
+  vulkan/pbr/prefilter_map_generator.cpp
+  vulkan/lighting_system/lighting_system.cpp
+  vulkan/image/image_transition_state.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
 include(FetchContent)
 
+# Kept at your old pin to minimize code churn.
+# You can update later after the Vulkan integration is stable.
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  # Pick a tag you want; keep it fixed for reproducible builds
   GIT_TAG v1.90.9
+  GIT_SHALLOW TRUE
 )
 
-FetchContent_MakeAvailable(imgui)
+FetchContent_GetProperties(imgui)
+if(NOT imgui_POPULATED)
+  FetchContent_MakeAvailable(imgui)
+endif()
 
-# Compile ImGui directly into your target (core)
 target_sources(app PRIVATE
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-)
+  ${imgui_SOURCE_DIR}/imgui_demo.cpp        # optional, but useful while integrating
 
-# Optional: demo window (remove if you don't want it)
-# target_sources(app PRIVATE ${imgui_SOURCE_DIR}/imgui_demo.cpp)
-
-# Backends you use (GLFW + OpenGL3)
-target_sources(app PRIVATE
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
 
-# Make <imgui.h> and <imgui_impl_glfw.h> resolvable
 target_include_directories(app PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
 )
 
-# ---------------- Other links ----------------
+find_program(GLSLANG_VALIDATOR
+  NAMES glslangValidator glslangValidator.exe
+  HINTS
+    ENV VULKAN_SDK
+  PATH_SUFFIXES
+    Bin
+    bin
+  REQUIRED
+)
+
+set(SHADERS_SRC_DIR "${CMAKE_SOURCE_DIR}/shaders")
+set(SHADERS_BUILD_DIR "${CMAKE_BINARY_DIR}/shaders")
+
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS
+  "${SHADERS_SRC_DIR}/*.vert"
+  "${SHADERS_SRC_DIR}/*.frag"
+  "${SHADERS_SRC_DIR}/*.comp"
+)
+
+set(SPIRV_OUTPUTS)
+
+foreach(SHADER ${SHADER_SOURCES})
+  get_filename_component(SHADER_NAME "${SHADER}" NAME)
+  set(SPIRV_OUTPUT "${SHADERS_BUILD_DIR}/${SHADER_NAME}.spv")
+
+  add_custom_command(
+    OUTPUT "${SPIRV_OUTPUT}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_BUILD_DIR}"
+    COMMAND "${GLSLANG_VALIDATOR}" -V "${SHADER}" -o "${SPIRV_OUTPUT}"
+    DEPENDS "${SHADER}"
+    COMMENT "Compiling shader ${SHADER_NAME}"
+    VERBATIM
+  )
+
+  list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
+endforeach()
+
+add_custom_target(compile_shaders ALL DEPENDS ${SPIRV_OUTPUTS})
+add_dependencies(app compile_shaders)
+
+# Копируем уже скомпилированные .spv рядом с app.exe / app
+add_custom_command(TARGET app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:app>/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${SHADERS_BUILD_DIR}"
+          "$<TARGET_FILE_DIR:app>/shaders"
+  COMMENT "Copying compiled shaders next to app"
+)
+
+
+set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
+add_custom_target(copy_assets ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${ASSETS_SRC}"
+          "$<TARGET_FILE_DIR:app>/assets"
+  COMMENT "Copying assets next to app"
+)
+add_dependencies(copy_assets app)
+
+# set(SHADERS_SRC "${CMAKE_SOURCE_DIR}/shaders")
+# add_custom_target(copy_shaders ALL
+#   COMMAND ${CMAKE_COMMAND} -E copy_directory
+#           "${SHADERS_SRC}"
+#           "$<TARGET_FILE_DIR:app>/shaders"
+#   COMMENT "Copying shaders next to app"
+# )
+# add_dependencies(copy_shaders app)
+
 target_link_libraries(app PRIVATE
   glfw
   GLEW::GLEW
   glm::glm
   OpenGL::GL
+  Vulkan::Vulkan
 )
 
-# Windows-only defines/properties
 if (WIN32)
   target_compile_definitions(app PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   set_target_properties(app PROPERTIES WIN32_EXECUTABLE OFF)
