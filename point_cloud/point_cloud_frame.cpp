@@ -12,112 +12,124 @@ void PointCloudFrame::load_from_file(VulkanEngine& engine, const std::filesystem
 
     in.read(reinterpret_cast<char*>(&timestamp_ns), sizeof(uint64_t));
     in.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
-    // in.read(reinterpret_cast<char*>(&flags), sizeof(uint32_t));
     if (!in) throw std::runtime_error("Bad header in: " + path.string());
 
-    // std::vector<PointInstance> local_points;
-    points.reserve(count);
+    struct TimedPointSample {
+        glm::vec3 p_local_ros{0.0f};   // raw lidar point in lidar frame, ROS coords
+        float time = 0.0f;             // per-point time
+        glm::vec3 base_pos_ros{0.0f};  // interpolated GPS/base pose at point time
+        glm::vec3 base_rpy_ros{0.0f};  // interpolated IMU RPY at point time
+        bool valid = true;
+    };
 
-    const bool has_rgb = (flags & 1u) != 0;
-    const bool has_intensity = (flags & 2u) != 0;
-
-    size_t bpp = 10 * sizeof(float);
-    // if (has_rgb) bpp += 3 * sizeof(uint8_t);
-    // if (has_intensity) bpp += sizeof(float);
+    const size_t bpp = 10 * sizeof(float); // x y z time px py pz roll pitch yaw
 
     std::vector<uint8_t> buf(size_t(count) * bpp);
     in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
     if (!in) throw std::runtime_error("Unexpected EOF in: " + path.string());
 
+    std::vector<TimedPointSample> samples(count);
+
+    const float INF = std::numeric_limits<float>::infinity();
+    const uint8_t* p = buf.data();
+
+    float min_time = std::numeric_limits<float>::infinity();
+    size_t ref_idx = 0;
+
+    for (uint32_t i = 0; i < count; ++i) {
+        float x, y, z;
+        float time;
+        float px, py, pz;
+        float roll, pitch, yaw;
+
+        std::memcpy(&x,     p, 4); p += 4;
+        std::memcpy(&y,     p, 4); p += 4;
+        std::memcpy(&z,     p, 4); p += 4;
+        std::memcpy(&time,  p, 4); p += 4;
+        std::memcpy(&px,    p, 4); p += 4;
+        std::memcpy(&py,    p, 4); p += 4;
+        std::memcpy(&pz,    p, 4); p += 4;
+        std::memcpy(&roll,  p, 4); p += 4;
+        std::memcpy(&pitch, p, 4); p += 4;
+        std::memcpy(&yaw,   p, 4); p += 4;
+
+        samples[i].p_local_ros = glm::vec3(x, y, z);
+        samples[i].time = time;
+        samples[i].base_pos_ros = glm::vec3(px, py, pz);
+        samples[i].base_rpy_ros = glm::vec3(roll, pitch, yaw);
+        samples[i].valid = std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+
+        if (time < min_time) {
+            min_time = time;
+            ref_idx = i;
+        }
+    }
+
+    points.clear();
     points.resize(count);
 
-    const uint8_t* p = buf.data();
+    // If your saved pose is base_link pose and LiDAR is offset from base_link,
+    // put the real extrinsics here. If pose already describes the LiDAR frame,
+    // keep these zero.
+    const glm::vec3 lidar_offset_from_base_ros(0.0f, 0.0f, 0.0f);
+    const glm::vec3 lidar_rpy_from_base_ros(0.0f, 0.0f, 0.0f);
+
+    const glm::mat3 R_bl = rpy_to_mat3_zyx(
+        lidar_rpy_from_base_ros.x,
+        lidar_rpy_from_base_ros.y,
+        lidar_rpy_from_base_ros.z
+    );
+
+    const TimedPointSample& ref = samples[ref_idx];
+
+    const glm::mat3 R_wb_ref = rpy_to_mat3_zyx(
+        ref.base_rpy_ros.x,
+        ref.base_rpy_ros.y,
+        ref.base_rpy_ros.z
+    );
+    const glm::mat3 R_wl_ref = R_wb_ref * R_bl;
+    const glm::vec3 t_wl_ref = ref.base_pos_ros + R_wb_ref * lidar_offset_from_base_ros;
+
     for (uint32_t i = 0; i < count; ++i) {
-        std::memcpy(&points[i].pos.x, p, 4); p += 4;
-        std::memcpy(&points[i].pos.y, p, 4); p += 4;
-        std::memcpy(&points[i].pos.z, p, 4); p += 4;
-        p += 28;
-        // std::memcpy(&local_points[i].time, p, 4); p += 4;
-        // std::memcpy(&local_points[i].gps_pos.x, p, 4); p += 4;
-        // std::memcpy(&local_points[i].gps_pos.y, p, 4); p += 4;
-        // std::memcpy(&local_points[i].gps_pos.z, p, 4); p += 4;
-        // std::memcpy(&local_points[i].imu_rotation.x, p, 4); p += 4;
-        // std::memcpy(&local_points[i].imu_rotation.y, p, 4); p += 4;
-        // std::memcpy(&local_points[i].imu_rotation.z, p, 4); p += 4;
+        const TimedPointSample& s = samples[i];
 
-        // std::memcpy(&local_points[i].time, p, 4); p += 4;
+        if (!s.valid) {
+            points[i].pos = glm::vec4(INF, INF, INF, 1.0f);
+            points[i].color = glm::vec4(0, 0, 1, 1);
+            continue;
+        }
 
-        // local_points[i].pos.x += local_points[i].gps_pos.x;
-        // local_points[i].pos.y += local_points[i].gps_pos.z;
-        // local_points[i].pos.z += local_points[i].gps_pos.y;
+        const glm::mat3 R_wb = rpy_to_mat3_zyx(
+            s.base_rpy_ros.x,
+            s.base_rpy_ros.y,
+            s.base_rpy_ros.z
+        );
+        const glm::mat3 R_wl = R_wb * R_bl;
+        const glm::vec3 t_wl = s.base_pos_ros + R_wb * lidar_offset_from_base_ros;
 
+        // Point in world ROS
+        const glm::vec3 p_world_ros = R_wl * s.p_local_ros + t_wl;
 
+        // Bring it back into the reference LiDAR frame
+        const glm::vec3 p_ref_ros = glm::transpose(R_wl_ref) * (p_world_ros - t_wl_ref);
 
-        // std::cout << local_points[i].time << std::endl;
+        // Convert reference-frame point to engine coords
+        const glm::vec3 p_ref_eng = ros_pos_to_engine(p_ref_ros);
 
-
-        // How do I apply the gps and imu transformation to each point here?????
-        
-        float y = points[i].pos.y;
-        float z = points[i].pos.z;
-
-        points[i].pos.x = -points[i].pos.x;
-        points[i].pos.y = z;
-        points[i].pos.z = y;
-
-
-
-        // glm::vec3 p_local_ros = local_points[i].pos;
-
-        // // 2) pose in ROS coords (translation + RPY)
-        // glm::vec3 t_ros = local_points[i].gps_pos;
-        // float roll  = local_points[i].imu_rotation.x;
-        // float pitch = local_points[i].imu_rotation.y;
-        // float yaw   = local_points[i].imu_rotation.z;
-
-        // // 3) transform point into "world" (or whatever GPS frame is)
-        // glm::mat3 R_ros = rpy_to_mat3_zyx(roll, pitch, yaw);
-        // glm::vec3 p_world_ros = R_ros * p_local_ros + t_ros;
-
-        // // 4) convert to engine coords once
-        // local_points[i].pos = ros_pos_to_engine(p_world_ros);
-
-        
-
-        // ros_rpy_to_engine_rpy
-        
-
-
-        //   glm::vec3 pos_0 = glm::vec3(-point_0.x, point_0.z, point_0.y);
-        // local_points[i].color.r = local_points[i].color.g = local_points[i].color.b = 1.0f;
-        
-        points[i].color.r = points[i].color.g = points[i].color.b = points[i].pos.y / 3.0f;
+        points[i].pos = glm::vec4(p_ref_eng, 1.0f);
         points[i].color = glm::vec4(0, 0, 1, 1);
-
-        // if (has_rgb) {
-        //     // local_points[i].color.r = *p++;
-        //     // local_points[i].color.g = *p++;
-        //     // local_points[i].color.b = *p++;
-        // }
-        // if (has_intensity) {
-        //     // std::memcpy(&local_points[i].intensity, p, 4); 
-        //     // p += 4;
-        // }
     }
 
     get_normals(points, normals);
     remove_invalid_points_and_normals(points, normals);
     drop_out_points_and_normals(points, normals, 10000);
-
     remove_points_near_origin(points, normals, 3);
 
-    // // point_cloud.drop_out_points_and_normals(local_points, normals, 10000);
     point_cloud.create(engine);
     point_cloud.set_points(std::move(points));
+
     normal_buffer.create(engine, normals.size() * sizeof(glm::vec4));
     normal_buffer.update_data(normals.data(), normals.size() * sizeof(glm::vec4));
-
-    // point_cloud.get_normals_ssbo(normals, normals_ssbo);
 }
 
 void PointCloudFrame::remove_points_near_origin(std::vector<PointInstance>& points,
@@ -206,6 +218,94 @@ void PointCloudFrame::drop_out_points_and_normals(std::vector<PointInstance>& po
 
     points = std::move(new_points);
     normals = std::move(new_normals);
+}
+
+
+void PointCloudFrame::keep_only_upward_facing_points_and_normals(
+    std::vector<PointInstance>& points,
+    std::vector<glm::vec4>& normals,
+    float up_dot_threshold)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "keep_only_upward_facing_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    std::vector<PointInstance> kept_points;
+    std::vector<glm::vec4> kept_normals;
+
+    kept_points.reserve(points.size());
+    kept_normals.reserve(normals.size());
+
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        const PointInstance& p = points[i];
+        const glm::vec3 n = glm::vec3(normals[i]);
+
+        if (!is_point_valid(p) || glm::dot(n, n) < 1e-12f) {
+            continue;
+        }
+
+        float up_dot = glm::dot(glm::normalize(n), up);
+
+        if (up_dot >= up_dot_threshold) {
+            kept_points.push_back(p);
+            kept_normals.push_back(normals[i]);
+        }
+    }
+
+    points = std::move(kept_points);
+    normals = std::move(kept_normals);
+}
+
+
+
+void PointCloudFrame::remove_ground_points_and_normals(
+    std::vector<PointInstance>& points,
+    std::vector<glm::vec4>& normals,
+    float up_dot_threshold,
+    float max_ground_height)
+{
+    if (points.size() != normals.size()) {
+        std::cout << "remove_ground_points_and_normals: points.size() != normals.size()\n";
+        return;
+    }
+
+    std::vector<PointInstance> filtered_points;
+    std::vector<glm::vec4> filtered_normals;
+
+    filtered_points.reserve(points.size());
+    filtered_normals.reserve(normals.size());
+
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        const PointInstance& p = points[i];
+        const glm::vec3 n = glm::vec3(normals[i]);
+
+        // Keep invalid points/normals handling simple
+        if (!is_point_valid(p) || glm::dot(n, n) < 1e-12f) {
+            filtered_points.push_back(p);
+            filtered_normals.push_back(normals[i]);
+            continue;
+        }
+
+        glm::vec3 nn = glm::normalize(n);
+        float up_dot = glm::dot(nn, up);
+
+        bool looks_like_ground =
+            (up_dot >= up_dot_threshold) &&
+            (p.pos.y <= max_ground_height);
+
+        if (!looks_like_ground) {
+            filtered_points.push_back(p);
+            filtered_normals.push_back(normals[i]);
+        }
+    }
+
+    points = std::move(filtered_points);
+    normals = std::move(filtered_normals);
 }
 
 

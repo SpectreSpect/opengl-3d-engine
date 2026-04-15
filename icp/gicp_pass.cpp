@@ -266,6 +266,7 @@ double GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_c
     //           << ", |v| = " << glm::length(v)
     //           << "\n";
 
+    std::cout << rmse << std::endl;
     return rmse;
 }
 
@@ -275,12 +276,12 @@ double GICPPass::fit(VoxelPointMap& voxel_point_map, PointCloud& source_point_cl
     for (int i = 0; i < max_steps; i++) {
         rmse = step(voxel_point_map, source_point_cloud, source_normal_buffer);
         if (rmse < 0.5) {
-            std::cout << "BREAK" << std::endl;
+            // std::cout << "BREAK" << std::endl;
             break;
         }
             
     }
-    std::cout << rmse << std::endl;
+    // std::cout << rmse << std::endl;
 
     return rmse;
 }

@@ -21,6 +21,10 @@ public:
     glm::vec3 car_rotation;
     glm::vec3 position_change;
     glm::vec3 rotation_change;
+    glm::vec3 angular_acceleration;
+    glm::vec3 linear_acceleration;
+    glm::vec3 velocity;
+    glm::vec3 angular_velocity;
 
     PointCloudFrame() = default;
     PointCloudFrame(VulkanEngine& engine, const std::filesystem::path& path);
@@ -118,6 +122,10 @@ public:
                         float rel_thresh = 1.5f, bool more_permissive_with_distance = true,
                         float abs_thresh = 0.12f);
     float radial_distance(const PointInstance &p);
+
+    void keep_only_upward_facing_points_and_normals(std::vector<PointInstance>& points, std::vector<glm::vec4>& normals, float up_dot_threshold);
+
+    void remove_ground_points_and_normals(std::vector<PointInstance>& points, std::vector<glm::vec4>& normals, float up_dot_threshold, float max_ground_height);
 
     // void draw(RenderState state) override;
 };

@@ -12,6 +12,8 @@ struct IndexEntry {
     uint32_t point_count;
     glm::vec3 position{0.0f};
     glm::vec3 rotation_rpy{0.0f}; // roll,pitch,yaw in ROS
+    glm::vec3 angular_velocity;
+    glm::vec3 linear_acceleration;
 };
 
 class PointCloudVideo : public Drawable, public Transformable {
@@ -34,11 +36,6 @@ public:
 
     void draw_clouds(PointCloudPass& point_cloud_pass, Camera& camera);
 
-    static inline glm::vec3 ros_pos_to_engine(const glm::vec3& p_ros) {
-        // same as your point remap: (-x, z, y)
-        return glm::vec3(-p_ros.x, p_ros.z, p_ros.y);
-    }
-
     static inline glm::mat3 basis_M_ros_to_engine() {
         // Columns are images of ROS basis vectors expressed in engine coords
         // col0 = M*[1,0,0] = (-1,0,0)
@@ -49,6 +46,55 @@ public:
         M[1] = glm::vec3( 0, 0, 1);
         M[2] = glm::vec3( 0, 1, 0);
         return M;
+    }
+
+
+    static glm::vec3 mat3_to_euler_xyz_custom(const glm::mat3& R) {
+        const float EPS = 1e-6f;
+        const float HALF_PI = 1.57079632679f;
+
+        float x, y, z;
+        float sy = glm::clamp(-R[0][2], -1.0f, 1.0f);
+
+        if (sy >= 1.0f - EPS) {
+            y = HALF_PI;
+            z = 0.0f;
+            x = std::atan2(R[1][0], R[1][1]);
+        }
+        else if (sy <= -1.0f + EPS) {
+            y = -HALF_PI;
+            z = 0.0f;
+            x = std::atan2(-R[1][0], R[1][1]);
+        }
+        else {
+            y = std::asin(sy);
+            x = std::atan2(R[1][2], R[2][2]);
+            z = std::atan2(R[0][1], R[0][0]);
+        }
+
+        return glm::vec3(x, y, z);
+    }
+
+    static void mat4_to_pose(const glm::mat4& M, glm::vec3& position, glm::vec3& rotation) {
+        position = glm::vec3(M[3]);
+        rotation = mat3_to_euler_xyz_custom(glm::mat3(M));
+    }
+
+    static glm::mat4 pose_to_mat4(const glm::vec3& position, const glm::vec3& rotation) {
+        glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), rotation.x, glm::vec3(1, 0, 0));
+        glm::mat4 Ry = glm::rotate(glm::mat4(1.0f), rotation.y, glm::vec3(0, 1, 0));
+        glm::mat4 Rz = glm::rotate(glm::mat4(1.0f), rotation.z, glm::vec3(0, 0, 1));
+        glm::mat4 R  = Rz * Ry * Rx;
+        glm::mat4 T  = glm::translate(glm::mat4(1.0f), position);
+        return T * R;
+    }
+
+    static inline glm::vec3 ros_pos_to_engine(const glm::vec3& p_ros) {
+        return glm::vec3(-p_ros.x, p_ros.z, p_ros.y);
+    }
+
+    static inline glm::vec3 ros_vec_to_engine(const glm::vec3& v_ros) {
+        return basis_M_ros_to_engine() * v_ros;
     }
 
     // Build R = Rz(yaw) * Ry(pitch) * Rx(roll)  (same order as your Transformable)

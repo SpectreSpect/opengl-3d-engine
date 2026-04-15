@@ -103,6 +103,7 @@
 #include "icp/voxel_point_map.h"
 #include "icp/voxel_map_point_inserter.h"
 #include "icp/voxel_point_map_reseter.h"
+#include <algorithm>
 
 struct Vertex {
     glm::vec4 position;
@@ -340,6 +341,28 @@ static float rotation_angle_from_mat4(const glm::mat4& M) {
     return std::acos(c);
 }
 
+glm::vec3 heatmap(float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+
+    float r = std::clamp(1.5 - std::abs(4.0 * t - 3.0), 0.0, 1.0);
+    float g = std::clamp(1.5 - std::abs(4.0 * t - 2.0), 0.0, 1.0);
+    float b = std::clamp(1.5 - std::abs(4.0 * t - 1.0), 0.0, 1.0);
+
+    return glm::vec3(r, g, b);
+}
+
+static glm::quat rpy_to_quat_zyx(const glm::vec3& rpy) {
+    glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), rpy.x, glm::vec3(1, 0, 0));
+    glm::mat4 Ry = glm::rotate(glm::mat4(1.0f), rpy.y, glm::vec3(0, 1, 0));
+    glm::mat4 Rz = glm::rotate(glm::mat4(1.0f), rpy.z, glm::vec3(0, 0, 1));
+    return glm::normalize(glm::quat_cast(glm::mat3(Rz * Ry * Rx)));
+}
+
+static glm::vec3 quat_to_rpy_zyx(const glm::quat& q) {
+    return PointCloudVideo::mat3_to_rpy_zyx(glm::mat3_cast(glm::normalize(q)));
+}
+
 int main() {
     VulkanEngine engine;
     VulkanWindow window(&engine, 1280, 720, "3D visualization");
@@ -456,13 +479,13 @@ int main() {
     point_cloud_pass.create(engine);
 
     PointCloudVideo point_cloud_video = PointCloudVideo();
-    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording_slow_mouse_movement/index.csv", 300);
+    point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 247);
 
-    PointCloudFrame& source_point_cloud_frame = point_cloud_video.frames[0];
-    PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[1];
+    PointCloudFrame& source_point_cloud_frame = point_cloud_video.frames[89];
+    PointCloudFrame& target_point_cloud_frame = point_cloud_video.frames[95];
 
-    source_point_cloud_frame.point_cloud.position += glm::vec3(3, 3, 0);
-    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0.2f, 0, 0);
+    source_point_cloud_frame.point_cloud.position = glm::vec3(0, 0, 0);
+    source_point_cloud_frame.point_cloud.rotation = glm::vec3(0, 0, 0);
 
     for (int i = 0; i < source_point_cloud_frame.points.size(); i++) {
         source_point_cloud_frame.points[i].color = glm::vec4(1, 0, 0, 1);
@@ -489,7 +512,7 @@ int main() {
     VoxelMapPointInserter voxel_map_point_inserter;
     voxel_map_point_inserter.create(engine);
 
-    target_point_cloud_frame.point_cloud.position -= glm::vec3(0, 0, 0);
+    target_point_cloud_frame.point_cloud.position = glm::vec3(0, 0, 0);
     target_point_cloud_frame.point_cloud.rotation = glm::vec3(0.0f, 0, 0);
 
     voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud, target_point_cloud_frame.normal_buffer);
@@ -526,7 +549,63 @@ int main() {
         relative_deltas[i] = glm::inverse(raw_world_poses[i - 1]) * raw_world_poses[i];
     }
 
-    point_cloud_video.current_frame = 50;
+    std::vector<glm::quat> predicted_orientation(
+        point_cloud_video.frames.size(),
+        glm::quat(1.0f, 0.0f, 0.0f, 0.0f)
+    );
+
+    point_cloud_video.current_frame = 5;
+
+    std::vector<glm::quat> predicted_q(
+        point_cloud_video.frames.size(),
+        glm::quat(1.0f, 0.0f, 0.0f, 0.0f)
+    );
+
+
+    predicted_q[point_cloud_video.current_frame] =
+        rpy_to_quat_zyx(point_cloud_video.frames[point_cloud_video.current_frame].point_cloud.rotation);
+
+    point_cloud_video.frames[point_cloud_video.current_frame].velocity = glm::vec3(0.0f);
+    point_cloud_video.frames[point_cloud_video.current_frame].angular_velocity = glm::vec3(0.0f);
+
+    glm::vec3 gravity = point_cloud_video.frames[point_cloud_video.current_frame].linear_acceleration;
+
+    // for (size_t i = point_cloud_video.current_frame + 1; i < point_cloud_video.frames.size(); ++i) {
+    //     const auto& prev = point_cloud_video.frames[i - 1];
+    //     auto& curr = point_cloud_video.frames[i];
+
+    //     float dt = float(curr.timestamp_ns - prev.timestamp_ns) * 1e-9f;
+    //     if (dt <= 0.0f) {
+    //         curr.velocity = prev.velocity;
+    //         predicted_q[i] = predicted_q[i - 1];
+    //         continue;
+    //     }
+
+    //     // Linear motion
+    //     glm::vec3 a = prev.linear_acceleration - gravity;
+    //     curr.velocity = prev.velocity + a * dt;
+
+    //     // Angular motion: angular_velocity is already measured in rad/s
+    //     glm::vec3 omega0 = prev.angular_velocity;
+    //     glm::vec3 omega1 = curr.angular_velocity;
+    //     glm::vec3 omega_avg = 0.5f * (omega0 + omega1);
+
+    //     float omega_len = glm::length(omega_avg);
+    //     if (omega_len > 1e-6f) {
+    //         glm::vec3 axis = omega_avg / omega_len;
+    //         float angle = omega_len * dt;
+
+    //         glm::quat dq = glm::angleAxis(angle, axis);
+
+    //         // angular velocity is in BODY/LOCAL frame -> right multiply
+    //         predicted_q[i] = glm::normalize(predicted_q[i - 1] * dq);
+    //     } else {
+    //         predicted_q[i] = predicted_q[i - 1];
+    //     }
+
+    //     curr.point_cloud.rotation = quat_to_rpy_zyx(predicted_q[i]);
+    //     curr.point_cloud.position = glm::vec3(0, 0, 0);
+    // }
 
     // for (int i = 0; i < 10; i++) {
     //     GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
@@ -561,7 +640,7 @@ int main() {
 
         lighting_system.update(camera);
 
-        // point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
+        point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
         // point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
         point_cloud_pass.render(voxel_map_point_cloud, camera);
 
@@ -571,108 +650,134 @@ int main() {
         // point_cloud_pass.render(fitted_scan, camera);
         
 
-        bool skip = false;
-        if (last_frame_id != point_cloud_video.current_frame) {
-            size_t cur = point_cloud_video.current_frame;
-            bool skip_insert = false;
+        // bool skip = false;
+        // if (last_frame_id != point_cloud_video.current_frame) {
+        //     size_t cur = point_cloud_video.current_frame;
+        //     bool skip_insert = false;
 
-            if (cur > 0) {
-                float position_change_length = glm::length(glm::vec3(relative_deltas[cur][3]));
-                float rotation_change_length = rotation_angle_from_mat4(relative_deltas[cur]);
+        //     float rotation_change_length = 0;
+        //     if (cur > 0) {
+        //         // float position_change_length = glm::length(glm::vec3(relative_deltas[cur][3]));
+        //         // float rotation_change_length = rotation_angle_from_mat4(relative_deltas[cur]);
 
-                glm::mat4 T_prev_est = pose_to_mat4(
-                    point_cloud_video.frames[cur - 1].point_cloud.position,
-                    point_cloud_video.frames[cur - 1].point_cloud.rotation
-                );
+        //         // glm::mat4 T_prev_est = pose_to_mat4(
+        //         //     point_cloud_video.frames[cur - 1].point_cloud.position,
+        //         //     point_cloud_video.frames[cur - 1].point_cloud.rotation
+        //         // );
 
-                glm::mat4 T_cur_pred = T_prev_est * relative_deltas[cur];
+        //         // glm::mat4 T_cur_pred = T_prev_est * relative_deltas[cur];
 
-                glm::vec3 pred_position;
-                glm::vec3 pred_rotation;
-                mat4_to_pose(T_cur_pred, pred_position, pred_rotation);
+                
 
-                point_cloud_video.frames[cur].point_cloud.position = pred_position;
-                point_cloud_video.frames[cur].point_cloud.rotation = pred_rotation;
+        //         // glm::vec3 velocity = 
+                
+        //         // glm::vec3 pred_position =;
+        //         // glm::vec3 pred_rotation;
+        //         // mat4_to_pose(T_cur_pred, pred_position, pred_rotation);
+        //         const auto& prev = point_cloud_video.frames[cur - 1];
+        //         auto& curr = point_cloud_video.frames[cur];
 
-                if (position_change_length > 3.0f) {
-                    skip_insert = true;
-                }
+        //         float dt = float(curr.timestamp_ns - prev.timestamp_ns) * 1e-9f;
 
-                if (rotation_change_length > 0.2f) {
-                    skip_insert = true;
-                }
-            } else {
-                point_cloud_video.frames[cur].point_cloud.position = raw_positions[cur];
-                point_cloud_video.frames[cur].point_cloud.rotation = raw_rotations[cur];
-            }
+        //         glm::vec3 a = prev.linear_acceleration - gravity;
+        //         curr.velocity = prev.velocity + a * dt;
 
-            original_scan.set_points(point_cloud_video.frames[cur].points);
-            original_scan.position = raw_positions[cur];
-            original_scan.rotation = raw_rotations[cur];
+        //         curr.point_cloud.position =
+        //             prev.point_cloud.position + prev.velocity * dt + 0.5f * a * dt * dt;
 
-            fitted_scan.set_points(
-                point_cloud_video.frames[cur].point_cloud.get_instance_buffer(),
-                point_cloud_video.frames[cur].point_cloud.num_instances
-            );
-            fitted_scan.position = point_cloud_video.frames[cur].point_cloud.position;
-            fitted_scan.rotation = point_cloud_video.frames[cur].point_cloud.rotation;
+        //         // curr.point_cloud.rotation = quat_to_rpy_zyx(predicted_q[cur]);
 
-            if (!skip_insert) {
-                double rmse = gicp_pass.fit(
-                    voxel_point_map,
-                    point_cloud_video.frames[cur].point_cloud,
-                    point_cloud_video.frames[cur].normal_buffer,
-                    20
-                );
 
-                fitted_scan.position = point_cloud_video.frames[cur].point_cloud.position;
-                fitted_scan.rotation = point_cloud_video.frames[cur].point_cloud.rotation;
 
-                if (rmse <= 10) {
-                    voxel_map_point_inserter.insert(
-                        voxel_point_map,
-                        point_cloud_video.frames[cur].point_cloud,
-                        point_cloud_video.frames[cur].normal_buffer
-                    );
+        //         // curr.point_cloud.rotation = prev.point_cloud.rotation + curr.angular_velocity * dt;
+        //         // curr.point_cloud.rotation = curr.rotation;
 
-                    voxel_map_point_cloud.set_points(
-                        voxel_point_map.map_point_buffer,
-                        voxel_point_map.map_point_count
-                    );
+        //         // if (position_change_length > 3.0f) {
+        //         //     skip_insert = true;
+        //         // }
 
-                    fitted_scan.color = glm::vec4(0, 1, 0, 1);
-                } else {
-                    fitted_scan.color = glm::vec4(0, 0, 1, 1);
-                }
-            } else {
-                fitted_scan.color = glm::vec4(0, 0, 1, 1);
-            }
+        //         // if (rotation_change_length > 0.2f) {
+        //         //     skip_insert = true;
+        //         // }
+        //     } else {
+        //         point_cloud_video.frames[cur].point_cloud.position = raw_positions[cur];
+        //         point_cloud_video.frames[cur].point_cloud.rotation = raw_rotations[cur];
+        //     }
 
-            last_frame_id = cur;
-        }
+        //     original_scan.set_points(point_cloud_video.frames[cur].points);
+        //     original_scan.position = raw_positions[cur];
+        //     original_scan.rotation = raw_rotations[cur];
+
+        //     fitted_scan.set_points(
+        //         point_cloud_video.frames[cur].point_cloud.get_instance_buffer(),
+        //         point_cloud_video.frames[cur].point_cloud.num_instances
+        //     );
+        //     fitted_scan.position = point_cloud_video.frames[cur].point_cloud.position;
+        //     fitted_scan.rotation = point_cloud_video.frames[cur].point_cloud.rotation;
+
+        //     if (!skip_insert) {
+        //         double rmse = gicp_pass.fit(
+        //             voxel_point_map,
+        //             point_cloud_video.frames[cur].point_cloud,
+        //             point_cloud_video.frames[cur].normal_buffer,
+        //             20
+        //         );
+
+        //         fitted_scan.position = point_cloud_video.frames[cur].point_cloud.position;
+        //         fitted_scan.rotation = point_cloud_video.frames[cur].point_cloud.rotation;
+
+        //         if (rmse <= 10) {
+        //             // float t = rmse / 10.0f;
+        //             // float t = rotation_change_length / 0.2f;
+        //             // point_cloud_video.frames[cur].point_cloud.color = glm::vec4(heatmap(t), 1.0f);
+        //             voxel_map_point_inserter.insert(
+        //                 voxel_point_map,
+        //                 point_cloud_video.frames[cur].point_cloud,
+        //                 point_cloud_video.frames[cur].normal_buffer
+        //             );
+
+        //             voxel_map_point_cloud.set_points(
+        //                 voxel_point_map.map_point_buffer,
+        //                 voxel_point_map.map_point_count
+        //             );
+
+        //             fitted_scan.color = glm::vec4(0, 1, 0, 1);
+        //         } else {
+        //             fitted_scan.color = glm::vec4(0, 0, 1, 1);
+        //         }
+        //     } else {
+        //         fitted_scan.color = glm::vec4(0, 0, 1, 1);
+        //     }
+
+        //     last_frame_id = cur;
+        // }
         
 
         ImGui::Begin("Hello");
 
         ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::Text("Current video frame: %d", point_cloud_video.current_frame);
 
         if (ImGui::Button("GICP step")) {
             // GICP::step(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
             // GICP::step_test(source_point_cloud_frame, target_point_cloud_frame, source_point_cloud_frame.normals, target_point_cloud_frame.normals);
             // gicp_pass.step(source_point_cloud_frame.point_cloud, target_point_cloud_frame.point_cloud, source_normal_buffer, target_normal_buffer);
-            // gicp_pass.step(voxel_point_map, source_point_cloud_frame.point_cloud, source_point_cloud_frame.normal_buffer);
-            gicp_pass.fit(voxel_point_map, source_point_cloud_frame.point_cloud, source_point_cloud_frame.normal_buffer, 10);
+            gicp_pass.step(voxel_point_map, source_point_cloud_frame.point_cloud, source_point_cloud_frame.normal_buffer);
+            // gicp_pass.fit(voxel_point_map, source_point_cloud_frame.point_cloud, source_point_cloud_frame.normal_buffer, 10);
 
-            std::cout << "position: (";
-            print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.position, 1.0f));
-            std::cout << ")     rotation: (";
-            print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.rotation, 1.0f));
-            std::cout << ")" << std::endl;
+            // std::cout << "position: (";
+            // print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.position, 1.0f));
+            // std::cout << ")     rotation: (";
+            // print_vec4(glm::vec4(source_point_cloud_frame.point_cloud.rotation, 1.0f));
+            // std::cout << ")" << std::endl;
         }
 
 
         if (ImGui::Button("Next frame")) {
             point_cloud_video.current_frame += 1;
+            const auto& rot = point_cloud_video.frames[point_cloud_video.current_frame].point_cloud.rotation;
+
+            std::cout << "(" << rot.x << ", " << rot.y << ", " << rot.z << ")" << std::endl;
         }
 
         ImGui::End();

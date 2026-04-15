@@ -34,7 +34,7 @@ void PointCloudVideo::load_from_file(VulkanEngine& engine, const std::filesystem
         }
 
         // Expect at least: id, t_ns, filename, count, px,py,pz, roll,pitch,yaw
-        if (tok.size() < 10) continue;
+        if (tok.size() < 16) continue;
 
         IndexEntry e;
         if (!parse_u64(tok[0], e.frame_id)) continue;
@@ -43,11 +43,17 @@ void PointCloudVideo::load_from_file(VulkanEngine& engine, const std::filesystem
         if (!parse_u32(tok[3], e.point_count)) continue;
 
         float px, py, pz, rr, pp, yy;
+        float angacl_x, angacl_y, angacl_z;
+        float linacl_x, linacl_y, linacl_z;
         if (!parse_f(tok[4], px) || !parse_f(tok[5], py) || !parse_f(tok[6], pz)) continue;
         if (!parse_f(tok[7], rr) || !parse_f(tok[8], pp) || !parse_f(tok[9], yy)) continue;
+        if (!parse_f(tok[10], angacl_x) || !parse_f(tok[11], angacl_y) || !parse_f(tok[12], angacl_z)) continue;
+        if (!parse_f(tok[13], linacl_x) || !parse_f(tok[14], linacl_y) || !parse_f(tok[15], linacl_z)) continue;
 
         e.position = glm::vec3(px, py, pz);
         e.rotation_rpy = glm::vec3(rr, pp, yy);
+        e.angular_velocity = glm::vec3(angacl_x, angacl_y, angacl_z);;
+        e.linear_acceleration = glm::vec3(linacl_x, linacl_y, linacl_z);
 
         entries.push_back(std::move(e));
 
@@ -64,11 +70,46 @@ void PointCloudVideo::load_from_file(VulkanEngine& engine, const std::filesystem
         frames.emplace_back();
         frames.back().load_from_file(engine, video_dir_path / e.filename);
 
-        // Apply SAME basis remap as points:
-        frames.back().point_cloud.position = ros_pos_to_engine(e.position);
-        frames.back().point_cloud.rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
-        frames.back().car_pos = ros_pos_to_engine(e.position);
-        frames.back().car_rotation = ros_rpy_to_engine_rpy(e.rotation_rpy);
+        frames.back().timestamp_ns = e.timestamp_ns;
+
+        glm::vec3 car_pos_eng = ros_pos_to_engine(e.position);
+        glm::vec3 car_rpy_eng = ros_rpy_to_engine_rpy(e.rotation_rpy);
+
+        frames.back().car_pos = car_pos_eng;
+        frames.back().car_rotation = car_rpy_eng;
+
+        glm::mat4 T_world_car = pose_to_mat4(car_pos_eng, car_rpy_eng);
+
+        // Replace these with your actual LiDAR mounting extrinsics
+        glm::vec3 lidar_offset_from_car_eng(0.0f, 0.0f, 0.0f);
+        glm::vec3 lidar_rpy_from_car_eng(0.0f, 0.0f, 0.0f);
+
+        glm::mat4 T_car_lidar = pose_to_mat4(
+            lidar_offset_from_car_eng,
+            lidar_rpy_from_car_eng
+        );
+
+        glm::mat4 T_world_lidar = T_world_car * T_car_lidar;
+
+        glm::vec3 lidar_pos_eng, lidar_rpy_eng;
+        mat4_to_pose(T_world_lidar, lidar_pos_eng, lidar_rpy_eng);
+
+        frames.back().point_cloud.position = lidar_pos_eng;
+        frames.back().point_cloud.rotation = lidar_rpy_eng;
+
+        glm::mat3 R_eng = rpy_to_mat3(
+            car_rpy_eng.x,
+            car_rpy_eng.y,
+            car_rpy_eng.z
+        );
+
+        frames.back().linear_acceleration =
+            R_eng * ros_vec_to_engine(e.linear_acceleration);
+
+        frames.back().angular_velocity = ros_vec_to_engine(e.angular_velocity);
+
+        frames.back().velocity = glm::vec3(0.0f);
+        frames.back().angular_velocity = glm::vec3(0.0f);
     }
 }
 

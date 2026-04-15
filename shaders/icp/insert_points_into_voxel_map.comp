@@ -11,6 +11,7 @@ layout(std140, set = 0, binding = 0) uniform ParamsBuffer {
     uint max_map_point_count;
     uint num_hash_table_slots;
     mat4 source_model;
+    vec4 color;
 } params;
 
 layout(std430, set = 0, binding = 1) readonly buffer SourcePointBuffer {
@@ -175,10 +176,17 @@ void main()
 
     ivec3 key = voxel_key_from_world_pos(p_world, voxel_size);
 
+    // voxel_insert_point_and_normal(
+    //     key,
+    //     vec4(p_world, 1.0),
+    //     vec4(n_world, 0.0),
+    //     source_point_buffer.points[source_point_id].color
+    // );
+
     voxel_insert_point_and_normal(
         key,
         vec4(p_world, 1.0),
         vec4(n_world, 0.0),
-        source_point_buffer.points[source_point_id].color
+        params.color
     );
 }
