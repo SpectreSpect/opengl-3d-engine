@@ -13,11 +13,12 @@
 class PointCloudGenerator {
 public:
     struct PointCloudGeneratorUniform {
-
-        glm::mat4 view;
-        glm::mat4 proj;
-
-        glm::vec2 viewport;
+        uint32_t width;
+        uint32_t height;
+        float max_range;
+        uint32_t pad_0;
+        glm::vec4 position;
+        glm::vec4 rotation;
     };
 
     // struct PointCloudGeneratorPushConstants {
@@ -33,6 +34,9 @@ public:
     void create(VulkanEngine& engine);
     PointCloud generate(glm::vec3 position, glm::vec3 rotation, float time, 
                         glm::vec3 prev_position, glm::vec3 prev_rotation, float prev_time);
+    
+    void generate(PointCloud& point_cloud, glm::vec3 position, glm::vec3 rotation, float time, 
+                  glm::vec3 prev_position, glm::vec3 prev_rotation, float prev_time);
     // 
     // void render(PointCloud& point_cloud, Camera& camera);
     CommandPool command_pool;

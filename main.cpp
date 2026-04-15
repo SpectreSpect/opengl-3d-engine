@@ -483,7 +483,19 @@ int main() {
     PointCloudGenerator point_cloud_generator;
     point_cloud_generator.create(engine);
 
-    PointCloud generated_point_cloud = point_cloud_generator.generate(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+    // PointCloud generated_point_cloud = point_cloud_generator.generate(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+    PointCloud generated_point_cloud;
+    generated_point_cloud.create(engine, 3600 * 16);
+
+    float pi = glm::pi<float>();
+    uint32_t num_point_cloud_frames = 100;
+    PointCloud point_cloud_frames[num_point_cloud_frames];
+    for (int i = 0; i < num_point_cloud_frames; i++) {
+        point_cloud_frames[i] = point_cloud_generator.generate(glm::vec3(i, 0.3, 0), glm::vec3(0, 0 , 0), 0, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+    }
+
+
+
 
     // PointCloudVideo point_cloud_video = PointCloudVideo();
     // point_cloud_video.load_from_file(engine, "/home/spectre/TEMP_lidar_output_mesh/recording/index.csv", 247);
@@ -641,7 +653,15 @@ int main() {
 
         lighting_system.update(camera);
 
-        point_cloud_pass.render(generated_point_cloud, camera);
+        
+        point_cloud_pass.render(point_cloud_frames[last_frame_id], camera);
+
+        // glm::vec3 f = glm::normalize(camera.front);
+        // float rotY = std::atan2(-f.z, std::sqrt(f.x * f.x + f.y * f.y));
+        // float rotZ = std::atan2(f.y, f.x);
+        // float rotX = 0.0f;
+        // point_cloud_generator.generate(generated_point_cloud, camera.position, glm::vec3(rotX, rotY, rotZ), 0, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 0);
+        // point_cloud_pass.render(generated_point_cloud, camera);
 
         // point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
         // point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
@@ -668,6 +688,7 @@ int main() {
 
 
         if (ImGui::Button("Next frame")) {
+            last_frame_id++;
             // point_cloud_video.current_frame += 1;
             // const auto& rot = point_cloud_video.frames[point_cloud_video.current_frame].point_cloud.rotation;
 

@@ -12,9 +12,31 @@ layout(std430, binding = 1) buffer OutputPointInstances {
 };
 
 const float PI = 3.14159265358979323846;
-const float MAX_RANGE = 50.0;
-const uint IMAGE_WIDTH = 3600u;
-const uint NUM_RINGS   = 16u;
+
+// ------------------------------------------------------------
+// Scene controls
+// ------------------------------------------------------------
+const float ROAD_HALF_WIDTH   = 6.0;   // wider road: total width = 12 m
+const float ROAD_SEG1_LEN     = 50.0;
+const float ROAD_TURN_DEG     = 70.0;
+const float ROAD_TURN_RAD     = ROAD_TURN_DEG * PI / 180.0;
+const float ROAD_TURN_RADIUS  = 18.0;  // larger radius = gentler turn
+const float ROAD_ARC_LEN      = ROAD_TURN_RADIUS * ROAD_TURN_RAD;
+const float ROAD_SEG2_LEN     = 30.0;
+const float ROAD_TOTAL_LEN    = ROAD_SEG1_LEN + ROAD_ARC_LEN + ROAD_SEG2_LEN;
+
+const int EDGE_BOX_COUNT      = 28;
+const int END_BOX_COUNT       = 5;
+const int CAR_COUNT           = 10;
+
+layout(std140, set = 0, binding = 0) uniform UniformBuffer {
+    uint width;
+    uint height;
+    float max_range;
+    uint pad_0;
+    vec4 position;   // xyz = scanner position in world space
+    vec4 rotation;   // xyz = Euler rotation in radians: pitch, yaw, roll
+} ubo;
 
 struct Sphere {
     vec3 center;
@@ -22,17 +44,41 @@ struct Sphere {
     vec3 color;
 };
 
+struct Plane {
+    vec3 normal;
+    float d;         // plane equation: dot(normal, p) + d = 0
+    vec3 color;
+};
+
+// ------------------------------------------------------------
+// Utility
+// ------------------------------------------------------------
+
+float hash11(float p)
+{
+    return fract(sin(p * 127.1) * 43758.5453123);
+}
+
+vec3 carColor(int i)
+{
+    float fi = float(i);
+    return 0.35 + 0.65 * vec3(
+        hash11(fi * 11.3 + 1.7),
+        hash11(fi * 17.1 + 3.2),
+        hash11(fi * 23.7 + 5.9)
+    );
+}
+
 float ringElevation(uint ring)
 {
-    // 16 lidar rings, evenly spread here for simplicity
     float minDeg = -15.0;
     float maxDeg =  15.0;
 
-    if (NUM_RINGS <= 1u) {
+    if (ubo.height <= 1u) {
         return radians(0.0);
     }
 
-    float t = float(ring) / float(NUM_RINGS - 1u);
+    float t = float(ring) / float(ubo.height - 1u);
     return radians(mix(minDeg, maxDeg, t));
 }
 
@@ -72,61 +118,363 @@ bool intersectSphere(
     return false;
 }
 
+bool intersectPlane(
+    vec3 rayOrigin,
+    vec3 rayDir,
+    Plane plane,
+    out float tHit)
+{
+    const float EPS = 0.001;
+
+    float denom = dot(plane.normal, rayDir);
+    if (abs(denom) < EPS) {
+        return false;
+    }
+
+    tHit = -(dot(plane.normal, rayOrigin) + plane.d) / denom;
+    return tHit > EPS;
+}
+
+bool intersectAABB(
+    vec3 rayOrigin,
+    vec3 rayDir,
+    vec3 bmin,
+    vec3 bmax,
+    out float tHit)
+{
+    vec3 invDir = 1.0 / rayDir;
+
+    vec3 t0 = (bmin - rayOrigin) * invDir;
+    vec3 t1 = (bmax - rayOrigin) * invDir;
+
+    vec3 tsmaller = min(t0, t1);
+    vec3 tbigger  = max(t0, t1);
+
+    float tNear = max(max(tsmaller.x, tsmaller.y), tsmaller.z);
+    float tFar  = min(min(tbigger.x, tbigger.y), tbigger.z);
+
+    const float EPS = 0.001;
+
+    if (tFar < max(tNear, EPS)) {
+        return false;
+    }
+
+    tHit = (tNear > EPS) ? tNear : tFar;
+    return tHit > EPS;
+}
+
+// rotation.x = pitch around X
+// rotation.y = yaw   around Y
+// rotation.z = roll  around Z
+vec3 rotateByEuler(vec3 v, vec3 rotation)
+{
+    float cx = cos(rotation.x);
+    float sx = sin(rotation.x);
+
+    float cy = cos(rotation.y);
+    float sy = sin(rotation.y);
+
+    float cz = cos(rotation.z);
+    float sz = sin(rotation.z);
+
+    // X
+    v = vec3(
+        v.x,
+        cx * v.y - sx * v.z,
+        sx * v.y + cx * v.z
+    );
+
+    // Y
+    v = vec3(
+         cy * v.x + sy * v.z,
+         v.y,
+        -sy * v.x + cy * v.z
+    );
+
+    // Z
+    v = vec3(
+        cz * v.x - sz * v.y,
+        sz * v.x + cz * v.y,
+        v.z
+    );
+
+    return v;
+}
+
+// ------------------------------------------------------------
+// Road definition in XZ plane
+//
+// Straight along +X for 50 m,
+// then gradual turn,
+// then 30 m straight.
+// ------------------------------------------------------------
+void sampleRoad(float s, out vec2 centerXZ, out vec2 tangentXZ, out vec2 rightXZ)
+{
+    if (s <= ROAD_SEG1_LEN) {
+        // First straight
+        centerXZ  = vec2(s, 0.0);
+        tangentXZ = vec2(1.0, 0.0);
+    }
+    else if (s <= ROAD_SEG1_LEN + ROAD_ARC_LEN) {
+        // Turn section
+        float arcS  = s - ROAD_SEG1_LEN;
+        float theta = arcS / ROAD_TURN_RADIUS;
+
+        // This version bends the road the opposite way from before
+        vec2 circleCenter = vec2(ROAD_SEG1_LEN, ROAD_TURN_RADIUS);
+
+        centerXZ = circleCenter + vec2(
+            ROAD_TURN_RADIUS * sin(theta),
+           -ROAD_TURN_RADIUS * cos(theta)
+        );
+
+        tangentXZ = normalize(vec2(
+            cos(theta),
+            sin(theta)
+        ));
+    }
+    else {
+        // Final straight after turn
+        float s2 = s - (ROAD_SEG1_LEN + ROAD_ARC_LEN);
+        float theta = ROAD_TURN_RAD;
+
+        vec2 circleCenter = vec2(ROAD_SEG1_LEN, ROAD_TURN_RADIUS);
+        vec2 arcEnd = circleCenter + vec2(
+            ROAD_TURN_RADIUS * sin(theta),
+           -ROAD_TURN_RADIUS * cos(theta)
+        );
+
+        tangentXZ = normalize(vec2(
+            cos(theta),
+            sin(theta)
+        ));
+
+        centerXZ = arcEnd + tangentXZ * s2;
+    }
+
+    // right vector in XZ plane
+    rightXZ = vec2(tangentXZ.y, -tangentXZ.x);
+}
+
+void testSceneSphere(
+    Sphere sphere,
+    vec3 rayOrigin,
+    vec3 rayDir,
+    inout float nearestT,
+    inout bool hitSomething,
+    inout vec3 nearestColor)
+{
+    float tHit;
+    if (intersectSphere(rayOrigin, rayDir, sphere, tHit)) {
+        if (tHit < nearestT) {
+            nearestT = tHit;
+            nearestColor = sphere.color;
+            hitSomething = true;
+        }
+    }
+}
+
+void testSceneBox(
+    vec3 center,
+    vec3 halfSize,
+    vec3 color,
+    vec3 rayOrigin,
+    vec3 rayDir,
+    inout float nearestT,
+    inout bool hitSomething,
+    inout vec3 nearestColor)
+{
+    float tHit;
+    if (intersectAABB(rayOrigin, rayDir, center - halfSize, center + halfSize, tHit)) {
+        if (tHit < nearestT) {
+            nearestT = tHit;
+            nearestColor = color;
+            hitSomething = true;
+        }
+    }
+}
+
 void main()
 {
     uint x_id = gl_GlobalInvocationID.x;
     uint y_id = gl_GlobalInvocationID.y;
 
-    uint image_width = IMAGE_WIDTH;
-    uint num_layers  = NUM_RINGS;
+    uint image_width = ubo.width;
+    uint num_layers  = ubo.height;
 
     if (x_id >= image_width) return;
     if (y_id >= num_layers)  return;
 
     uint point_id = x_id + y_id * image_width;
 
-    Sphere spheres[5];
-    spheres[0] = Sphere(vec3(12.0,  0.0,  0.0), 2.5, vec3(1.0, 0.2, 0.2));
-    spheres[1] = Sphere(vec3(18.0,  1.5,  4.0), 3.0, vec3(0.2, 1.0, 0.2));
-    spheres[2] = Sphere(vec3(10.0, -2.0, -6.0), 2.0, vec3(0.2, 0.4, 1.0));
-    spheres[3] = Sphere(vec3(24.0,  3.0, -2.0), 4.0, vec3(1.0, 1.0, 0.2));
-    spheres[4] = Sphere(vec3(30.0, -1.0,  8.0), 3.5, vec3(1.0, 0.2, 1.0));
+    // Change to 190.0 or 360.0 as needed
+    float horizontalFovDeg = 190.0;
 
-    vec3 rayOrigin = vec3(0.0, 0.0, 0.0);
+    // Infinite flat ground plane at y = 0
+    Plane ground = Plane(
+        vec3(0.0, 1.0, 0.0),
+        0.0,
+        vec3(1, 1, 1)
+    );
 
-    float azimuth = (float(x_id) / float(image_width)) * (2.0 * PI);
     float elevation = ringElevation(y_id);
 
-    vec3 rayDir = normalize(vec3(
+    float azimuth;
+    float fovRad = radians(horizontalFovDeg);
+
+    if (horizontalFovDeg >= 359.999) {
+        float t = float(x_id) / float(image_width);
+        azimuth = t * (2.0 * PI);
+    } else {
+        float t = (image_width <= 1u)
+            ? 0.5
+            : float(x_id) / float(image_width - 1u);
+
+        azimuth = mix(-0.5 * fovRad, 0.5 * fovRad, t);
+    }
+
+    // Scanner-local ray
+    vec3 localRayDir = normalize(vec3(
         cos(elevation) * cos(azimuth),
         sin(elevation),
         cos(elevation) * sin(azimuth)
     ));
 
-    float nearestT = MAX_RANGE;
-    int nearestSphere = -1;
+    // World-space ray
+    vec3 rayOrigin = ubo.position.xyz;
+    vec3 rayDir    = normalize(rotateByEuler(localRayDir, ubo.rotation.xyz));
 
-    for (int i = 0; i < spheres.length(); ++i) {
+    float nearestT = ubo.max_range;
+    bool hitSomething = false;
+    vec3 nearestColor = vec3(0.0);
+
+    // ------------------------------------------------------------
+    // 1. Infinite ground plane
+    // ------------------------------------------------------------
+    {
         float tHit;
-        if (intersectSphere(rayOrigin, rayDir, spheres[i], tHit)) {
+        if (intersectPlane(rayOrigin, rayDir, ground, tHit)) {
             if (tHit < nearestT) {
                 nearestT = tHit;
-                nearestSphere = i;
+                nearestColor = ground.color;
+                hitSomething = true;
             }
         }
     }
 
-    if (nearestSphere >= 0) {
+    // ------------------------------------------------------------
+    // 2. Road edge boxes
+    // ------------------------------------------------------------
+    {
+        vec3 boxHalfSize = vec3(0.35, 0.75, 0.35);
+        vec3 edgeColorL = vec3(1.00, 0.82, 0.18);
+        vec3 edgeColorR = vec3(1.00, 0.55, 0.10);
+
+        for (int i = 0; i < EDGE_BOX_COUNT; ++i) {
+            float t = (EDGE_BOX_COUNT <= 1)
+                ? 0.0
+                : float(i) / float(EDGE_BOX_COUNT - 1);
+
+            float s = mix(4.0, ROAD_TOTAL_LEN - 4.0, t);
+
+            vec2 centerXZ;
+            vec2 tangentXZ;
+            vec2 rightXZ;
+            sampleRoad(s, centerXZ, tangentXZ, rightXZ);
+
+            vec2 leftEdgeXZ  = centerXZ - rightXZ * ROAD_HALF_WIDTH;
+            vec2 rightEdgeXZ = centerXZ + rightXZ * ROAD_HALF_WIDTH;
+
+            vec3 leftBoxCenter  = vec3(leftEdgeXZ.x,  boxHalfSize.y, leftEdgeXZ.y);
+            vec3 rightBoxCenter = vec3(rightEdgeXZ.x, boxHalfSize.y, rightEdgeXZ.y);
+
+            testSceneBox(leftBoxCenter,  boxHalfSize, edgeColorL, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+            testSceneBox(rightBoxCenter, boxHalfSize, edgeColorR, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // 3. End boxes across the road end
+    // ------------------------------------------------------------
+    {
+        vec2 endXZ;
+        vec2 endTangentXZ;
+        vec2 endRightXZ;
+        sampleRoad(ROAD_TOTAL_LEN, endXZ, endTangentXZ, endRightXZ);
+
+        vec3 barrierHalfSize = vec3(0.45, 0.85, 0.45);
+
+        for (int i = 0; i < END_BOX_COUNT; ++i) {
+            float t = (END_BOX_COUNT <= 1)
+                ? 0.5
+                : float(i) / float(END_BOX_COUNT - 1);
+
+            float lateral = mix(-ROAD_HALF_WIDTH * 1.05, ROAD_HALF_WIDTH * 1.05, t);
+
+            vec2 barrierXZ = endXZ + endTangentXZ * 2.0 + endRightXZ * lateral;
+            vec3 barrierCenter = vec3(barrierXZ.x, barrierHalfSize.y, barrierXZ.y);
+
+            vec3 barrierColor = (mod(float(i), 2.0) < 0.5)
+                ? vec3(0.95, 0.15, 0.15)
+                : vec3(0.95, 0.95, 0.95);
+
+            testSceneBox(barrierCenter, barrierHalfSize, barrierColor, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // 4. Cars as smaller spheres placed on the road
+    // ------------------------------------------------------------
+    {
+        for (int i = 0; i < CAR_COUNT; ++i) {
+            float fi = float(i);
+
+            float s = mix(
+                8.0,
+                ROAD_TOTAL_LEN - 10.0,
+                hash11(fi * 13.17 + 1.23)
+            );
+
+            float lateral = mix(
+                -ROAD_HALF_WIDTH * 0.55,
+                 ROAD_HALF_WIDTH * 0.55,
+                hash11(fi * 29.41 + 7.81)
+            );
+
+            float radius = mix(
+                0.45,
+                0.75,
+                hash11(fi * 41.73 + 2.11)
+            );
+
+            vec2 centerXZ;
+            vec2 tangentXZ;
+            vec2 rightXZ;
+            sampleRoad(s, centerXZ, tangentXZ, rightXZ);
+
+            vec2 carXZ = centerXZ + rightXZ * lateral;
+
+            Sphere car;
+            car.center = vec3(carXZ.x, radius, carXZ.y);
+            car.radius = radius;
+            car.color = carColor(i);
+
+            testSceneSphere(car, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Output
+    // ------------------------------------------------------------
+    if (hitSomething) {
         vec3 hitPos = rayOrigin + nearestT * rayDir;
 
-        float intensity = 1.0 - clamp(nearestT / MAX_RANGE, 0.0, 1.0);
-        vec3 baseColor = spheres[nearestSphere].color;
-        vec3 finalColor = baseColor * (0.3 + 0.7 * intensity);
+        float intensity = 1.0 - clamp(nearestT / ubo.max_range, 0.0, 1.0);
+        vec3 finalColor = nearestColor * (0.35 + 0.65 * intensity);
 
         output_points[point_id].position = vec4(hitPos, 1.0);
         output_points[point_id].color    = vec4(finalColor, 1.0);
     } else {
-        // no return
         output_points[point_id].position = vec4(0.0, 0.0, 0.0, 1.0);
         output_points[point_id].color    = vec4(0.0, 0.0, 0.0, 0.0);
     }
