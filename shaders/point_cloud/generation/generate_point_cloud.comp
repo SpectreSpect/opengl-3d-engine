@@ -1,0 +1,133 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+struct PointInstance {
+    vec4 position;
+    vec4 color;
+};
+
+layout(std430, binding = 1) buffer OutputPointInstances {
+    PointInstance output_points[];
+};
+
+const float PI = 3.14159265358979323846;
+const float MAX_RANGE = 50.0;
+const uint IMAGE_WIDTH = 3600u;
+const uint NUM_RINGS   = 16u;
+
+struct Sphere {
+    vec3 center;
+    float radius;
+    vec3 color;
+};
+
+float ringElevation(uint ring)
+{
+    // 16 lidar rings, evenly spread here for simplicity
+    float minDeg = -15.0;
+    float maxDeg =  15.0;
+
+    if (NUM_RINGS <= 1u) {
+        return radians(0.0);
+    }
+
+    float t = float(ring) / float(NUM_RINGS - 1u);
+    return radians(mix(minDeg, maxDeg, t));
+}
+
+bool intersectSphere(
+    vec3 rayOrigin,
+    vec3 rayDir,
+    Sphere sphere,
+    out float tHit)
+{
+    vec3 oc = rayOrigin - sphere.center;
+
+    float b = dot(oc, rayDir);
+    float c = dot(oc, oc) - sphere.radius * sphere.radius;
+    float h = b * b - c;
+
+    if (h < 0.0) {
+        return false;
+    }
+
+    h = sqrt(h);
+
+    float t0 = -b - h;
+    float t1 = -b + h;
+
+    const float EPS = 0.001;
+
+    if (t0 > EPS) {
+        tHit = t0;
+        return true;
+    }
+
+    if (t1 > EPS) {
+        tHit = t1;
+        return true;
+    }
+
+    return false;
+}
+
+void main()
+{
+    uint x_id = gl_GlobalInvocationID.x;
+    uint y_id = gl_GlobalInvocationID.y;
+
+    uint image_width = IMAGE_WIDTH;
+    uint num_layers  = NUM_RINGS;
+
+    if (x_id >= image_width) return;
+    if (y_id >= num_layers)  return;
+
+    uint point_id = x_id + y_id * image_width;
+
+    Sphere spheres[5];
+    spheres[0] = Sphere(vec3(12.0,  0.0,  0.0), 2.5, vec3(1.0, 0.2, 0.2));
+    spheres[1] = Sphere(vec3(18.0,  1.5,  4.0), 3.0, vec3(0.2, 1.0, 0.2));
+    spheres[2] = Sphere(vec3(10.0, -2.0, -6.0), 2.0, vec3(0.2, 0.4, 1.0));
+    spheres[3] = Sphere(vec3(24.0,  3.0, -2.0), 4.0, vec3(1.0, 1.0, 0.2));
+    spheres[4] = Sphere(vec3(30.0, -1.0,  8.0), 3.5, vec3(1.0, 0.2, 1.0));
+
+    vec3 rayOrigin = vec3(0.0, 0.0, 0.0);
+
+    float azimuth = (float(x_id) / float(image_width)) * (2.0 * PI);
+    float elevation = ringElevation(y_id);
+
+    vec3 rayDir = normalize(vec3(
+        cos(elevation) * cos(azimuth),
+        sin(elevation),
+        cos(elevation) * sin(azimuth)
+    ));
+
+    float nearestT = MAX_RANGE;
+    int nearestSphere = -1;
+
+    for (int i = 0; i < spheres.length(); ++i) {
+        float tHit;
+        if (intersectSphere(rayOrigin, rayDir, spheres[i], tHit)) {
+            if (tHit < nearestT) {
+                nearestT = tHit;
+                nearestSphere = i;
+            }
+        }
+    }
+
+    if (nearestSphere >= 0) {
+        vec3 hitPos = rayOrigin + nearestT * rayDir;
+
+        float intensity = 1.0 - clamp(nearestT / MAX_RANGE, 0.0, 1.0);
+        vec3 baseColor = spheres[nearestSphere].color;
+        vec3 finalColor = baseColor * (0.3 + 0.7 * intensity);
+
+        output_points[point_id].position = vec4(hitPos, 1.0);
+        output_points[point_id].color    = vec4(finalColor, 1.0);
+    } else {
+        // no return
+        output_points[point_id].position = vec4(0.0, 0.0, 0.0, 1.0);
+        output_points[point_id].color    = vec4(0.0, 0.0, 0.0, 0.0);
+    }
+}
