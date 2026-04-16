@@ -35,8 +35,10 @@ public:
     PointCloud generate(glm::vec3 position, glm::vec3 rotation, float time, 
                         glm::vec3 prev_position, glm::vec3 prev_rotation, float prev_time);
     
-    void generate(PointCloud& point_cloud, glm::vec3 position, glm::vec3 rotation, float time, 
-                  glm::vec3 prev_position, glm::vec3 prev_rotation, float prev_time);
+    void generate(PointCloud& point_cloud, VideoBuffer& normal_buffer, glm::vec3 position, glm::vec3 rotation);
+
+    // 1. points
+    // 2. normals
     // 
     // void render(PointCloud& point_cloud, Camera& camera);
     CommandPool command_pool;

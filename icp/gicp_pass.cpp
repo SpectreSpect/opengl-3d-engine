@@ -266,7 +266,7 @@ double GICPPass::step(VoxelPointMap& voxel_point_map, PointCloud& source_point_c
     //           << ", |v| = " << glm::length(v)
     //           << "\n";
 
-    std::cout << rmse << std::endl;
+    // std::cout << rmse << std::endl;
     return rmse;
 }
 

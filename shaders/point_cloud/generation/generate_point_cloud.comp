@@ -11,16 +11,20 @@ layout(std430, binding = 1) buffer OutputPointInstances {
     PointInstance output_points[];
 };
 
+layout(std430, binding = 2) buffer OutputNormalBuffer {
+    vec4 output_normals[];
+};
+
 const float PI = 3.14159265358979323846;
 
 // ------------------------------------------------------------
 // Scene controls
 // ------------------------------------------------------------
-const float ROAD_HALF_WIDTH   = 6.0;   // wider road: total width = 12 m
+const float ROAD_HALF_WIDTH   = 6.0;
 const float ROAD_SEG1_LEN     = 50.0;
 const float ROAD_TURN_DEG     = 70.0;
 const float ROAD_TURN_RAD     = ROAD_TURN_DEG * PI / 180.0;
-const float ROAD_TURN_RADIUS  = 18.0;  // larger radius = gentler turn
+const float ROAD_TURN_RADIUS  = 18.0;
 const float ROAD_ARC_LEN      = ROAD_TURN_RADIUS * ROAD_TURN_RAD;
 const float ROAD_SEG2_LEN     = 30.0;
 const float ROAD_TOTAL_LEN    = ROAD_SEG1_LEN + ROAD_ARC_LEN + ROAD_SEG2_LEN;
@@ -201,26 +205,55 @@ vec3 rotateByEuler(vec3 v, vec3 rotation)
     return v;
 }
 
+// Inverse of rotateByEuler(): undo Z, then Y, then X
+vec3 inverseRotateByEuler(vec3 v, vec3 rotation)
+{
+    float cx = cos(rotation.x);
+    float sx = sin(rotation.x);
+
+    float cy = cos(rotation.y);
+    float sy = sin(rotation.y);
+
+    float cz = cos(rotation.z);
+    float sz = sin(rotation.z);
+
+    // inverse Z
+    v = vec3(
+        cz * v.x + sz * v.y,
+       -sz * v.x + cz * v.y,
+        v.z
+    );
+
+    // inverse Y
+    v = vec3(
+        cy * v.x - sy * v.z,
+        v.y,
+        sy * v.x + cy * v.z
+    );
+
+    // inverse X
+    v = vec3(
+        v.x,
+        cx * v.y + sx * v.z,
+       -sx * v.y + cx * v.z
+    );
+
+    return v;
+}
+
 // ------------------------------------------------------------
 // Road definition in XZ plane
-//
-// Straight along +X for 50 m,
-// then gradual turn,
-// then 30 m straight.
 // ------------------------------------------------------------
 void sampleRoad(float s, out vec2 centerXZ, out vec2 tangentXZ, out vec2 rightXZ)
 {
     if (s <= ROAD_SEG1_LEN) {
-        // First straight
         centerXZ  = vec2(s, 0.0);
         tangentXZ = vec2(1.0, 0.0);
     }
     else if (s <= ROAD_SEG1_LEN + ROAD_ARC_LEN) {
-        // Turn section
         float arcS  = s - ROAD_SEG1_LEN;
         float theta = arcS / ROAD_TURN_RADIUS;
 
-        // This version bends the road the opposite way from before
         vec2 circleCenter = vec2(ROAD_SEG1_LEN, ROAD_TURN_RADIUS);
 
         centerXZ = circleCenter + vec2(
@@ -234,7 +267,6 @@ void sampleRoad(float s, out vec2 centerXZ, out vec2 tangentXZ, out vec2 rightXZ
         ));
     }
     else {
-        // Final straight after turn
         float s2 = s - (ROAD_SEG1_LEN + ROAD_ARC_LEN);
         float theta = ROAD_TURN_RAD;
 
@@ -252,8 +284,31 @@ void sampleRoad(float s, out vec2 centerXZ, out vec2 tangentXZ, out vec2 rightXZ
         centerXZ = arcEnd + tangentXZ * s2;
     }
 
-    // right vector in XZ plane
     rightXZ = vec2(tangentXZ.y, -tangentXZ.x);
+}
+
+// ------------------------------------------------------------
+// Normal helpers
+// ------------------------------------------------------------
+vec3 sphereNormalAtPoint(vec3 hitPos, Sphere sphere)
+{
+    return normalize(hitPos - sphere.center);
+}
+
+vec3 boxNormalAtPoint(vec3 hitPos, vec3 center, vec3 halfSize)
+{
+    vec3 local = hitPos - center;
+    vec3 scaled = abs(local) / max(halfSize, vec3(1e-6));
+
+    if (scaled.x > scaled.y && scaled.x > scaled.z) {
+        return vec3(sign(local.x), 0.0, 0.0);
+    }
+    else if (scaled.y > scaled.z) {
+        return vec3(0.0, sign(local.y), 0.0);
+    }
+    else {
+        return vec3(0.0, 0.0, sign(local.z));
+    }
 }
 
 void testSceneSphere(
@@ -262,13 +317,16 @@ void testSceneSphere(
     vec3 rayDir,
     inout float nearestT,
     inout bool hitSomething,
-    inout vec3 nearestColor)
+    inout vec3 nearestColor,
+    inout vec3 nearestNormal)
 {
     float tHit;
     if (intersectSphere(rayOrigin, rayDir, sphere, tHit)) {
         if (tHit < nearestT) {
+            vec3 hitPos = rayOrigin + tHit * rayDir;
             nearestT = tHit;
             nearestColor = sphere.color;
+            nearestNormal = sphereNormalAtPoint(hitPos, sphere);
             hitSomething = true;
         }
     }
@@ -282,13 +340,16 @@ void testSceneBox(
     vec3 rayDir,
     inout float nearestT,
     inout bool hitSomething,
-    inout vec3 nearestColor)
+    inout vec3 nearestColor,
+    inout vec3 nearestNormal)
 {
     float tHit;
     if (intersectAABB(rayOrigin, rayDir, center - halfSize, center + halfSize, tHit)) {
         if (tHit < nearestT) {
+            vec3 hitPos = rayOrigin + tHit * rayDir;
             nearestT = tHit;
             nearestColor = color;
+            nearestNormal = boxNormalAtPoint(hitPos, center, halfSize);
             hitSomething = true;
         }
     }
@@ -307,14 +368,12 @@ void main()
 
     uint point_id = x_id + y_id * image_width;
 
-    // Change to 190.0 or 360.0 as needed
     float horizontalFovDeg = 190.0;
 
-    // Infinite flat ground plane at y = 0
     Plane ground = Plane(
         vec3(0.0, 1.0, 0.0),
         0.0,
-        vec3(1, 1, 1)
+        vec3(1.0, 1.0, 1.0)
     );
 
     float elevation = ringElevation(y_id);
@@ -347,6 +406,7 @@ void main()
     float nearestT = ubo.max_range;
     bool hitSomething = false;
     vec3 nearestColor = vec3(0.0);
+    vec3 nearestNormal = vec3(0.0);
 
     // ------------------------------------------------------------
     // 1. Infinite ground plane
@@ -357,6 +417,7 @@ void main()
             if (tHit < nearestT) {
                 nearestT = tHit;
                 nearestColor = ground.color;
+                nearestNormal = normalize(ground.normal);
                 hitSomething = true;
             }
         }
@@ -388,8 +449,17 @@ void main()
             vec3 leftBoxCenter  = vec3(leftEdgeXZ.x,  boxHalfSize.y, leftEdgeXZ.y);
             vec3 rightBoxCenter = vec3(rightEdgeXZ.x, boxHalfSize.y, rightEdgeXZ.y);
 
-            testSceneBox(leftBoxCenter,  boxHalfSize, edgeColorL, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
-            testSceneBox(rightBoxCenter, boxHalfSize, edgeColorR, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+            testSceneBox(
+                leftBoxCenter, boxHalfSize, edgeColorL,
+                rayOrigin, rayDir,
+                nearestT, hitSomething, nearestColor, nearestNormal
+            );
+
+            testSceneBox(
+                rightBoxCenter, boxHalfSize, edgeColorR,
+                rayOrigin, rayDir,
+                nearestT, hitSomething, nearestColor, nearestNormal
+            );
         }
     }
 
@@ -418,7 +488,11 @@ void main()
                 ? vec3(0.95, 0.15, 0.15)
                 : vec3(0.95, 0.95, 0.95);
 
-            testSceneBox(barrierCenter, barrierHalfSize, barrierColor, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+            testSceneBox(
+                barrierCenter, barrierHalfSize, barrierColor,
+                rayOrigin, rayDir,
+                nearestT, hitSomething, nearestColor, nearestNormal
+            );
         }
     }
 
@@ -459,23 +533,34 @@ void main()
             car.radius = radius;
             car.color = carColor(i);
 
-            testSceneSphere(car, rayOrigin, rayDir, nearestT, hitSomething, nearestColor);
+            testSceneSphere(
+                car,
+                rayOrigin,
+                rayDir,
+                nearestT,
+                hitSomething,
+                nearestColor,
+                nearestNormal
+            );
         }
     }
 
     // ------------------------------------------------------------
-    // Output
+    // Output in scanner-local space
     // ------------------------------------------------------------
     if (hitSomething) {
-        vec3 hitPos = rayOrigin + nearestT * rayDir;
+        vec3 localHitPos = nearestT * localRayDir;
+        vec3 localNormal = normalize(inverseRotateByEuler(nearestNormal, ubo.rotation.xyz));
 
         float intensity = 1.0 - clamp(nearestT / ubo.max_range, 0.0, 1.0);
         vec3 finalColor = nearestColor * (0.35 + 0.65 * intensity);
 
-        output_points[point_id].position = vec4(hitPos, 1.0);
+        output_points[point_id].position = vec4(localHitPos, 1.0);
         output_points[point_id].color    = vec4(finalColor, 1.0);
+        output_normals[point_id]         = vec4(localNormal, 0.0);
     } else {
         output_points[point_id].position = vec4(0.0, 0.0, 0.0, 1.0);
         output_points[point_id].color    = vec4(0.0, 0.0, 0.0, 0.0);
+        output_normals[point_id]         = vec4(0.0, 0.0, 0.0, 0.0);
     }
 }

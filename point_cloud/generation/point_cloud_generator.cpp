@@ -17,6 +17,7 @@ void PointCloudGenerator::create(VulkanEngine& engine) {
     builder.add_uniform_buffer(0, uniform_buffer, VK_SHADER_STAGE_COMPUTE_BIT);
     // builder.add_combined_image_sampler(1, VK_SHADER_STAGE_COMPUTE_BIT);
     builder.add_storage_buffer(1, VK_SHADER_STAGE_COMPUTE_BIT); // output point instances
+    builder.add_storage_buffer(2, VK_SHADER_STAGE_COMPUTE_BIT); // output normal buffer
     descriptor_set_bundle = builder.create(engine.device);
 
     pipeline.create(engine.device, descriptor_set_bundle, compute_shader);
@@ -99,8 +100,7 @@ PointCloud PointCloudGenerator::generate(glm::vec3 position, glm::vec3 rotation,
     return output_point_cloud;
 }
 
-void PointCloudGenerator::generate(PointCloud& point_cloud, glm::vec3 position, glm::vec3 rotation, float time, 
-                  glm::vec3 prev_position, glm::vec3 prev_rotation, float prev_time) {
+void PointCloudGenerator::generate(PointCloud& point_cloud, VideoBuffer& normal_buffer, glm::vec3 position, glm::vec3 rotation) {
 
     if (!this->engine)
         throw std::runtime_error("engine was null");
@@ -139,6 +139,7 @@ void PointCloudGenerator::generate(PointCloud& point_cloud, glm::vec3 position, 
     uint32_t y_groups = vulkan_utils::div_up_u32(uniform_data.height, 16);
 
     descriptor_set_bundle.bind_storage_buffer(1, point_cloud.get_instance_buffer());
+    descriptor_set_bundle.bind_storage_buffer(2, normal_buffer);
     
     command_buffer.begin();
 

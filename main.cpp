@@ -490,7 +490,9 @@ int main() {
     float pi = glm::pi<float>();
 
     uint32_t num_point_cloud_frames = 100;
-    PointCloud point_cloud_frames[num_point_cloud_frames];
+    PointCloudFrame point_cloud_frames[num_point_cloud_frames];
+    // PointCloud point_cloud_frames[num_point_cloud_frames];
+    // VideoBuffer normal_buffers[num_point_cloud_frames];
 
     const uint32_t forward_frames = 40;
     const uint32_t turn_frames    = 20;
@@ -535,14 +537,24 @@ int main() {
             rotation = glm::vec3(0.0f, pi, 0.0f);
         }
 
-        point_cloud_frames[i] = point_cloud_generator.generate(
-            position,
-            rotation,
-            0,
-            glm::vec3(0, 0, 0),
-            glm::vec3(0, 0, 0),
-            0
-        );
+        uint32_t num_points = 3600 * 16;
+
+        point_cloud_frames[i].point_cloud.create(engine, num_points);
+        point_cloud_frames[i].normal_buffer.create(engine, num_points * sizeof(glm::vec4));
+
+        point_cloud_generator.generate(point_cloud_frames[i].point_cloud, point_cloud_frames[i].normal_buffer, position, rotation);
+
+        // point_cloud_frames[i].point_cloud.position = position;
+        // point_cloud_frames[i].point_cloud.rotation = rotation;
+
+        // point_cloud_frames[i] = point_cloud_generator.generate(
+        //     position,
+        //     rotation,
+        //     0,
+        //     glm::vec3(0, 0, 0),
+        //     glm::vec3(0, 0, 0),
+        //     0
+        // );
     }
 
 
@@ -562,29 +574,29 @@ int main() {
     // }
     // source_point_cloud_frame.point_cloud.set_points(source_point_cloud_frame.points);
 
-    // VoxelPointMap voxel_point_map;
-    // voxel_point_map.create(engine, 1500000, 1500000);
+    VoxelPointMap voxel_point_map;
+    voxel_point_map.create(engine, 1500000, 1500000);
 
-    // VoxelPointMapReseter voxel_point_map_reseter;
-    // voxel_point_map_reseter.create(engine);
+    VoxelPointMapReseter voxel_point_map_reseter;
+    voxel_point_map_reseter.create(engine);
 
-    // voxel_point_map_reseter.reset(voxel_point_map);
+    voxel_point_map_reseter.reset(voxel_point_map);
 
-    // VoxelMapPointInserter voxel_map_point_inserter;
-    // voxel_map_point_inserter.create(engine);
+    VoxelMapPointInserter voxel_map_point_inserter;
+    voxel_map_point_inserter.create(engine);
 
     // target_point_cloud_frame.point_cloud.position = glm::vec3(0, 0, 0);
     // target_point_cloud_frame.point_cloud.rotation = glm::vec3(0.0f, 0, 0);
 
-    // voxel_map_point_inserter.insert(voxel_point_map, target_point_cloud_frame.point_cloud, target_point_cloud_frame.normal_buffer);
+    voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[0].point_cloud, point_cloud_frames[0].normal_buffer);
 
-    // GICPPass gicp_pass;
-    // gicp_pass.create(engine);
+    GICPPass gicp_pass;
+    gicp_pass.create(engine);
 
-    // PointCloud voxel_map_point_cloud;
-    // voxel_map_point_cloud.create(engine);
+    PointCloud voxel_map_point_cloud;
+    voxel_map_point_cloud.create(engine, voxel_point_map.map_point_count);
 
-    // voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
+    voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
 
 
     // PointCloud original_scan;
@@ -705,7 +717,7 @@ int main() {
         lighting_system.update(camera);
 
         
-        point_cloud_pass.render(point_cloud_frames[last_frame_id], camera);
+        // point_cloud_pass.render(point_cloud_frames[last_frame_id].point_cloud, camera);
 
         // glm::vec3 f = glm::normalize(camera.front);
         // float rotY = std::atan2(-f.z, std::sqrt(f.x * f.x + f.y * f.y));
@@ -716,7 +728,7 @@ int main() {
 
         // point_cloud_pass.render(source_point_cloud_frame.point_cloud, camera);
         // point_cloud_pass.render(target_point_cloud_frame.point_cloud, camera);
-        // point_cloud_pass.render(voxel_map_point_cloud, camera);
+        point_cloud_pass.render(voxel_map_point_cloud, camera);
 
         ImGui::Begin("Hello");
 
@@ -737,13 +749,19 @@ int main() {
             // std::cout << ")" << std::endl;
         }
 
-
         if (ImGui::Button("Next frame")) {
             last_frame_id++;
-            // point_cloud_video.current_frame += 1;
-            // const auto& rot = point_cloud_video.frames[point_cloud_video.current_frame].point_cloud.rotation;
 
-            // std::cout << "(" << rot.x << ", " << rot.y << ", " << rot.z << ")" << std::endl;
+            point_cloud_frames[last_frame_id].point_cloud.position = point_cloud_frames[last_frame_id - 1].point_cloud.position;
+            point_cloud_frames[last_frame_id].point_cloud.rotation = point_cloud_frames[last_frame_id - 1].point_cloud.rotation;
+
+            gicp_pass.fit(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer, 10);
+            
+            voxel_point_map_reseter.reset(voxel_point_map);
+
+            voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer);
+            
+            voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
         }
 
         ImGui::End();
