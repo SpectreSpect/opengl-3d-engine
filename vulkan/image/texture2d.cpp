@@ -133,14 +133,7 @@ void Texture2D::upload_data(
 }
 
 void Texture2D::read_data(CommandBuffer& command_buffer, VideoBuffer& staging_buffer) {
-    image_resource.transition_layout_all(
-        command_buffer,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_ACCESS_TRANSFER_READ_BIT
-    );
+    image_resource.transition_image_mip(command_buffer, 0, ImageTransitionState::ImageUsage::TransferSrc);
 
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
@@ -162,14 +155,7 @@ void Texture2D::read_data(CommandBuffer& command_buffer, VideoBuffer& staging_bu
         &region
     );
 
-    image_resource.transition_layout_all(
-        command_buffer,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_ACCESS_TRANSFER_READ_BIT,
-        VK_ACCESS_SHADER_READ_BIT
-    );
+    image_resource.transition_image_mip(command_buffer, 0, ImageTransitionState::ImageUsage::SampledRead);
 }
 
 uint32_t Texture2D::calc_mip_levels(uint32_t width, uint32_t height) {

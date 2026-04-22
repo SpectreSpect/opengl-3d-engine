@@ -1,11 +1,6 @@
 #include "vulkan_engine.h"
 #include "vulkan/graphics_pipeline.h"
 
-#include <iostream>
-#include <stdexcept>
-#include <cstring>
-#include <cstdlib>
-
 namespace {
     constexpr const char* kDeviceExtensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -362,7 +357,9 @@ void VulkanEngine::draw_indexed(uint32_t num_indices) {
 
 void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
     if (frameInProgress) {
-        throw std::runtime_error("begin_frame called while a frame is already in progress");
+        std::string message = "VulkanEngine::begin_frame: begin_frame called while a frame is already in progress";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
     }
 
     if (device == VK_NULL_HANDLE || swapchain == VK_NULL_HANDLE) {
@@ -375,8 +372,6 @@ void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
         // Window is minimized or not drawable right now.
         return;
     }
-
-    
 
     vk_check(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX),
              "vkWaitForFences");
@@ -396,7 +391,9 @@ void VulkanEngine::begin_frame(const glm::vec4& clear_color) {
     }
 
     if (acquireRes != VK_SUCCESS && acquireRes != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("vkAcquireNextImageKHR failed");
+        std::string message = "VulkanEngine::begin_frame: vkAcquireNextImageKHR failed";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
     }
 
     vk_check(vkResetFences(device, 1, &inFlightFence), "vkResetFences");

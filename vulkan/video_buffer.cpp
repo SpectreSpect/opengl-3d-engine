@@ -10,52 +10,10 @@ VideoBuffer::VideoBuffer(
     VkMemoryPropertyFlags properties)
     :   engine(engine),
         size_bytes(size_bytes),
+        usage(usage),
         memory_properties(properties)
 {
-    if (engine == nullptr) {
-        std::string message = "VideoBuffer::VideoBuffer: engine was nullptr";
-        std::cout << message << std::endl;
-        throw std::runtime_error(message);
-    }
-
-    if (engine->device == VK_NULL_HANDLE) {
-        std::string message = "VideoBuffer::VideoBuffer: engine->device was not initialized";
-        std::cout << message << std::endl;
-        throw std::runtime_error(message);
-    }
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size_bytes;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    vulkan_utils::vk_check(
-        vkCreateBuffer(engine->device, &bufferInfo, nullptr, &buffer),
-        "vkCreateBuffer"
-    );
-
-    VkMemoryRequirements memRequirements{};
-    vkGetBufferMemoryRequirements(engine->device, buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = vulkan_utils::find_memory_type(
-        physical_device,
-        memRequirements.memoryTypeBits,
-        properties
-    );
-
-    vulkan_utils::vk_check(
-        vkAllocateMemory(engine->device, &allocInfo, nullptr, &buffer_memory),
-        "vkAllocateMemory"
-    );
-
-    vulkan_utils::vk_check(
-        vkBindBufferMemory(engine->device, buffer, buffer_memory, 0),
-        "vkBindBufferMemory"
-    );
+    realloc(physical_device, size_bytes, usage, properties);
 }
 
 VideoBuffer::~VideoBuffer() {
@@ -111,17 +69,29 @@ VideoBuffer& VideoBuffer::operator=(VideoBuffer&& other) noexcept {
 }
 
 void VideoBuffer::read_subdata(VkDeviceSize offset_bytes, void* out, VkDeviceSize out_bytes) {
-    if (!device)
-        throw std::runtime_error("device was null");
+    if (engine == nullptr) {
+        std::string message = "VideoBuffer::read_subdata: engine was nullptr";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
+
+    if (engine->device == VK_NULL_HANDLE) {
+        std::string message = "VideoBuffer::read_subdata: engine->device was not initialized";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
 
     void* mapped = nullptr;
-    vkMapMemory(*device, buffer_memory, offset_bytes, out_bytes, 0, &mapped);
+    vkMapMemory(engine->device, buffer_memory, offset_bytes, out_bytes, 0, &mapped);
 
-    if (!mapped)
-        throw std::runtime_error("failed to map");
+    if (!mapped) {
+        std::string message = "VideoBuffer::read_subdata: failed to map";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
 
     std::memcpy(out, mapped, static_cast<size_t>(out_bytes));
-    vkUnmapMemory(*device, buffer_memory);
+    vkUnmapMemory(engine->device, buffer_memory);
 }
 
 void VideoBuffer::memory_barrier(
@@ -150,6 +120,75 @@ void VideoBuffer::memory_barrier(
         1, &barrier,
         0, nullptr
     );
+}
+
+void VideoBuffer::realloc(VkPhysicalDevice& physical_device, uint32_t size_bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+    if (engine == nullptr) {
+        std::string message = "VideoBuffer::VideoBuffer: engine was nullptr";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
+
+    if (engine->device == VK_NULL_HANDLE) {
+        std::string message = "VideoBuffer::VideoBuffer: engine->device was not initialized";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size_bytes;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    vulkan_utils::vk_check(
+        vkCreateBuffer(engine->device, &bufferInfo, nullptr, &buffer),
+        "vkCreateBuffer"
+    );
+
+    VkMemoryRequirements memRequirements{};
+    vkGetBufferMemoryRequirements(engine->device, buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = vulkan_utils::find_memory_type(
+        physical_device,
+        memRequirements.memoryTypeBits,
+        properties
+    );
+
+    vulkan_utils::vk_check(
+        vkAllocateMemory(engine->device, &allocInfo, nullptr, &buffer_memory),
+        "vkAllocateMemory"
+    );
+
+    vulkan_utils::vk_check(
+        vkBindBufferMemory(engine->device, buffer, buffer_memory, 0),
+        "vkBindBufferMemory"
+    );
+
+    this->size_bytes = size_bytes;
+    this->usage = usage;
+    this->memory_properties = properties;
+}
+
+void VideoBuffer::realloc(uint32_t size_bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+    realloc(engine->physicalDevice, size_bytes, usage, properties);
+}
+
+void VideoBuffer::realloc(uint32_t size_bytes) {
+    realloc(size_bytes, this->usage, this->memory_properties);
+}
+
+void VideoBuffer::ensure_capacity(uint32_t size_bytes) {
+    if (this->size_bytes < size_bytes) {
+        realloc(size_bytes);
+    }
+}
+
+void VideoBuffer::copy_from_buffer() {
+
 }
 
 void VideoBuffer::update_data(const void* data, VkDeviceSize size_bytes, VkDeviceSize offset_bytes, VkMemoryMapFlags flags) {
@@ -224,4 +263,32 @@ void VideoBuffer::clear_cpu() {
     }
 
     vkUnmapMemory(engine->device, buffer_memory);
+}
+
+void VideoBuffer::copy_buffer(
+    CommandBuffer& command_buffer,
+    const VideoBuffer& src_buffer,
+    uint32_t offset_bytes_src,
+    VideoBuffer& dst_buffer,
+    uint32_t offset_bytes_dst,
+    VkDeviceSize size_bytes)
+{
+    if (offset_bytes_src + size_bytes > src_buffer.size_bytes) {
+        std::string message = "VideoBuffer::copy_buffer: the source copy region doesn't fit into the source buffer.";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
+
+    if (offset_bytes_dst + size_bytes > dst_buffer.size_bytes) {
+        std::string message = "VideoBuffer::copy_buffer: the destination copy region doesn't fit into the destination buffer.";
+        std::cout << message << std::endl;
+        throw std::runtime_error(message);
+    }
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = offset_bytes_src;
+    copyRegion.dstOffset = offset_bytes_dst;
+    copyRegion.size = size_bytes;
+
+    vkCmdCopyBuffer(command_buffer.buffer, src_buffer.buffer, dst_buffer.buffer, 1, &copyRegion);
 }

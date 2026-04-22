@@ -261,7 +261,7 @@ void ImageResource::transition_image_mip(
     );
 }
 
-void ImageResource::generate_mipmaps(VulkanEngine& engine, CommandBuffer& command_buffer) {
+void ImageResource::generate_mipmaps(CommandBuffer& command_buffer) {
     if (command_buffer.buffer == VK_NULL_HANDLE) {
         std::string message = "ImageResource::generate_mipmaps: cmd was VK_NULL_HANDLE";
         std::cout << message << std::endl;

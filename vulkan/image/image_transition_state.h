@@ -38,6 +38,12 @@ public:
     ImageTransitionState() = default;
     ImageTransitionState(uint32_t mip_levels, uint32_t array_layers);
 
+    ImageTransitionState(const ImageTransitionState&) = default;
+    ImageTransitionState& operator=(const ImageTransitionState&) = default;
+    
+    ImageTransitionState(ImageTransitionState&&) noexcept = default;
+    ImageTransitionState& operator=(ImageTransitionState&&) noexcept = default;
+
     size_t subresource_index(uint32_t mip, uint32_t layer) const;
     ImageSubresourceState& subresource_state(uint32_t mip, uint32_t layer);
     const ImageSubresourceState& subresource_state(uint32_t mip, uint32_t layer) const;

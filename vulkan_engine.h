@@ -1,29 +1,67 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <vulkan/vulkan.h>
-// #include "engine3d.h"
-// #include "window.h"
-
-
-#include <GLFW/glfw3.h>
-
-#include <optional>
 #include <set>
 #include <string>
 #include <vector>
-#include "vulkan_window.h"
+#include <cstring>
+#include <cstdlib>
+#include <optional>
 #include <stdexcept>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <GLFW/glfw3.h>
+#include <vulkan/vulkan.h>
+
 #include "drawable.h"
 #include "imgui_layer.h"
+#include "vulkan_window.h"
 
 class GraphicsPipeline;
 class VideoBuffer;
 
 class VulkanEngine {
 public:
+    VulkanWindow* m_window = nullptr;
+
+    VkInstance instance = VK_NULL_HANDLE;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
+
+    VkQueue graphicsQueue = VK_NULL_HANDLE;
+    VkQueue presentQueue = VK_NULL_HANDLE;
+
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    std::vector<VkImage> swapchainImages;
+    std::vector<VkImageView> swapchainImageViews;
+    VkFormat swapchainImageFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D swapchainExtent{};
+
+    VkRenderPass renderPass = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> swapchainFramebuffers;
+
+    VkCommandPool commandPool = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> commandBuffers;
+
+    VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
+    VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
+    VkFence inFlightFence = VK_NULL_HANDLE;
+
+    VkImage depthImage = VK_NULL_HANDLE;
+    VkDeviceMemory depthImageMemory = VK_NULL_HANDLE;
+    VkImageView depthImageView = VK_NULL_HANDLE;
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+
+    uint32_t currentImageIndex = 0;
+    VkCommandBuffer currentCommandBuffer = VK_NULL_HANDLE;
+    
+    uint32_t imguiMinImageCount = 2;
+
+    bool frameInProgress = false;
+    bool framebufferResized = false;
+
     VulkanEngine();
     ~VulkanEngine();
 
@@ -94,46 +132,6 @@ private:
     };
 
     void create_imgui_descriptor_pool();
-
-public:
-    VulkanWindow* m_window = nullptr;
-
-    VkInstance instance = VK_NULL_HANDLE;
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    VkDevice device = VK_NULL_HANDLE;
-
-    VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkQueue presentQueue = VK_NULL_HANDLE;
-
-    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-    std::vector<VkImage> swapchainImages;
-    std::vector<VkImageView> swapchainImageViews;
-    VkFormat swapchainImageFormat = VK_FORMAT_UNDEFINED;
-    VkExtent2D swapchainExtent{};
-
-    VkRenderPass renderPass = VK_NULL_HANDLE;
-    std::vector<VkFramebuffer> swapchainFramebuffers;
-
-    VkCommandPool commandPool = VK_NULL_HANDLE;
-    std::vector<VkCommandBuffer> commandBuffers;
-
-    VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
-    VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
-    VkFence inFlightFence = VK_NULL_HANDLE;
-
-    VkImage depthImage = VK_NULL_HANDLE;
-    VkDeviceMemory depthImageMemory = VK_NULL_HANDLE;
-    VkImageView depthImageView = VK_NULL_HANDLE;
-    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
-
-    uint32_t currentImageIndex = 0;
-    VkCommandBuffer currentCommandBuffer = VK_NULL_HANDLE;
-    
-    uint32_t imguiMinImageCount = 2;
-
-    bool frameInProgress = false;
-    bool framebufferResized = false;
 
 private:
     void cleanup();

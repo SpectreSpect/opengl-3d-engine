@@ -90,7 +90,7 @@ public:
 
     // Assumes mip 0 already contains valid data.
     // Assumes the image was created with TRANSFER_SRC and TRANSFER_DST usage.
-    void generate_mipmaps(VulkanEngine& engine, CommandBuffer& command_buffer);
+    void generate_mipmaps(CommandBuffer& command_buffer);
 
     static ImageCreateDesc texture2d_desc(
         VkFormat format,

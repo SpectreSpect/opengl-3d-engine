@@ -21,41 +21,9 @@ find_package(Vulkan REQUIRED)
 
 add_executable(app
   main.cpp
-  camera.cpp
-  mesh.cpp
-  transformable.cpp
-  fps_camera_controller.cpp
-  imgui_layer.cpp
-  vulkan_engine.cpp
-  vulkan_window.cpp
-  vulkan/shader_module.cpp
-  vulkan/video_buffer.cpp
-  vulkan/vulkan_vertex_layout.cpp
-  vulkan/graphics_pipeline.cpp
-  vulkan/pbr_renderer.cpp
-  vulkan/image/texture2d.cpp
-  vulkan/descriptor_set_layout.cpp
-  vulkan/descriptor_pool.cpp
-  vulkan/descriptor_set.cpp
-  vulkan/descriptor_set_bundle.cpp
-  vulkan/render_pass.cpp
-  vulkan/render_target_2d.cpp
-  vulkan/pbr/equirect_to_cubemap_pass.cpp
-  vulkan/image/cubemap.cpp
-  vulkan/command_pool.cpp
-  vulkan/command_buffer.cpp
-  vulkan/compute_pipeline.cpp
-  vulkan/fence.cpp
-  vulkan/resource_loader.cpp
-  vulkan/image/image_resource.cpp
-  vulkan/image/image_view.cpp
-  vulkan/image/sampler.cpp
-  skybox/skybox_pass.cpp
-  vulkan/pbr/brdf_lut_generator.cpp
-  vulkan/pbr/irradiance_map_generator.cpp
-  vulkan/pbr/prefilter_map_generator.cpp
-  vulkan/lighting_system/lighting_system.cpp
-  vulkan/image/image_transition_state.cpp
+  vulkan_self/vulkan_engine.cpp
+  vulkan_self/logger/logger.cpp
+  vulkan_self/logger/level_marker.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------

@@ -79,6 +79,8 @@ Cubemap IrradianceMapGenerator::generate(Cubemap& environment_map, uint32_t face
         VK_ACCESS_SHADER_WRITE_BIT
     );
 
+    cubemap.image_resource.
+
     command_buffer.bind_pipeline(pipeline);
     command_buffer.dispatch(x_groups, y_groups, z_groups);
 
@@ -90,6 +92,8 @@ Cubemap IrradianceMapGenerator::generate(Cubemap& environment_map, uint32_t face
         VK_ACCESS_SHADER_WRITE_BIT,
         VK_ACCESS_SHADER_READ_BIT
     );
+
+    
 
     // command_buffer.memory_barrier(temp_storage_buffer);
     command_buffer.end();
