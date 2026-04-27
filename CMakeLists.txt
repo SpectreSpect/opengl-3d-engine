@@ -22,6 +22,9 @@ find_package(Vulkan REQUIRED)
 add_executable(app
   main.cpp
   vulkan_self/vulkan_engine.cpp
+  vulkan_self/colored_string/colored_string.cpp
+  vulkan_self/colored_string/multicolor_string.cpp
+  vulkan_self/colored_string/colored_string_stream.cpp
   vulkan_self/logger/logger.cpp
   vulkan_self/logger/level_marker.cpp
 )

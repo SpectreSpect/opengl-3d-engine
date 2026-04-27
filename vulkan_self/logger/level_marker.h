@@ -1,5 +1,6 @@
 #pragma once
-#include "colored_string.h"
+#include "../colored_string/colored_string.h"
+#include "../colored_string/multicolor_string.h"
 
 class Logger;
 

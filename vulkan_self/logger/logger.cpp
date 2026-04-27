@@ -20,20 +20,18 @@ void Logger::try_pop_level() noexcept {
     } 
 }
 
-void Logger::log(const MultiColorString& message) const {
-    write(std::cout, message);
+ColoredStringsStream Logger::log() const {
+    return ColoredStringsStream([this](const MultiColorString& message) {
+        if (this)
+            this->log<false>(message);
+    });
 }
 
-void Logger::log(std::string_view message) const {
-    write(std::cout, message);
-}
-
-void Logger::log_error(const MultiColorString& error_message) const {
-    write(std::cerr, error_message);
-}
-
-void Logger::log_error(std::string_view error_message) const {
-    write(std::cerr, ColoredString(error_message, LoggerPalette::error));
+ColoredStringsStream Logger::log_error() const {
+    return ColoredStringsStream([this](const MultiColorString& error_message) {
+        if (this)
+            this->log_error<false>(error_message);
+    });
 }
 
 void Logger::log_traceback() const {
@@ -44,10 +42,10 @@ void Logger::log_traceback() const {
     }
 }
 
-void Logger::write(std::ostream& os, const MultiColorString& message) const {
+void Logger::write(std::ostream& os, const std::string& message, bool new_line) const {
     if (level_stack.empty()) {
-        os << message << '\n';
+        os << message << (new_line ? "\n" : "");
     } else {
-        os << level_stack.back() << ": " << message << '\n';
+        os << level_stack.back() << ": " << message << (new_line ? "\n" : "");
     }
 }

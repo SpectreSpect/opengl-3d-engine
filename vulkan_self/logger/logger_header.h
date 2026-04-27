@@ -60,3 +60,5 @@ static MultiColorString header_str(std::string_view class_name, std::string_view
         logger,                                                  \
         ColoredString(__func__, LoggerPalette::purple)           \
     )
+
+using clr = ColoredString; 
