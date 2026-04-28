@@ -1,9 +1,12 @@
 #include "vulkan_engine.h"
 
+VulkanEngine::VulkanEngine(Window& window) : m_window(&window) {
+    
+}
+
 void VulkanEngine::init() {
     LOG_METHOD();
 
-    init_window();
     init_vulkan();
 }
 
@@ -91,43 +94,14 @@ void VulkanEngine::cleanup() {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
     }
-
-    if (m_window) {
-        glfwDestroyWindow(m_window);
-        m_window = nullptr;
-    }
-
-    glfwTerminate();
-}
-
-void VulkanEngine::init_window() {
-    LOG_METHOD();
-
-    glfwSetErrorCallback(glfw_error_callback);
-
-    logger.check(glfwInit(), "Failed to initialize GLFW");
-
-    logger.log() << "GLFW version: " << clr(glfwGetVersionString(), "#ffaa2c") << "\n";
-    logger.log() << "glfwVulkanSupported: " << clr(std::to_string(glfwVulkanSupported()), "#2c87ff") << "\n";
-
-    logger.check(glfwVulkanSupported(), "GLFW reports Vulkan is not supported on this machine");
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-
-    m_window = glfwCreateWindow(
-        static_cast<int>(m_width),
-        static_cast<int>(m_height),
-        m_window_title,
-        nullptr,
-        nullptr
-    );
-
-    logger.check(m_window, "Failed to create GLFW window");
 }
 
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
+
+    logger.log() << "glfwVulkanSupported: " << clr(std::to_string(glfwVulkanSupported()), "#2c87ff") << "\n";
+
+    logger.check(glfwVulkanSupported(), "GLFW reports Vulkan is not supported on this machine");
 
     create_instance();
     setup_debug_messenger();
@@ -150,8 +124,8 @@ void VulkanEngine::init_vulkan() {
 void VulkanEngine::run() {
     LOG_METHOD();
 
-    while (!glfwWindowShouldClose(m_window)) {
-        glfwPollEvents();
+    while (!m_window->should_close()) {
+        m_window->poll_events();
         draw_frame();
     }
 
@@ -477,7 +451,7 @@ VkExtent2D VulkanEngine::choose_swap_extent(
 
     int width = 0;
     int height = 0;
-    glfwGetFramebufferSize(m_window, &width, &height);
+    glfwGetFramebufferSize(m_window->handle(), &width, &height);
 
     VkExtent2D actual_extent = {
         static_cast<uint32_t>(width),
@@ -946,7 +920,7 @@ void VulkanEngine::setup_debug_messenger() {
 void VulkanEngine::create_surface() {
     LOG_METHOD();
 
-    VkResult result = glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface);
+    VkResult result = glfwCreateWindowSurface(m_instance, m_window->handle(), nullptr, &m_surface);
     logger.check(result == VK_SUCCESS, "Failed to create window surface");
 }
 
@@ -1024,18 +998,4 @@ void VulkanEngine::destroy_debug_utils_messenger_ext(
     }
 }
 
-void VulkanEngine::glfw_error_callback(int code, const char* description) {
-    LOG_NAMED("VulkanEngine");
 
-    logger.log_traceback();
-
-    std::cerr << "GLFW error [" << code << "]: " << description << std::endl;
-
-    MultiColorString header = {
-        {"GLFW error [", LoggerPalette::error},
-        {std::to_string(code), LoggerPalette::yellow},
-        {"]: ", LoggerPalette::error}
-    };
-
-    std::cerr << header << clr(description, LoggerPalette::error) << std::endl;
-}

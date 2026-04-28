@@ -14,16 +14,19 @@
 #include <GLFW/glfw3.h>
 
 #include "logger/logger_header.h"
+#include "glfw_context.h"
+#include "window.h"
 
 class VulkanEngine {
 public:
     _XCLASS_NAME(VulkanEngine);
 
+    VulkanEngine(Window& window);
+
     void init();
     void shutdown();
     void cleanup();
 
-    void init_window();
     void init_vulkan();
 
     void run();
@@ -34,7 +37,7 @@ private:
     void create_surface();
 
 private:
-    GLFWwindow* m_window = nullptr;
+    Window* m_window;
 
     VkInstance m_instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_debug_messenger = VK_NULL_HANDLE;
@@ -170,6 +173,4 @@ private:
         VkDebugUtilsMessengerEXT debug_messenger,
         const VkAllocationCallbacks* allocator
     );
-
-    static void glfw_error_callback(int code, const char* description);
 };
