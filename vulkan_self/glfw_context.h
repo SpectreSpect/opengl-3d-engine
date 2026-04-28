@@ -16,5 +16,8 @@ public:
     GlfwContext(const GlfwContext&) = delete;
     GlfwContext& operator=(const GlfwContext&) = delete;
 
+    GlfwContext(GlfwContext&&) noexcept = delete;
+    GlfwContext& operator=(GlfwContext&&) noexcept = delete;
+
     static void glfw_error_callback(int code, const char* description);
 };

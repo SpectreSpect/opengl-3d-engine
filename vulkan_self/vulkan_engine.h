@@ -21,7 +21,15 @@ class VulkanEngine {
 public:
     _XCLASS_NAME(VulkanEngine);
 
-    VulkanEngine(Window& window);
+    explicit VulkanEngine(Window& window);
+
+    ~VulkanEngine();
+
+    VulkanEngine(const VulkanEngine&) = delete;
+    VulkanEngine& operator=(const VulkanEngine&) = delete;
+
+    VulkanEngine(VulkanEngine&&) = delete;
+    VulkanEngine& operator=(VulkanEngine&&) = delete;
 
     void init();
     void shutdown();
@@ -37,15 +45,11 @@ private:
     void create_surface();
 
 private:
-    Window* m_window;
+    Window& m_window;
 
     VkInstance m_instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT m_debug_messenger = VK_NULL_HANDLE;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-
-    const uint32_t m_width = 1280;
-    const uint32_t m_height = 720;
-    const char* m_window_title = "VulkanEngine";
 
 private:
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
@@ -102,7 +106,7 @@ private:
 private:
 
 #ifdef NDEBUG
-    const bool m_enableValidationLayers = false;
+    const bool m_enable_validation_layers = false;
 #else
     const bool m_enable_validation_layers = true;
 #endif

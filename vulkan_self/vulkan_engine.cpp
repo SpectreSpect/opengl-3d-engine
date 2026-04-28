@@ -1,7 +1,11 @@
 #include "vulkan_engine.h"
 
-VulkanEngine::VulkanEngine(Window& window) : m_window(&window) {
+VulkanEngine::VulkanEngine(Window& window) : m_window(window) {
     
+}
+
+VulkanEngine::~VulkanEngine() {
+
 }
 
 void VulkanEngine::init() {
@@ -49,11 +53,6 @@ void VulkanEngine::cleanup() {
         vkDestroyCommandPool(m_device, m_commandPool, nullptr);
         m_commandPool = VK_NULL_HANDLE;
     }
-
-    for (VkFramebuffer framebuffer : m_swapchain_framebuffers) {
-        vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-    }
-    m_swapchain_framebuffers.clear();
 
     for (VkFramebuffer framebuffer : m_swapchain_framebuffers) {
         vkDestroyFramebuffer(m_device, framebuffer, nullptr);
@@ -124,8 +123,8 @@ void VulkanEngine::init_vulkan() {
 void VulkanEngine::run() {
     LOG_METHOD();
 
-    while (!m_window->should_close()) {
-        m_window->poll_events();
+    while (!m_window.should_close()) {
+        m_window.poll_events();
         draw_frame();
     }
 
@@ -451,7 +450,7 @@ VkExtent2D VulkanEngine::choose_swap_extent(
 
     int width = 0;
     int height = 0;
-    glfwGetFramebufferSize(m_window->handle(), &width, &height);
+    glfwGetFramebufferSize(m_window.handle(), &width, &height);
 
     VkExtent2D actual_extent = {
         static_cast<uint32_t>(width),
@@ -871,13 +870,15 @@ void VulkanEngine::create_instance() {
 
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = m_window_title;
+    app_info.pApplicationName = m_window.title().c_str();
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.pEngineName = "VulkanEngine";
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion = VK_API_VERSION_1_3;
 
     std::vector<const char*> extensions = get_required_extensions();
+
+
 
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -888,6 +889,10 @@ void VulkanEngine::create_instance() {
     if (m_enable_validation_layers) {
         create_info.enabledLayerCount = static_cast<uint32_t>(m_validationLayers.size());
         create_info.ppEnabledLayerNames = m_validationLayers.data();
+
+        VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
+        populate_debug_messenger_create_info(debug_create_info);
+        create_info.pNext = &debug_create_info;
     } else {
         create_info.enabledLayerCount = 0;
         create_info.ppEnabledLayerNames = nullptr;
@@ -920,7 +925,7 @@ void VulkanEngine::setup_debug_messenger() {
 void VulkanEngine::create_surface() {
     LOG_METHOD();
 
-    VkResult result = glfwCreateWindowSurface(m_instance, m_window->handle(), nullptr, &m_surface);
+    VkResult result = glfwCreateWindowSurface(m_instance, m_window.handle(), nullptr, &m_surface);
     logger.check(result == VK_SUCCESS, "Failed to create window surface");
 }
 
@@ -930,13 +935,29 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanEngine::debug_callback(
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
     void* user_data)
 {
-    (void)message_severity;
     (void)message_type;
     (void)user_data;
 
-    logger.log_traceback();
+    const char* severity_text = "INFO";
+    uint32_t color = LoggerPalette::white;
 
-    std::cerr << clr("[VULKAN VALIDATION ERROR] ", LoggerPalette::error)
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        severity_text = "ERROR";
+        color = LoggerPalette::error;
+    } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        severity_text = "WARNING";
+        color = LoggerPalette::yellow;
+    } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        severity_text = "INFO";
+        color = LoggerPalette::blue;
+    } else if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+        severity_text = "VERBOSE";
+        color = LoggerPalette::gray;
+    }
+
+    std::cerr << clr("[VULKAN ", color)
+              << clr(severity_text, color)
+              << clr("] ", color)
               << callback_data->pMessage
               << std::endl;
 
@@ -950,7 +971,6 @@ void VulkanEngine::populate_debug_messenger_create_info(
     create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 
     create_info.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
