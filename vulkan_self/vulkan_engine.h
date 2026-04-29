@@ -9,6 +9,7 @@
 #include <optional>
 #include <algorithm>
 #include <stdexcept>
+#include <string_view>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -17,13 +18,16 @@
 #include "glfw_context.h"
 #include "window.h"
 
+#include "vulkan_instance.h"
+
 class VulkanEngine {
 public:
     _XCLASS_NAME(VulkanEngine);
 
-    explicit VulkanEngine(Window& window);
+    explicit VulkanEngine(const GlfwContext& glfw_context, Window& window, std::string_view app_name = "vulkan_engine");
 
     ~VulkanEngine();
+    void destroy();
 
     VulkanEngine(const VulkanEngine&) = delete;
     VulkanEngine& operator=(const VulkanEngine&) = delete;
@@ -32,23 +36,17 @@ public:
     VulkanEngine& operator=(VulkanEngine&&) = delete;
 
     void init();
-    void shutdown();
-    void cleanup();
-
     void init_vulkan();
 
     void run();
 
 private:
-    void create_instance();
-    void setup_debug_messenger();
     void create_surface();
 
 private:
     Window& m_window;
+    VulkanInstance m_instance;
 
-    VkInstance m_instance = VK_NULL_HANDLE;
-    VkDebugUtilsMessengerEXT m_debug_messenger = VK_NULL_HANDLE;
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
 private:
@@ -104,18 +102,6 @@ private:
     void create_framebuffers();
 
 private:
-
-#ifdef NDEBUG
-    const bool m_enable_validation_layers = false;
-#else
-    const bool m_enable_validation_layers = true;
-#endif
-
-    const std::vector<const char*> m_validationLayers = {
-        "VK_LAYER_KHRONOS_validation"
-    };
-
-private:
     SwapChainSupportDetails query_swapchain_support(VkPhysicalDevice device) const;
 
     VkSurfaceFormatKHR choose_swap_surface_format(
@@ -149,32 +135,4 @@ private:
 
     void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
     void draw_frame();
-
-private:
-    bool check_validation_layer_support() const;
-    std::vector<const char*> get_required_extensions() const;
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
-        VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-        VkDebugUtilsMessageTypeFlagsEXT message_type,
-        const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-        void* user_data
-    );
-
-    void populate_debug_messenger_create_info(
-        VkDebugUtilsMessengerCreateInfoEXT& create_info
-    ) const;
-
-    static VkResult create_debug_utils_messenger_ext(
-        VkInstance instance,
-        const VkDebugUtilsMessengerCreateInfoEXT* create_info,
-        const VkAllocationCallbacks* allocator,
-        VkDebugUtilsMessengerEXT* debug_messenger
-    );
-
-    static void destroy_debug_utils_messenger_ext(
-        VkInstance instance,
-        VkDebugUtilsMessengerEXT debug_messenger,
-        const VkAllocationCallbacks* allocator
-    );
 };

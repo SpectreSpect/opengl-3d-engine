@@ -29,6 +29,8 @@ add_executable(app
   vulkan_self/logger/level_marker.cpp
   vulkan_self/glfw_context.cpp
   vulkan_self/window.cpp
+  vulkan_self/vulkan_instance.cpp
+  vulkan_self/vulkan_surface.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------
