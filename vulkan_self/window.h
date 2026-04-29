@@ -31,9 +31,9 @@ public:
     bool should_close() const;
     void poll_events() const;
 
-    uint32_t width() const;
-    uint32_t height() const;
-    const std::string& title() const;
+    uint32_t width() const noexcept;
+    uint32_t height() const noexcept;
+    const std::string& title() const noexcept;
 
 private:
     uint32_t m_width = 0;

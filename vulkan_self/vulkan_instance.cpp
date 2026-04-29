@@ -81,15 +81,15 @@ VulkanInstance& VulkanInstance::operator=(VulkanInstance&& other) noexcept {
     return *this;
 }
 
-const std::string& VulkanInstance::app_name() const {
+const std::string& VulkanInstance::app_name() const noexcept {
     return m_app_name;
 }
 
-VkInstance VulkanInstance::handle() const { 
+VkInstance VulkanInstance::handle() const noexcept { 
     return m_instance;
 }
 
-VkDebugUtilsMessengerEXT VulkanInstance::debug_messenger() const {
+VkDebugUtilsMessengerEXT VulkanInstance::debug_messenger() const noexcept {
     return m_debug_messenger;
 }
 
@@ -162,6 +162,8 @@ std::vector<const char*> VulkanInstance::get_required_extensions() const {
 
 void VulkanInstance::populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info) const 
 {
+    LOG_METHOD();
+
     create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 

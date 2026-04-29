@@ -26,9 +26,9 @@ public:
     VulkanInstance(VulkanInstance&& other) noexcept;
     VulkanInstance& operator=(VulkanInstance&& other) noexcept;
 
-    const std::string& app_name() const;
-    VkInstance handle() const;
-    VkDebugUtilsMessengerEXT debug_messenger() const;
+    const std::string& app_name() const noexcept;
+    VkInstance handle() const noexcept;
+    VkDebugUtilsMessengerEXT debug_messenger() const noexcept;
 
 #ifdef NDEBUG
     static constexpr bool enable_validation_layers = false;

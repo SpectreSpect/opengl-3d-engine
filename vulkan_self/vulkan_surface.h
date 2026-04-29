@@ -1,15 +1,19 @@
 #pragma once
 
+#include <utility>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "window.h"
+#include "vulkan_instance.h"
 #include "logger/logger_header.h"
 
 class VulkanSurface {
 public:
     _XCLASS_NAME(VulkanSurface);
 
-    explicit VulkanSurface();
+    explicit VulkanSurface(const VulkanInstance& instance, const Window& window);
     ~VulkanSurface();
     void destroy();
 
@@ -19,8 +23,10 @@ public:
     VulkanSurface(VulkanSurface&& other) noexcept;
     VulkanSurface& operator=(VulkanSurface&& other) noexcept;
 
-    VkSurfaceKHR handle() const;
+    VkSurfaceKHR handle() const noexcept;
+    VkInstance instance_handle() const noexcept;
 
 private:
-    VkSurfaceKHR m_surface = VK_NULL_HANDLE;    
+    VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+    VkInstance m_instance = VK_NULL_HANDLE;
 };

@@ -18,6 +18,7 @@
 #include "glfw_context.h"
 #include "window.h"
 
+#include "vulkan_surface.h"
 #include "vulkan_instance.h"
 
 class VulkanEngine {
@@ -41,13 +42,9 @@ public:
     void run();
 
 private:
-    void create_surface();
-
-private:
     Window& m_window;
     VulkanInstance m_instance;
-
-    VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+    VulkanSurface m_surface;
 
 private:
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;

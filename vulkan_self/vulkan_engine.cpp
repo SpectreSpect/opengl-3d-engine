@@ -2,7 +2,8 @@
 
 VulkanEngine::VulkanEngine(const GlfwContext& glfw_context, Window& window, std::string_view app_name) 
     :   m_window(window), 
-        m_instance(glfw_context, app_name) 
+        m_instance(glfw_context, app_name),
+        m_surface(m_instance, m_window)
 {
     
 }
@@ -67,11 +68,6 @@ void VulkanEngine::destroy() {
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
     }
-
-    if (m_surface != VK_NULL_HANDLE) {
-        vkDestroySurfaceKHR(m_instance.handle(), m_surface, nullptr);
-        m_surface = VK_NULL_HANDLE;
-    }
 }
 
 void VulkanEngine::init() {
@@ -82,8 +78,6 @@ void VulkanEngine::init() {
 
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
-
-    create_surface();
 
     pick_physical_device();
     create_logical_device();
@@ -240,7 +234,7 @@ VulkanEngine::QueueFamilyIndices VulkanEngine::find_queue_families(VkPhysicalDev
         }
 
         VkBool32 present_support = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &present_support);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface.handle(), &present_support);
 
         if (queue_family.queueCount > 0 && present_support) {
             indices.present_family = i;
@@ -346,18 +340,18 @@ VulkanEngine::SwapChainSupportDetails VulkanEngine::query_swapchain_support(VkPh
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         device,
-        m_surface,
+        m_surface.handle(),
         &details.capabilities
     );
 
     uint32_t format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &format_count, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface.handle(), &format_count, nullptr);
 
     if (format_count != 0) {
         details.formats.resize(format_count);
         vkGetPhysicalDeviceSurfaceFormatsKHR(
             device,
-            m_surface,
+            m_surface.handle(),
             &format_count,
             details.formats.data()
         );
@@ -366,7 +360,7 @@ VulkanEngine::SwapChainSupportDetails VulkanEngine::query_swapchain_support(VkPh
     uint32_t present_mode_count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(
         device,
-        m_surface,
+        m_surface.handle(),
         &present_mode_count,
         nullptr
     );
@@ -375,7 +369,7 @@ VulkanEngine::SwapChainSupportDetails VulkanEngine::query_swapchain_support(VkPh
         details.present_modes.resize(present_mode_count);
         vkGetPhysicalDeviceSurfacePresentModesKHR(
             device,
-            m_surface,
+            m_surface.handle(),
             &present_mode_count,
             details.present_modes.data()
         );
@@ -463,7 +457,7 @@ void VulkanEngine::create_swapchain() {
 
     VkSwapchainCreateInfoKHR create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.surface = m_surface;
+    create_info.surface = m_surface.handle();
 
     create_info.minImageCount = image_count;
     create_info.imageFormat = surface_format.format;
@@ -783,11 +777,4 @@ void VulkanEngine::record_command_buffer(
 
     VkResult end_result = vkEndCommandBuffer(command_buffer);
     logger.check(end_result == VK_SUCCESS, "Failed to record command buffer");
-}
-
-void VulkanEngine::create_surface() {
-    LOG_METHOD();
-
-    VkResult result = glfwCreateWindowSurface(m_instance.handle(), m_window.handle(), nullptr, &m_surface);
-    logger.check(result == VK_SUCCESS, "Failed to create window surface");
 }

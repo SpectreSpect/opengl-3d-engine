@@ -55,21 +55,23 @@ GLFWwindow* Window::handle() const {
 }
 
 bool Window::should_close() const {
+    // LOG_METHOD();
     return glfwWindowShouldClose(m_window);
 }
 
 void Window::poll_events() const {
+    // LOG_METHOD();
     glfwPollEvents();
 }
 
-uint32_t Window::width() const {
+uint32_t Window::width() const noexcept {
     return m_width;
 }
 
-uint32_t Window::height() const {
+uint32_t Window::height() const noexcept {
     return m_height;
 }
 
-const std::string& Window::title() const {
+const std::string& Window::title() const noexcept {
     return m_title;
 }
