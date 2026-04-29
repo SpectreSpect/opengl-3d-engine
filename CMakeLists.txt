@@ -31,6 +31,7 @@ add_executable(app
   vulkan_self/window.cpp
   vulkan_self/vulkan_instance.cpp
   vulkan_self/vulkan_surface.cpp
+  vulkan_self/vulkan_physical_device.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------

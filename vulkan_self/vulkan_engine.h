@@ -18,8 +18,9 @@
 #include "glfw_context.h"
 #include "window.h"
 
-#include "vulkan_surface.h"
 #include "vulkan_instance.h"
+#include "vulkan_surface.h"
+#include "vulkan_physical_device.h"
 
 class VulkanEngine {
 public:
@@ -45,27 +46,13 @@ private:
     Window& m_window;
     VulkanInstance m_instance;
     VulkanSurface m_surface;
+    VulkanPhysicalDevice m_physical_device;
 
 private:
-    VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
     VkDevice m_device = VK_NULL_HANDLE;
 
     VkQueue m_graphics_queue = VK_NULL_HANDLE;
     VkQueue m_present_queue = VK_NULL_HANDLE;
-
-    const std::vector<const char*> m_device_extensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    };
-
-private:
-    struct QueueFamilyIndices {
-        std::optional<uint32_t> graphics_family;
-        std::optional<uint32_t> present_family;
-
-        bool is_complete() const {
-            return graphics_family.has_value() && present_family.has_value();
-        }
-    };
 
 private:
     VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
@@ -76,21 +63,8 @@ private:
     VkExtent2D m_swapchainExtent{};
 
 private:
-    struct SwapChainSupportDetails {
-        VkSurfaceCapabilitiesKHR capabilities{};
-        std::vector<VkSurfaceFormatKHR> formats;
-        std::vector<VkPresentModeKHR> present_modes;
-    };
-
-private:
-    void pick_physical_device();
     void create_logical_device();
 
-    bool is_device_suitable(VkPhysicalDevice device) const;
-    bool check_device_extension_support(VkPhysicalDevice device) const;
-    QueueFamilyIndices find_queue_families(VkPhysicalDevice device) const;
-
-private:
     VkRenderPass m_render_pass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> m_swapchain_framebuffers;
 
@@ -99,8 +73,6 @@ private:
     void create_framebuffers();
 
 private:
-    SwapChainSupportDetails query_swapchain_support(VkPhysicalDevice device) const;
-
     VkSurfaceFormatKHR choose_swap_surface_format(
         const std::vector<VkSurfaceFormatKHR>& available_formats
     ) const;
