@@ -9,7 +9,8 @@ VulkanEngine::VulkanEngine(
         m_instance(glfw_context, app_name),
         m_surface(m_instance, m_window),
         m_physical_device(m_instance, m_surface, queue_request),
-        m_device(m_physical_device) {}
+        m_device(m_physical_device),
+        m_swapchain(m_physical_device, m_device, m_surface, m_window) {}
 
 VulkanEngine::~VulkanEngine() {
     destroy();
@@ -59,14 +60,12 @@ void VulkanEngine::destroy() {
         }
 
         for (VkImageView image_view : m_swapchain_image_views) {
-            vkDestroyImageView(m_device.handle(), image_view, nullptr);
+            if (image_view != VK_NULL_HANDLE) {
+                vkDestroyImageView(m_device.handle(), image_view, nullptr);
+            }
         }
-        m_swapchain_image_views.clear();
 
-        if (m_swapchain != VK_NULL_HANDLE) {
-            vkDestroySwapchainKHR(m_device.handle(), m_swapchain, nullptr);
-            m_swapchain = VK_NULL_HANDLE;
-        }
+        m_swapchain_image_views.clear();
     }
 }
 
@@ -79,7 +78,6 @@ void VulkanEngine::init() {
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
 
-    create_swapchain();
     create_image_views();
 
     create_render_pass();
@@ -105,7 +103,7 @@ void VulkanEngine::create_render_pass() {
     LOG_METHOD();
 
     VkAttachmentDescription color_attachment{};
-    color_attachment.format = m_swapchain_image_format;
+    color_attachment.format = m_swapchain.image_format();
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
 
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -171,8 +169,8 @@ void VulkanEngine::create_framebuffers() {
         framebuffer_info.renderPass = m_render_pass;
         framebuffer_info.attachmentCount = 1;
         framebuffer_info.pAttachments = attachments;
-        framebuffer_info.width = m_swapchainExtent.width;
-        framebuffer_info.height = m_swapchainExtent.height;
+        framebuffer_info.width = m_swapchain.extent().width;
+        framebuffer_info.height = m_swapchain.extent().height;
         framebuffer_info.layers = 1;
 
         VkResult result = vkCreateFramebuffer(
@@ -186,145 +184,17 @@ void VulkanEngine::create_framebuffers() {
     }
 }
 
-VkSurfaceFormatKHR VulkanEngine::choose_swap_surface_format(
-    const std::vector<VkSurfaceFormatKHR>& available_formats
-) const {
-    LOG_METHOD();
-
-    for (const auto& available_format : available_formats) {
-        if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB &&
-            available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return available_format;
-        }
-    }
-
-    return available_formats[0];
-}
-
-VkPresentModeKHR VulkanEngine::choose_swap_present_mode(
-    const std::vector<VkPresentModeKHR>& available_present_modes
-) const {
-    LOG_METHOD();
-
-    for (const auto& available_present_mode : available_present_modes) {
-        if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return available_present_mode;
-        }
-    }
-
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D VulkanEngine::choose_swap_extent(
-    const VkSurfaceCapabilitiesKHR& capabilities
-) const {
-    LOG_METHOD();
-
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
-        return capabilities.currentExtent;
-    }
-
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(m_window.handle(), &width, &height);
-
-    VkExtent2D actual_extent = {
-        static_cast<uint32_t>(width),
-        static_cast<uint32_t>(height)
-    };
-
-    actual_extent.width = std::clamp(
-        actual_extent.width,
-        capabilities.minImageExtent.width,
-        capabilities.maxImageExtent.width
-    );
-
-    actual_extent.height = std::clamp(
-        actual_extent.height,
-        capabilities.minImageExtent.height,
-        capabilities.maxImageExtent.height
-    );
-
-    return actual_extent;
-}
-
-void VulkanEngine::create_swapchain() {
-    LOG_METHOD();
-
-    auto swapchain_support = m_physical_device.query_swapchain_support();
-    VkSurfaceFormatKHR surface_format = choose_swap_surface_format(swapchain_support.formats);
-    VkPresentModeKHR present_mode = choose_swap_present_mode(swapchain_support.present_modes);
-    VkExtent2D extent = choose_swap_extent(swapchain_support.capabilities);
-
-    uint32_t image_count = swapchain_support.capabilities.minImageCount + 1;
-
-    if (swapchain_support.capabilities.maxImageCount > 0 &&
-        image_count > swapchain_support.capabilities.maxImageCount) {
-        image_count = swapchain_support.capabilities.maxImageCount;
-    }
-
-    VkSwapchainCreateInfoKHR create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.surface = m_surface.handle();
-
-    create_info.minImageCount = image_count;
-    create_info.imageFormat = surface_format.format;
-    create_info.imageColorSpace = surface_format.colorSpace;
-    create_info.imageExtent = extent;
-    create_info.imageArrayLayers = 1;
-    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    const VulkanQueue& graphics_queue = m_device.graphics_queue();
-    const VulkanQueue& present_queue = m_device.present_queue();
-
-    uint32_t queue_family_indices[] = {
-        graphics_queue.location().family_index,
-        present_queue.location().family_index
-    };
-
-    if (graphics_queue.location().family_index != present_queue.location().family_index) {
-        create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        create_info.queueFamilyIndexCount = 2;
-        create_info.pQueueFamilyIndices = queue_family_indices;
-    } else {
-        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        create_info.queueFamilyIndexCount = 0;
-        create_info.pQueueFamilyIndices = nullptr;
-    }
-
-    create_info.preTransform = swapchain_support.capabilities.currentTransform;
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = present_mode;
-    create_info.clipped = VK_TRUE;
-    create_info.oldSwapchain = VK_NULL_HANDLE;
-
-    VkResult result = vkCreateSwapchainKHR(m_device.handle(), &create_info, nullptr, &m_swapchain);
-    logger.check(result == VK_SUCCESS, "Failed to create swapchain");
-
-    vkGetSwapchainImagesKHR(m_device.handle(), m_swapchain, &image_count, nullptr);
-    m_swapchain_images.resize(image_count);
-    vkGetSwapchainImagesKHR(
-        m_device.handle(),
-        m_swapchain,
-        &image_count,
-        m_swapchain_images.data()
-    );
-
-    m_swapchain_image_format = surface_format.format;
-    m_swapchainExtent = extent;
-}
-
 void VulkanEngine::create_image_views() {
     LOG_METHOD();
 
-    m_swapchain_image_views.resize(m_swapchain_images.size());
+    m_swapchain_image_views.resize(m_swapchain.images().size());
 
-    for (size_t i = 0; i < m_swapchain_images.size(); ++i) {
+    for (size_t i = 0; i < m_swapchain.images().size(); ++i) {
         VkImageViewCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        create_info.image = m_swapchain_images[i];
+        create_info.image = m_swapchain.image(i);
         create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        create_info.format = m_swapchain_image_format;
+        create_info.format = m_swapchain.image_format();
 
         create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -394,7 +264,7 @@ void VulkanEngine::create_sync_objects() {
 
     // Важно: эти semaphores ждёт vkQueuePresentKHR,
     // поэтому они должны быть по количеству swapchain images.
-    m_render_finished_semaphores.resize(m_swapchain_images.size());
+    m_render_finished_semaphores.resize(m_swapchain.images().size());
 
     VkSemaphoreCreateInfo semaphore_info{};
     semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -455,7 +325,7 @@ void VulkanEngine::draw_frame() {
 
     VkResult acquire_result = vkAcquireNextImageKHR(
         m_device.handle(),
-        m_swapchain,
+        m_swapchain.handle(),
         UINT64_MAX,
         m_image_available_semaphores[m_current_frame],
         VK_NULL_HANDLE,
@@ -523,7 +393,7 @@ void VulkanEngine::draw_frame() {
     );
 
     VkSwapchainKHR swapchains[] = {
-        m_swapchain
+        m_swapchain.handle()
     };
 
     VkPresentInfoKHR present_info{};
@@ -567,7 +437,7 @@ void VulkanEngine::record_command_buffer(
     render_pass_info.framebuffer = m_swapchain_framebuffers[image_index];
 
     render_pass_info.renderArea.offset = {0, 0};
-    render_pass_info.renderArea.extent = m_swapchainExtent;
+    render_pass_info.renderArea.extent = m_swapchain.extent();
 
     VkClearValue clear_color{};
     clear_color.color = {{0.05f, 0.08f, 0.12f, 1.0f}};

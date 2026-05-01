@@ -22,6 +22,7 @@
 #include "vulkan_surface.h"
 #include "vulkan_physical_device.h"
 #include "vulkan_device.h"
+#include "vulkan_swapchain.h"
 
 class VulkanEngine {
 public:
@@ -54,14 +55,9 @@ private:
     VulkanSurface m_surface;
     VulkanPhysicalDevice m_physical_device;
     VulkanDevice m_device;
+    VulkanSwapchain m_swapchain;
 
-private:
-    VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
-    std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
-
-    VkFormat m_swapchain_image_format = VK_FORMAT_UNDEFINED;
-    VkExtent2D m_swapchainExtent{};
 
 private:
     VkRenderPass m_render_pass = VK_NULL_HANDLE;
@@ -72,17 +68,6 @@ private:
     void create_framebuffers();
 
 private:
-    VkSurfaceFormatKHR choose_swap_surface_format(
-        const std::vector<VkSurfaceFormatKHR>& available_formats
-    ) const;
-
-    VkPresentModeKHR choose_swap_present_mode(
-        const std::vector<VkPresentModeKHR>& available_present_modes
-    ) const;
-
-    VkExtent2D choose_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities) const;
-
-    void create_swapchain();
     void create_image_views();
 
 private:

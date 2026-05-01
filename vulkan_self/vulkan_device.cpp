@@ -109,6 +109,8 @@ VkDevice VulkanDevice::handle() const noexcept {
 }
 
 void VulkanDevice::wait_idle() const {
+    LOG_METHOD();
+
     if (m_device != VK_NULL_HANDLE) {
         VkResult result = vkDeviceWaitIdle(m_device);
         logger.check(result == VK_SUCCESS, "Failed to wait for logical device idle");
@@ -116,22 +118,28 @@ void VulkanDevice::wait_idle() const {
 }
 
 const VulkanQueue& VulkanDevice::graphics_queue(uint32_t index) const {
+    LOG_METHOD();
     return get_queue(m_graphics_queues, index, "No graphics queues available");
 }
 
 const VulkanQueue& VulkanDevice::present_queue(uint32_t index) const {
+    LOG_METHOD();
     return get_queue(m_present_queues, index, "No present queues available");
 }
 
 const VulkanQueue& VulkanDevice::compute_queue(uint32_t index) const {
+    LOG_METHOD();
     return get_queue(m_compute_queues, index, "No compute queues available");
 }
 
 const VulkanQueue& VulkanDevice::transfer_queue(uint32_t index) const {
+    LOG_METHOD();
     return get_queue(m_transfer_queues, index, "No transfer queues available");
 }
 
 void VulkanDevice::retrieve_queues(const QueueAllocation& queue_allocation) {
+    LOG_METHOD();
+
     auto retrieve_queue = [&](
         std::vector<VulkanQueue>& queues,
         const std::vector<QueueLocation>& locations,
@@ -156,6 +164,7 @@ const VulkanQueue& VulkanDevice::get_queue(
     uint32_t index,
     std::string_view error_message) const
 {
+    LOG_METHOD();
     logger.check(!queues.empty(), error_message.data());
     logger.check(index < queues.size(), "Queue index is out of range");
 
