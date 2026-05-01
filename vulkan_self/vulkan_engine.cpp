@@ -1,13 +1,15 @@
 #include "vulkan_engine.h"
 
-VulkanEngine::VulkanEngine(const GlfwContext& glfw_context, Window& window, std::string_view app_name) 
+VulkanEngine::VulkanEngine(
+    const GlfwContext& glfw_context,
+    Window& window,
+    const QueueRequest& queue_request,
+    std::string_view app_name)
     :   m_window(window), 
         m_instance(glfw_context, app_name),
         m_surface(m_instance, m_window),
-        m_physical_device(m_instance, m_surface)
-{
-    
-}
+        m_physical_device(m_instance, m_surface, queue_request),
+        m_device(m_physical_device) {}
 
 VulkanEngine::~VulkanEngine() {
     destroy();
@@ -16,24 +18,24 @@ VulkanEngine::~VulkanEngine() {
 void VulkanEngine::destroy() {
     LOG_METHOD();
 
-    if (m_device != VK_NULL_HANDLE) {
-        vkDeviceWaitIdle(m_device);
+    if (m_device.handle()) {
+        m_device.wait_idle();
 
         for (VkSemaphore semaphore : m_render_finished_semaphores) {
             if (semaphore != VK_NULL_HANDLE) {
-                vkDestroySemaphore(m_device, semaphore, nullptr);
+                vkDestroySemaphore(m_device.handle(), semaphore, nullptr);
             }
         }
 
         for (VkSemaphore semaphore : m_image_available_semaphores) {
             if (semaphore != VK_NULL_HANDLE) {
-                vkDestroySemaphore(m_device, semaphore, nullptr);
+                vkDestroySemaphore(m_device.handle(), semaphore, nullptr);
             }
         }
 
         for (VkFence fence : m_in_flight_fences) {
             if (fence != VK_NULL_HANDLE) {
-                vkDestroyFence(m_device, fence, nullptr);
+                vkDestroyFence(m_device.handle(), fence, nullptr);
             }
         }
 
@@ -42,32 +44,29 @@ void VulkanEngine::destroy() {
         m_in_flight_fences.clear();
 
         if (m_commandPool != VK_NULL_HANDLE) {
-            vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+            vkDestroyCommandPool(m_device.handle(), m_commandPool, nullptr);
             m_commandPool = VK_NULL_HANDLE;
         }
 
         for (VkFramebuffer framebuffer : m_swapchain_framebuffers) {
-            vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+            vkDestroyFramebuffer(m_device.handle(), framebuffer, nullptr);
         }
         m_swapchain_framebuffers.clear();
 
         if (m_render_pass != VK_NULL_HANDLE) {
-            vkDestroyRenderPass(m_device, m_render_pass, nullptr);
+            vkDestroyRenderPass(m_device.handle(), m_render_pass, nullptr);
             m_render_pass = VK_NULL_HANDLE;
         }
 
         for (VkImageView image_view : m_swapchain_image_views) {
-            vkDestroyImageView(m_device, image_view, nullptr);
+            vkDestroyImageView(m_device.handle(), image_view, nullptr);
         }
         m_swapchain_image_views.clear();
 
         if (m_swapchain != VK_NULL_HANDLE) {
-            vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+            vkDestroySwapchainKHR(m_device.handle(), m_swapchain, nullptr);
             m_swapchain = VK_NULL_HANDLE;
         }
-
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
     }
 }
 
@@ -79,8 +78,6 @@ void VulkanEngine::init() {
 
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
-
-    create_logical_device();
 
     create_swapchain();
     create_image_views();
@@ -101,51 +98,7 @@ void VulkanEngine::run() {
         draw_frame();
     }
 
-    vkDeviceWaitIdle(m_device);
-}
-
-void VulkanEngine::create_logical_device() {
-    LOG_METHOD();
-
-    QueueFamilyIndices indices = m_physical_device.find_queue_families();
-
-    std::set<uint32_t> unique_queue_families = {
-        indices.graphics_family.value(),
-        indices.present_family.value()
-    };
-
-    float queue_priority = 1.0f;
-    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
-
-    for (uint32_t queue_family : unique_queue_families) {
-        VkDeviceQueueCreateInfo queue_create_info{};
-        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_create_info.queueFamilyIndex = queue_family;
-        queue_create_info.queueCount = 1;
-        queue_create_info.pQueuePriorities = &queue_priority;
-
-        queue_create_infos.push_back(queue_create_info);
-    }
-
-    VkPhysicalDeviceFeatures device_features{};
-
-    VkDeviceCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-    create_info.pQueueCreateInfos = queue_create_infos.data();
-    create_info.pEnabledFeatures = &device_features;
-
-    create_info.enabledExtensionCount = static_cast<uint32_t>(VulkanPhysicalDevice::device_extensions.size());
-    create_info.ppEnabledExtensionNames = VulkanPhysicalDevice::device_extensions.data();
-
-    create_info.enabledLayerCount = 0;
-    create_info.ppEnabledLayerNames = nullptr;
-
-    VkResult result = vkCreateDevice(m_physical_device.handle(), &create_info, nullptr, &m_device);
-    logger.check(result == VK_SUCCESS, "Failed to create logical device");
-
-    vkGetDeviceQueue(m_device, indices.graphics_family.value(), 0, &m_graphics_queue);
-    vkGetDeviceQueue(m_device, indices.present_family.value(), 0, &m_present_queue);
+    m_device.wait_idle();
 }
 
 void VulkanEngine::create_render_pass() {
@@ -194,7 +147,7 @@ void VulkanEngine::create_render_pass() {
     render_pass_info.pDependencies = &dependency;
 
     VkResult result = vkCreateRenderPass(
-        m_device,
+        m_device.handle(),
         &render_pass_info,
         nullptr,
         &m_render_pass
@@ -223,7 +176,7 @@ void VulkanEngine::create_framebuffers() {
         framebuffer_info.layers = 1;
 
         VkResult result = vkCreateFramebuffer(
-            m_device,
+            m_device.handle(),
             &framebuffer_info,
             nullptr,
             &m_swapchain_framebuffers[i]
@@ -321,13 +274,15 @@ void VulkanEngine::create_swapchain() {
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    QueueFamilyIndices indices = m_physical_device.find_queue_families();
+    const VulkanQueue& graphics_queue = m_device.graphics_queue();
+    const VulkanQueue& present_queue = m_device.present_queue();
+
     uint32_t queue_family_indices[] = {
-        indices.graphics_family.value(),
-        indices.present_family.value()
+        graphics_queue.location().family_index,
+        present_queue.location().family_index
     };
 
-    if (indices.graphics_family != indices.present_family) {
+    if (graphics_queue.location().family_index != present_queue.location().family_index) {
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         create_info.queueFamilyIndexCount = 2;
         create_info.pQueueFamilyIndices = queue_family_indices;
@@ -343,13 +298,13 @@ void VulkanEngine::create_swapchain() {
     create_info.clipped = VK_TRUE;
     create_info.oldSwapchain = VK_NULL_HANDLE;
 
-    VkResult result = vkCreateSwapchainKHR(m_device, &create_info, nullptr, &m_swapchain);
+    VkResult result = vkCreateSwapchainKHR(m_device.handle(), &create_info, nullptr, &m_swapchain);
     logger.check(result == VK_SUCCESS, "Failed to create swapchain");
 
-    vkGetSwapchainImagesKHR(m_device, m_swapchain, &image_count, nullptr);
+    vkGetSwapchainImagesKHR(m_device.handle(), m_swapchain, &image_count, nullptr);
     m_swapchain_images.resize(image_count);
     vkGetSwapchainImagesKHR(
-        m_device,
+        m_device.handle(),
         m_swapchain,
         &image_count,
         m_swapchain_images.data()
@@ -383,7 +338,7 @@ void VulkanEngine::create_image_views() {
         create_info.subresourceRange.layerCount = 1;
 
         VkResult result = vkCreateImageView(
-            m_device,
+            m_device.handle(),
             &create_info,
             nullptr,
             &m_swapchain_image_views[i]
@@ -396,15 +351,13 @@ void VulkanEngine::create_image_views() {
 void VulkanEngine::create_command_pool() {
     LOG_METHOD();
 
-    QueueFamilyIndices queue_family_indices = m_physical_device.find_queue_families();
-
     VkCommandPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    pool_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
+    pool_info.queueFamilyIndex = m_device.graphics_queue().location().family_index;
 
     VkResult result = vkCreateCommandPool(
-        m_device,
+        m_device.handle(),
         &pool_info,
         nullptr,
         &m_commandPool
@@ -425,7 +378,7 @@ void VulkanEngine::create_command_buffers() {
     alloc_info.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size());
 
     VkResult result = vkAllocateCommandBuffers(
-        m_device,
+        m_device.handle(),
         &alloc_info,
         m_commandBuffers.data()
     );
@@ -452,14 +405,14 @@ void VulkanEngine::create_sync_objects() {
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         VkResult image_semaphore_result = vkCreateSemaphore(
-            m_device,
+            m_device.handle(),
             &semaphore_info,
             nullptr,
             &m_image_available_semaphores[i]
         );
 
         VkResult fence_result = vkCreateFence(
-            m_device,
+            m_device.handle(),
             &fence_info,
             nullptr,
             &m_in_flight_fences[i]
@@ -474,7 +427,7 @@ void VulkanEngine::create_sync_objects() {
 
     for (size_t i = 0; i < m_render_finished_semaphores.size(); ++i) {
         VkResult render_semaphore_result = vkCreateSemaphore(
-            m_device,
+            m_device.handle(),
             &semaphore_info,
             nullptr,
             &m_render_finished_semaphores[i]
@@ -491,7 +444,7 @@ void VulkanEngine::draw_frame() {
     LOG_METHOD();
 
     vkWaitForFences(
-        m_device,
+        m_device.handle(),
         1,
         &m_in_flight_fences[m_current_frame],
         VK_TRUE,
@@ -501,7 +454,7 @@ void VulkanEngine::draw_frame() {
     uint32_t image_index = 0;
 
     VkResult acquire_result = vkAcquireNextImageKHR(
-        m_device,
+        m_device.handle(),
         m_swapchain,
         UINT64_MAX,
         m_image_available_semaphores[m_current_frame],
@@ -515,7 +468,7 @@ void VulkanEngine::draw_frame() {
     );
 
     vkResetFences(
-        m_device,
+        m_device.handle(),
         1,
         &m_in_flight_fences[m_current_frame]
     );
@@ -558,7 +511,7 @@ void VulkanEngine::draw_frame() {
     submit_info.pSignalSemaphores = signal_semaphores;
 
     VkResult submit_result = vkQueueSubmit(
-        m_graphics_queue,
+        m_device.graphics_queue().handle(),
         1,
         &submit_info,
         m_in_flight_fences[m_current_frame]
@@ -584,7 +537,7 @@ void VulkanEngine::draw_frame() {
     present_info.pImageIndices = &image_index;
 
     VkResult present_result = vkQueuePresentKHR(
-        m_present_queue,
+        m_device.present_queue().handle(),
         &present_info
     );
 

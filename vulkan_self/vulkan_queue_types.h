@@ -1,0 +1,32 @@
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+enum class VulkanQueueType {
+    Graphics,
+    Present,
+    Compute,
+    Transfer
+};
+
+struct QueueRequest {
+    uint32_t graphics_count = 1;
+    uint32_t present_count = 1;
+    uint32_t compute_count = 0;
+    uint32_t transfer_count = 0;
+};
+
+struct QueueLocation {
+    uint32_t family_index = 0;
+    uint32_t queue_index = 0;
+
+    bool operator==(const QueueLocation&) const = default;
+};
+
+struct QueueAllocation {
+    std::vector<QueueLocation> graphics;
+    std::vector<QueueLocation> present;
+    std::vector<QueueLocation> compute;
+    std::vector<QueueLocation> transfer;
+};

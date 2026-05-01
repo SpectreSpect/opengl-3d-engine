@@ -21,12 +21,18 @@
 #include "vulkan_instance.h"
 #include "vulkan_surface.h"
 #include "vulkan_physical_device.h"
+#include "vulkan_device.h"
 
 class VulkanEngine {
 public:
     _XCLASS_NAME(VulkanEngine);
 
-    explicit VulkanEngine(const GlfwContext& glfw_context, Window& window, std::string_view app_name = "vulkan_engine");
+    explicit VulkanEngine(
+        const GlfwContext& glfw_context,
+        Window& window,
+        const QueueRequest& queue_request,
+        std::string_view app_name = "vulkan_engine"
+    );
 
     ~VulkanEngine();
     void destroy();
@@ -47,12 +53,7 @@ private:
     VulkanInstance m_instance;
     VulkanSurface m_surface;
     VulkanPhysicalDevice m_physical_device;
-
-private:
-    VkDevice m_device = VK_NULL_HANDLE;
-
-    VkQueue m_graphics_queue = VK_NULL_HANDLE;
-    VkQueue m_present_queue = VK_NULL_HANDLE;
+    VulkanDevice m_device;
 
 private:
     VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
@@ -63,8 +64,6 @@ private:
     VkExtent2D m_swapchainExtent{};
 
 private:
-    void create_logical_device();
-
     VkRenderPass m_render_pass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> m_swapchain_framebuffers;
 

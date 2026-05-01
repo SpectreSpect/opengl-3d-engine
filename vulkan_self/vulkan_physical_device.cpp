@@ -3,7 +3,10 @@
 #include <set>
 #include <string>
 
-VulkanPhysicalDevice::VulkanPhysicalDevice(const VulkanInstance& instance, const VulkanSurface& surface)
+VulkanPhysicalDevice::VulkanPhysicalDevice(
+    const VulkanInstance& instance,
+    const VulkanSurface& surface,
+    const QueueRequest& queue_request)
     :   m_surface(surface.handle())
 {
     LOG_METHOD();
@@ -17,8 +20,11 @@ VulkanPhysicalDevice::VulkanPhysicalDevice(const VulkanInstance& instance, const
     vkEnumeratePhysicalDevices(instance.handle(), &device_count, devices.data());
 
     for (const auto& device : devices) {
-        if (is_device_suitable(device)) {
+        QueueAllocation candidate_allocation{};
+
+        if (is_device_suitable(device, queue_request, &candidate_allocation)) {
             m_physical_device = device;
+            m_queue_allocation = std::move(candidate_allocation);
             break;
         }
     }
@@ -31,12 +37,14 @@ VulkanPhysicalDevice::VulkanPhysicalDevice(const VulkanInstance& instance, const
 
 VulkanPhysicalDevice::VulkanPhysicalDevice(VulkanPhysicalDevice&& other) noexcept
     :   m_physical_device(std::exchange(other.m_physical_device, VK_NULL_HANDLE)),
-        m_surface(std::exchange(other.m_surface, VK_NULL_HANDLE)) {}
+        m_surface(std::exchange(other.m_surface, VK_NULL_HANDLE)),
+        m_queue_allocation(std::move(other.m_queue_allocation)) {}
 
 VulkanPhysicalDevice& VulkanPhysicalDevice::operator=(VulkanPhysicalDevice&& other) noexcept {
     if (this != &other) {
         m_physical_device = std::exchange(other.m_physical_device, VK_NULL_HANDLE);
         m_surface = std::exchange(other.m_surface, VK_NULL_HANDLE);
+        m_queue_allocation = std::move(other.m_queue_allocation);
     }
 
     return *this;
@@ -46,41 +54,121 @@ VkPhysicalDevice VulkanPhysicalDevice::handle() const noexcept {
     return m_physical_device;
 }
 
-QueueFamilyIndices VulkanPhysicalDevice::find_queue_families(VkPhysicalDevice device) const {
+const QueueAllocation& VulkanPhysicalDevice::queue_allocation() const noexcept {
+    return m_queue_allocation;
+}
+
+bool VulkanPhysicalDevice::find_queue_families(
+    VkPhysicalDevice device,
+    const QueueRequest& queue_request,
+    QueueAllocation* queue_allocation
+) const
+{
     LOG_METHOD();
 
-    QueueFamilyIndices indices;
+    logger.check(queue_allocation != nullptr, "QueueAllocation pointer is null");
+
+    *queue_allocation = QueueAllocation{};
 
     uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
 
     std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        device,
+        &queue_family_count,
+        queue_families.data()
+    );
 
-    for (uint32_t i = 0; i < queue_family_count; ++i) {
-        const auto& queue_family = queue_families[i];
+    std::vector<uint32_t> used_queue_counts(queue_family_count, 0);
 
-        if (queue_family.queueCount > 0 && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-            indices.graphics_family = i;
+    auto try_allocate_queues = [&](
+        uint32_t family_index,
+        uint32_t requested_count,
+        std::vector<QueueLocation>& output
+    ) -> bool {
+        if (requested_count == 0) {
+            return true;
         }
+
+        if (!output.empty()) {
+            return true;
+        }
+
+        const uint32_t used_count = used_queue_counts[family_index];
+        const uint32_t available_count = queue_families[family_index].queueCount;
+
+        if (used_count + requested_count > available_count) {
+            return false;
+        }
+
+        for (uint32_t queue_index = used_count;
+             queue_index < used_count + requested_count;
+             ++queue_index) {
+            output.emplace_back(family_index, queue_index);
+        }
+
+        used_queue_counts[family_index] += requested_count;
+
+        return true;
+    };
+
+    for (uint32_t family_index = 0;
+         family_index < queue_family_count;
+         ++family_index) {
+        const auto& queue_family = queue_families[family_index];
 
         VkBool32 present_support = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &present_support);
+        vkGetPhysicalDeviceSurfaceSupportKHR(
+            device,
+            family_index,
+            m_surface,
+            &present_support
+        );
 
-        if (queue_family.queueCount > 0 && present_support) {
-            indices.present_family = i;
+        const bool supports_graphics = queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+        const bool supports_present = present_support == VK_TRUE;
+        const bool supports_compute = queue_family.queueFlags & VK_QUEUE_COMPUTE_BIT;
+        const bool supports_transfer = queue_family.queueFlags & VK_QUEUE_TRANSFER_BIT;
+
+        if (queue_allocation->graphics.empty() && supports_graphics) {
+            try_allocate_queues(
+                family_index,
+                queue_request.graphics_count,
+                queue_allocation->graphics
+            );
         }
 
-        if (indices.is_complete()) {
-            break;
+        if (queue_allocation->present.empty() && supports_present) {
+            try_allocate_queues(
+                family_index,
+                queue_request.present_count,
+                queue_allocation->present
+            );
+        }
+
+        if (queue_allocation->compute.empty() && supports_compute) {
+            try_allocate_queues(
+                family_index,
+                queue_request.compute_count,
+                queue_allocation->compute
+            );
+        }
+
+        if (queue_allocation->transfer.empty() && supports_transfer) {
+            try_allocate_queues(
+                family_index,
+                queue_request.transfer_count,
+                queue_allocation->transfer
+            );
         }
     }
 
-    return indices;
-}
-
-QueueFamilyIndices VulkanPhysicalDevice::find_queue_families() const {
-    return find_queue_families(m_physical_device);
+    return
+        queue_allocation->graphics.size() >= queue_request.graphics_count &&
+        queue_allocation->present.size()  >= queue_request.present_count &&
+        queue_allocation->compute.size()  >= queue_request.compute_count &&
+        queue_allocation->transfer.size() >= queue_request.transfer_count;
 }
 
 bool VulkanPhysicalDevice::check_device_extension_support(VkPhysicalDevice device) const {
@@ -162,10 +250,15 @@ VulkanPhysicalDevice::SwapchainSupportDetails VulkanPhysicalDevice::query_swapch
     return query_swapchain_support(m_physical_device);
 }
 
-bool VulkanPhysicalDevice::is_device_suitable(VkPhysicalDevice device) const {
+bool VulkanPhysicalDevice::is_device_suitable(
+    VkPhysicalDevice device, 
+    const QueueRequest& queue_request,
+    QueueAllocation* queue_allocation) const 
+{
     LOG_METHOD();
 
-    QueueFamilyIndices indices = find_queue_families(device);
+    bool queues_allocated = find_queue_families(device, queue_request, queue_allocation);
+
     bool extensions_supported = check_device_extension_support(device);
 
     bool swapchain_adequate = false;
@@ -176,9 +269,5 @@ bool VulkanPhysicalDevice::is_device_suitable(VkPhysicalDevice device) const {
             !swapchain_support.present_modes.empty();
     }
 
-    return indices.is_complete() && extensions_supported && swapchain_adequate;
-}
-
-bool VulkanPhysicalDevice::is_device_suitable() const {
-    return is_device_suitable(m_physical_device);
+    return queues_allocated && extensions_supported && swapchain_adequate;
 }
