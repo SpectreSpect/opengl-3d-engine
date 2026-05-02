@@ -6,6 +6,7 @@
 #include "logger/logger_header.h"
 
 class VulkanDevice;
+class VulkanSwapchain;
 
 class VulkanImageView {
 public:
@@ -24,6 +25,7 @@ public:
     VkImageView handle() const noexcept;
 
     static VkImageViewCreateInfo create_swapchain_desc(VkImage image, VkFormat format);
+    static std::vector<VulkanImageView> from_swapchain(const VulkanDevice& device, const VulkanSwapchain& swapchain);
 private:
     VkImageView m_image_view = VK_NULL_HANDLE;
     VkDevice m_device = VK_NULL_HANDLE;

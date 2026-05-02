@@ -11,8 +11,16 @@ VulkanEngine::VulkanEngine(
         m_physical_device(m_instance, m_surface, queue_request),
         m_device(m_physical_device),
         m_swapchain(m_physical_device, m_device, m_surface, m_window),
-        m_swapchain_image_views(VulkanEngine::create_swapchain_image_views(m_swapchain, m_device)),
-        m_render_pass(m_device, m_swapchain) {}
+        m_swapchain_image_views(VulkanImageView::from_swapchain(m_device, m_swapchain)),
+        m_render_pass(m_device, m_swapchain),
+        m_swapchain_framebuffers(
+            VulkanFramebuffer::from_image_views(
+                m_swapchain_image_views, 
+                m_device, 
+                m_render_pass, 
+                m_swapchain.extent()
+            )
+        ) {}
 
 VulkanEngine::~VulkanEngine() {
     destroy();
@@ -51,11 +59,7 @@ void VulkanEngine::destroy() {
             m_commandPool = VK_NULL_HANDLE;
         }
 
-        for (VkFramebuffer framebuffer : m_swapchain_framebuffers) {
-            vkDestroyFramebuffer(m_device.handle(), framebuffer, nullptr);
-        }
         m_swapchain_framebuffers.clear();
-
         m_swapchain_image_views.clear();
     }
 }
@@ -68,8 +72,6 @@ void VulkanEngine::init() {
 
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
-
-    create_framebuffers();
 
     create_command_pool();
     create_command_buffers();
@@ -85,58 +87,6 @@ void VulkanEngine::run() {
     }
 
     m_device.wait_idle();
-}
-
-void VulkanEngine::create_framebuffers() {
-    LOG_METHOD();
-
-    m_swapchain_framebuffers.resize(m_swapchain_image_views.size());
-
-    for (size_t i = 0; i < m_swapchain_image_views.size(); ++i) {
-        VkImageView attachments[] = {
-            m_swapchain_image_views[i].handle()
-        };
-
-        VkFramebufferCreateInfo framebuffer_info{};
-        framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebuffer_info.renderPass = m_render_pass.handle();
-        framebuffer_info.attachmentCount = 1;
-        framebuffer_info.pAttachments = attachments;
-        framebuffer_info.width = m_swapchain.extent().width;
-        framebuffer_info.height = m_swapchain.extent().height;
-        framebuffer_info.layers = 1;
-
-        VkResult result = vkCreateFramebuffer(
-            m_device.handle(),
-            &framebuffer_info,
-            nullptr,
-            &m_swapchain_framebuffers[i]
-        );
-
-        logger.check(result == VK_SUCCESS, "Failed to create framebuffer");
-    }
-}
-
-std::vector<VulkanImageView> VulkanEngine::create_swapchain_image_views(
-    const VulkanSwapchain& swapchain, 
-    const VulkanDevice& device)
-{
-    LOG_NAMED("VulkanEngine");
-
-    std::vector<VulkanImageView> image_views;
-    image_views.reserve(swapchain.images().size());
-
-    for (size_t i = 0; i < swapchain.images().size(); i++) {
-        image_views.emplace_back(
-            VulkanImageView::create_swapchain_desc(
-                swapchain.image(i), 
-                swapchain.image_format()
-            ),
-            device
-        );
-    }
-
-    return image_views;
 }
 
 void VulkanEngine::create_command_pool() {
@@ -355,7 +305,7 @@ void VulkanEngine::record_command_buffer(
     VkRenderPassBeginInfo render_pass_info{};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_info.renderPass = m_render_pass.handle();
-    render_pass_info.framebuffer = m_swapchain_framebuffers[image_index];
+    render_pass_info.framebuffer = m_swapchain_framebuffers[image_index].handle();
 
     render_pass_info.renderArea.offset = {0, 0};
     render_pass_info.renderArea.extent = m_swapchain.extent();

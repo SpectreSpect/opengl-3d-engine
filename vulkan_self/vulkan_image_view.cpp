@@ -1,5 +1,6 @@
 #include "vulkan_image_view.h"
 #include "vulkan_device.h"
+#include "vulkan_swapchain.h"
 
 #include <utility>
 
@@ -73,4 +74,23 @@ VkImageViewCreateInfo VulkanImageView::create_swapchain_desc(VkImage image, VkFo
     create_info.subresourceRange.layerCount = 1;
 
     return create_info;
+}
+
+std::vector<VulkanImageView> VulkanImageView::from_swapchain(const VulkanDevice& device, const VulkanSwapchain& swapchain) {
+    LOG_NAMED("VulkanImageView");
+
+    std::vector<VulkanImageView> image_views;
+    image_views.reserve(swapchain.images().size());
+
+    for (size_t i = 0; i < swapchain.images().size(); i++) {
+        image_views.emplace_back(
+            VulkanImageView::create_swapchain_desc(
+                swapchain.image(i), 
+                swapchain.image_format()
+            ),
+            device
+        );
+    }
+
+    return image_views;
 }
