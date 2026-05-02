@@ -13,7 +13,7 @@ class Cubemap {
 public:
     VulkanEngine* engine = nullptr;
     ImageResource image_resource;
-    ImageView image_view;
+    VulkanImageView image_view;
     Sampler sampler;
     uint32_t face_size = 0;
 

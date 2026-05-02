@@ -1,7 +1,7 @@
 #include "image_view.h"
 #include "../../vulkan_engine.h"
 
-ImageView::ImageView(VulkanEngine* engine, const CreateDesc& desc) 
+VulkanImageView::VulkanImageView(VulkanEngine* engine, const CreateDesc& desc) 
     :   engine(engine),
         view_type(desc.view_type),
         format(desc.format),
@@ -38,11 +38,11 @@ ImageView::ImageView(VulkanEngine* engine, const CreateDesc& desc)
     );
 }
 
-ImageView::~ImageView() {
+VulkanImageView::~VulkanImageView() {
     destroy();
 }
 
-void ImageView::destroy() {
+void VulkanImageView::destroy() {
     if (view != VK_NULL_HANDLE)
     if (engine == nullptr || engine->device == VK_NULL_HANDLE) {
         std::string message = 
@@ -60,7 +60,7 @@ void ImageView::destroy() {
     engine = nullptr;
 }
 
-ImageView::ImageView(ImageView&& other) noexcept
+VulkanImageView::VulkanImageView(VulkanImageView&& other) noexcept
     :   engine(std::exchange(other.engine, nullptr)),
         image(std::exchange(other.image, nullptr)),
         view(std::exchange(other.view, VK_NULL_HANDLE)),
@@ -74,7 +74,7 @@ ImageView::ImageView(ImageView&& other) noexcept
 
 }
 
-ImageView& ImageView::operator=(ImageView&& other) noexcept {
+VulkanImageView& VulkanImageView::operator=(VulkanImageView&& other) noexcept {
     if (this == &other)
         return *this;
     
@@ -92,7 +92,7 @@ ImageView& ImageView::operator=(ImageView&& other) noexcept {
     return *this;
 }
 
-ImageView::CreateDesc ImageView::texture2d_desc(ImageResource* image) {
+VulkanImageView::CreateDesc VulkanImageView::texture2d_desc(ImageResource* image) {
     CreateDesc desc{};
     desc.image = image;
     desc.view_type = VK_IMAGE_VIEW_TYPE_2D;
@@ -112,7 +112,7 @@ ImageView::CreateDesc ImageView::texture2d_desc(ImageResource* image) {
     return desc;
 }
 
-ImageView::CreateDesc ImageView::cubemap_desc(ImageResource* image) {
+VulkanImageView::CreateDesc VulkanImageView::cubemap_desc(ImageResource* image) {
     CreateDesc desc{};
     desc.image = image;
     desc.view_type = VK_IMAGE_VIEW_TYPE_CUBE;
@@ -132,7 +132,7 @@ ImageView::CreateDesc ImageView::cubemap_desc(ImageResource* image) {
     return desc;
 }
 
-ImageView::CreateDesc ImageView::cubemap_mip_desc(ImageResource* image, uint32_t mip_level) {
+VulkanImageView::CreateDesc VulkanImageView::cubemap_mip_desc(ImageResource* image, uint32_t mip_level) {
     if (!image)
         throw std::runtime_error("ImageView::cubemap_mip_desc: image was nullptr");
 

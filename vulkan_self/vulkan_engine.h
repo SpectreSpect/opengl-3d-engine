@@ -23,6 +23,8 @@
 #include "vulkan_physical_device.h"
 #include "vulkan_device.h"
 #include "vulkan_swapchain.h"
+#include "vulkan_image_view.h"
+#include "vulkan_render_pass.h"
 
 class VulkanEngine {
 public:
@@ -56,19 +58,19 @@ private:
     VulkanPhysicalDevice m_physical_device;
     VulkanDevice m_device;
     VulkanSwapchain m_swapchain;
-
-    std::vector<VkImageView> m_swapchain_image_views;
+    std::vector<VulkanImageView> m_swapchain_image_views;
+    VulkanRenderPass m_render_pass;
 
 private:
-    VkRenderPass m_render_pass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> m_swapchain_framebuffers;
 
 private:
-    void create_render_pass();
     void create_framebuffers();
 
-private:
-    void create_image_views();
+    static std::vector<VulkanImageView> create_swapchain_image_views(
+        const VulkanSwapchain& swapchain, 
+        const VulkanDevice& device
+    );
 
 private:
     VkCommandPool m_commandPool = VK_NULL_HANDLE;

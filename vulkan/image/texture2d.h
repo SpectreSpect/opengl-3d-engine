@@ -14,7 +14,7 @@ public:
     VulkanEngine* engine = nullptr;
 
     ImageResource image_resource;
-    ImageView image_view;
+    VulkanImageView image_view;
     Sampler sampler;
 
     Texture2D() = default;

@@ -38,7 +38,7 @@ Texture2D::Texture2D(
         final_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     image_resource = ImageResource(engine, ImageResource::texture2d_desc(format, width, height, mip_levels, final_usage));
-    image_view = ImageView(engine, ImageView::texture2d_desc(&image_resource));
+    image_view = VulkanImageView(engine, VulkanImageView::texture2d_desc(&image_resource));
 
     Sampler::SamplerCreateDesc sampler_desc = Sampler::linear_repeat_desc();
     sampler_desc.max_lod = float(mip_levels - 1);

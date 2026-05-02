@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 class Texture2D;
-class ImageView;
+class VulkanImageView;
 
 class DescriptorSetBundle {
 public:
@@ -23,7 +23,7 @@ public:
     void bind_storage_buffer(uint32_t binding, VideoBuffer& buffer);
     void bind_image_storage(uint32_t binding, Cubemap& texture);
     void bind_image_storage(uint32_t binding, Texture2D& texture);
-    void bind_image_storage(uint32_t binding, ImageView& image_view);
+    void bind_image_storage(uint32_t binding, VulkanImageView& image_view);
 
     DescriptorSetBundle() = default;
 };

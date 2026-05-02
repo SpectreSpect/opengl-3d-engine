@@ -86,10 +86,10 @@ Cubemap PrefilterMapGenerator::generate(Cubemap& environment_map, uint32_t face_
 
         uniform_buffer.update_data(&uniform_data, sizeof(PrefilterMapGeneratorUniform));
 
-        ImageView mip_view;
+        VulkanImageView mip_view;
         mip_view.create(
             *engine,
-            ImageView::cubemap_mip_desc(&prefilter_map.image_resource, mip)
+            VulkanImageView::cubemap_mip_desc(&prefilter_map.image_resource, mip)
         );
 
         descriptor_set_bundle.bind_image_storage(2, mip_view);

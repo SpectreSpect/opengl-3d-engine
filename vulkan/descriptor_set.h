@@ -7,7 +7,7 @@
 #include "image/cubemap.h"
 
 class Texture2D;
-class ImageView;
+class VulkanImageView;
 
 class DescriptorSet {
 public:
@@ -22,6 +22,6 @@ public:
     void write_combined_image_sampler(uint32_t binding, Cubemap& texture);
     void write_storage_image(uint32_t binding, Cubemap& texture);
     void write_storage_image(uint32_t binding, Texture2D& texture);
-    void write_storage_image(uint32_t binding, ImageView& image_view);
+    void write_storage_image(uint32_t binding, VulkanImageView& image_view);
     void write_storage_buffer(uint32_t binding, VideoBuffer& buffer);
 };

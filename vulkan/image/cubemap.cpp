@@ -33,7 +33,7 @@ Cubemap::Cubemap(
         final_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     image_resource = ImageResource(engine, ImageResource::cubemap_desc(format, face_size, mip_levels, final_usage));
-    image_view = ImageView(engine, ImageView::cubemap_desc(&image_resource));
+    image_view = VulkanImageView(engine, VulkanImageView::cubemap_desc(&image_resource));
 
     Sampler::SamplerCreateDesc sampler_desc = Sampler::cubemap_desc();
     sampler_desc.max_lod = float(mip_levels - 1);

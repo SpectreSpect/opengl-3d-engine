@@ -26,7 +26,7 @@ void DescriptorSetBundle::bind_image_storage(uint32_t binding, Texture2D& textur
     descriptor_set.write_storage_image(binding, texture);
 }
 
-void DescriptorSetBundle::bind_image_storage(uint32_t binding, ImageView& image_view) {
+void DescriptorSetBundle::bind_image_storage(uint32_t binding, VulkanImageView& image_view) {
     descriptor_set.write_storage_image(binding, image_view);
 }
 

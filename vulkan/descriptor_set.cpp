@@ -143,7 +143,7 @@ void DescriptorSet::write_storage_image(uint32_t binding, Texture2D& texture) {
     vkUpdateDescriptorSets(texture.engine->device, 1, &write, 0, nullptr);
 }
 
-void DescriptorSet::write_storage_image(uint32_t binding, ImageView& image_view) {
+void DescriptorSet::write_storage_image(uint32_t binding, VulkanImageView& image_view) {
     if (!device)
         throw std::runtime_error("'device' was nullptr");
 

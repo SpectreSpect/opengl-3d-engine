@@ -7,7 +7,7 @@
 
 class VulkanEngine;
 
-class ImageView {
+class VulkanImageView {
 public:
     struct CreateDesc {
         ImageResource* image = nullptr;
@@ -28,17 +28,17 @@ public:
     VkComponentMapping components{};
     VkImageViewCreateFlags flags = 0;
 
-    ImageView() = default;
-    ImageView(VulkanEngine* engine, const CreateDesc& desc);
+    VulkanImageView() = default;
+    VulkanImageView(VulkanEngine* engine, const CreateDesc& desc);
 
-    ~ImageView();
+    ~VulkanImageView();
     void destroy();
 
-    ImageView(const ImageView&) = delete;
-    ImageView& operator=(const ImageView&) = delete;
+    VulkanImageView(const VulkanImageView&) = delete;
+    VulkanImageView& operator=(const VulkanImageView&) = delete;
 
-    ImageView(ImageView&& other) noexcept;
-    ImageView& operator=(ImageView&& other) noexcept;
+    VulkanImageView(VulkanImageView&& other) noexcept;
+    VulkanImageView& operator=(VulkanImageView&& other) noexcept;
 
     static CreateDesc texture2d_desc(ImageResource* image);
     static CreateDesc cubemap_desc(ImageResource* image);

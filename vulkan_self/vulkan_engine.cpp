@@ -10,7 +10,9 @@ VulkanEngine::VulkanEngine(
         m_surface(m_instance, m_window),
         m_physical_device(m_instance, m_surface, queue_request),
         m_device(m_physical_device),
-        m_swapchain(m_physical_device, m_device, m_surface, m_window) {}
+        m_swapchain(m_physical_device, m_device, m_surface, m_window),
+        m_swapchain_image_views(VulkanEngine::create_swapchain_image_views(m_swapchain, m_device)),
+        m_render_pass(m_device, m_swapchain) {}
 
 VulkanEngine::~VulkanEngine() {
     destroy();
@@ -54,17 +56,6 @@ void VulkanEngine::destroy() {
         }
         m_swapchain_framebuffers.clear();
 
-        if (m_render_pass != VK_NULL_HANDLE) {
-            vkDestroyRenderPass(m_device.handle(), m_render_pass, nullptr);
-            m_render_pass = VK_NULL_HANDLE;
-        }
-
-        for (VkImageView image_view : m_swapchain_image_views) {
-            if (image_view != VK_NULL_HANDLE) {
-                vkDestroyImageView(m_device.handle(), image_view, nullptr);
-            }
-        }
-
         m_swapchain_image_views.clear();
     }
 }
@@ -78,9 +69,6 @@ void VulkanEngine::init() {
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
 
-    create_image_views();
-
-    create_render_pass();
     create_framebuffers();
 
     create_command_pool();
@@ -99,61 +87,6 @@ void VulkanEngine::run() {
     m_device.wait_idle();
 }
 
-void VulkanEngine::create_render_pass() {
-    LOG_METHOD();
-
-    VkAttachmentDescription color_attachment{};
-    color_attachment.format = m_swapchain.image_format();
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference color_attachment_ref{};
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
-
-    VkSubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask =
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    VkRenderPassCreateInfo render_pass_info{};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = 1;
-    render_pass_info.pAttachments = &color_attachment;
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass;
-    render_pass_info.dependencyCount = 1;
-    render_pass_info.pDependencies = &dependency;
-
-    VkResult result = vkCreateRenderPass(
-        m_device.handle(),
-        &render_pass_info,
-        nullptr,
-        &m_render_pass
-    );
-
-    logger.check(result == VK_SUCCESS, "Failed to create render pass");
-}
-
 void VulkanEngine::create_framebuffers() {
     LOG_METHOD();
 
@@ -161,12 +94,12 @@ void VulkanEngine::create_framebuffers() {
 
     for (size_t i = 0; i < m_swapchain_image_views.size(); ++i) {
         VkImageView attachments[] = {
-            m_swapchain_image_views[i]
+            m_swapchain_image_views[i].handle()
         };
 
         VkFramebufferCreateInfo framebuffer_info{};
         framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebuffer_info.renderPass = m_render_pass;
+        framebuffer_info.renderPass = m_render_pass.handle();
         framebuffer_info.attachmentCount = 1;
         framebuffer_info.pAttachments = attachments;
         framebuffer_info.width = m_swapchain.extent().width;
@@ -184,38 +117,26 @@ void VulkanEngine::create_framebuffers() {
     }
 }
 
-void VulkanEngine::create_image_views() {
-    LOG_METHOD();
+std::vector<VulkanImageView> VulkanEngine::create_swapchain_image_views(
+    const VulkanSwapchain& swapchain, 
+    const VulkanDevice& device)
+{
+    LOG_NAMED("VulkanEngine");
 
-    m_swapchain_image_views.resize(m_swapchain.images().size());
+    std::vector<VulkanImageView> image_views;
+    image_views.reserve(swapchain.images().size());
 
-    for (size_t i = 0; i < m_swapchain.images().size(); ++i) {
-        VkImageViewCreateInfo create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        create_info.image = m_swapchain.image(i);
-        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        create_info.format = m_swapchain.image_format();
-
-        create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-        create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        create_info.subresourceRange.baseMipLevel = 0;
-        create_info.subresourceRange.levelCount = 1;
-        create_info.subresourceRange.baseArrayLayer = 0;
-        create_info.subresourceRange.layerCount = 1;
-
-        VkResult result = vkCreateImageView(
-            m_device.handle(),
-            &create_info,
-            nullptr,
-            &m_swapchain_image_views[i]
+    for (size_t i = 0; i < swapchain.images().size(); i++) {
+        image_views.emplace_back(
+            VulkanImageView::create_swapchain_desc(
+                swapchain.image(i), 
+                swapchain.image_format()
+            ),
+            device
         );
-
-        logger.check(result == VK_SUCCESS, "Failed to create swapchain image view");
     }
+
+    return image_views;
 }
 
 void VulkanEngine::create_command_pool() {
@@ -433,7 +354,7 @@ void VulkanEngine::record_command_buffer(
 
     VkRenderPassBeginInfo render_pass_info{};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_info.renderPass = m_render_pass;
+    render_pass_info.renderPass = m_render_pass.handle();
     render_pass_info.framebuffer = m_swapchain_framebuffers[image_index];
 
     render_pass_info.renderArea.offset = {0, 0};
