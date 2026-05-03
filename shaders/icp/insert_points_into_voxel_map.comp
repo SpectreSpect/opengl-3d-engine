@@ -176,17 +176,17 @@ void main()
 
     ivec3 key = voxel_key_from_world_pos(p_world, voxel_size);
 
-    // voxel_insert_point_and_normal(
-    //     key,
-    //     vec4(p_world, 1.0),
-    //     vec4(n_world, 0.0),
-    //     source_point_buffer.points[source_point_id].color
-    // );
-
     voxel_insert_point_and_normal(
         key,
         vec4(p_world, 1.0),
         vec4(n_world, 0.0),
-        params.color
+        source_point_buffer.points[source_point_id].color
     );
+
+    // voxel_insert_point_and_normal(
+    //     key,
+    //     vec4(p_world, 1.0),
+    //     vec4(n_world, 0.0),
+    //     params.color
+    // );
 }

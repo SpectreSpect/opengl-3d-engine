@@ -13,6 +13,7 @@
 #include "icp/voxel_map_point_inserter.h"
 #include "icp/voxel_point_map_reseter.h"
 #include "point_cloud/generation/point_cloud_generator.h"
+#include "gicp_test_clouds.h"
 
 
 int main() {
@@ -38,6 +39,9 @@ int main() {
     PointCloudFrame point_cloud_frames[num_point_cloud_frames];
     point_cloud_generator.generate_with_motion(point_cloud_frames, num_point_cloud_frames);
 
+    GICPTestClouds gicp_test_clouds;
+    gicp_test_clouds.create_roads(&engine);
+
     VoxelPointMap voxel_point_map;
     voxel_point_map.create(engine, 1500000, 1500000);
     VoxelPointMapReseter voxel_point_map_reseter;
@@ -45,7 +49,9 @@ int main() {
     voxel_point_map_reseter.reset(voxel_point_map);
     VoxelMapPointInserter voxel_map_point_inserter;
     voxel_map_point_inserter.create(engine);
-    voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[0].point_cloud, point_cloud_frames[0].normal_buffer);
+    // voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[0].point_cloud, point_cloud_frames[0].normal_buffer);
+
+    voxel_map_point_inserter.insert(voxel_point_map, gicp_test_clouds.target_frame.point_cloud, gicp_test_clouds.target_frame.normal_buffer);
 
     GICPPass gicp_pass;
     gicp_pass.create(engine);
@@ -75,9 +81,12 @@ int main() {
         ui::begin_frame();
         ui::update_mouse_mode(&window);
         
-        point_cloud_pass.render(point_cloud_frames[last_frame_id].point_cloud, camera);
+        // point_cloud_pass.render(point_cloud_frames[last_frame_id].point_cloud, camera);
 
         point_cloud_pass.render(voxel_map_point_cloud, camera);
+
+        // point_cloud_pass.render(gicp_test_clouds.target_frame.point_cloud, camera);
+        point_cloud_pass.render(gicp_test_clouds.source_frame.point_cloud, camera);
 
         ImGui::Begin("Debug");
 
@@ -95,6 +104,20 @@ int main() {
             
             voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
         }
+
+        if (ImGui::Button("GICP step")) {
+            // point_cloud_frames[last_frame_id].point_cloud.position = point_cloud_frames[last_frame_id - 1].point_cloud.position;
+            // point_cloud_frames[last_frame_id].point_cloud.rotation = point_cloud_frames[last_frame_id - 1].point_cloud.rotation;
+
+            gicp_pass.step(voxel_point_map, gicp_test_clouds.source_frame.point_cloud, gicp_test_clouds.source_frame.normal_buffer);
+
+            // gicp_pass.fit(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer, 10);
+            
+            // voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer);
+            
+            // voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
+        }
+
 
         ImGui::End();
 

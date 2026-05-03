@@ -468,7 +468,7 @@ GICPPartial get_gicp_partial(uint source_point_id, mat3 R_src, vec3 source_posit
     partial.valid_count = 1u;
 
     float t = clamp(dist_to_target / 5.0, 0.0, 1.0);
-    source_point_buffer.points[source_point_id].color = vec4(heatmap(t), 1.0);
+    // source_point_buffer.points[source_point_id].color = vec4(heatmap(t), 1.0);
 
     return partial;
 }
