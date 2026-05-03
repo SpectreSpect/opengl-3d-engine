@@ -717,7 +717,7 @@ int main() {
         lighting_system.update(camera);
 
         
-        // point_cloud_pass.render(point_cloud_frames[last_frame_id].point_cloud, camera);
+        point_cloud_pass.render(point_cloud_frames[last_frame_id].point_cloud, camera);
 
         // glm::vec3 f = glm::normalize(camera.front);
         // float rotY = std::atan2(-f.z, std::sqrt(f.x * f.x + f.y * f.y));
@@ -749,6 +749,7 @@ int main() {
             // std::cout << ")" << std::endl;
         }
 
+
         if (ImGui::Button("Next frame")) {
             last_frame_id++;
 
@@ -757,11 +758,14 @@ int main() {
 
             gicp_pass.fit(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer, 10);
             
-            voxel_point_map_reseter.reset(voxel_point_map);
-
             voxel_map_point_inserter.insert(voxel_point_map, point_cloud_frames[last_frame_id].point_cloud, point_cloud_frames[last_frame_id].normal_buffer);
             
             voxel_map_point_cloud.set_points(voxel_point_map.map_point_buffer, voxel_point_map.map_point_count);
+
+            // point_cloud_video.current_frame += 1;
+            // const auto& rot = point_cloud_video.frames[point_cloud_video.current_frame].point_cloud.rotation;
+
+            // std::cout << "(" << rot.x << ", " << rot.y << ", " << rot.z << ")" << std::endl;
         }
 
         ImGui::End();
