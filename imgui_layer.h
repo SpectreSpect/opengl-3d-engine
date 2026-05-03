@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include <vulkan/vulkan.h>
 
+
 struct GLFWwindow;
 
 namespace ui {
@@ -32,6 +33,7 @@ struct VulkanInitInfo {
 };
 
 void init(GLFWwindow* window, const VulkanInitInfo& info);
+void init(VulkanWindow* window, VulkanEngine* engine);
 void begin_frame();
 void update_mouse_mode(VulkanWindow* window);
 void end_frame(VkCommandBuffer command_buffer);

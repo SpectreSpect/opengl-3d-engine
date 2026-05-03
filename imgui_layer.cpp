@@ -4,6 +4,8 @@
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#include "vulkan_engine.h"
+#include "vulkan_window.h"
 
 namespace ui {
 
@@ -39,6 +41,26 @@ void init(GLFWwindow* window, const VulkanInitInfo& info) {
     assert(vulkan_ok && "ImGui_ImplVulkan_Init failed");
 }
 
+
+void init(VulkanWindow* window, VulkanEngine* engine) {
+    ui::VulkanInitInfo ui_info{};
+    ui_info.instance = engine->instance;
+    ui_info.physical_device = engine->physicalDevice;
+    ui_info.device = engine->device;
+    ui_info.queue_family = engine->get_graphics_queue_family();
+    ui_info.queue = engine->graphicsQueue;
+    ui_info.descriptor_pool = engine->get_imgui_descriptor_pool();
+    ui_info.render_pass = engine->renderPass;
+    ui_info.min_image_count = engine->get_imgui_min_image_count();
+    ui_info.image_count = static_cast<uint32_t>(engine->swapchainImages.size());
+    ui_info.msaa_samples = VK_SAMPLE_COUNT_1_BIT;
+    ui_info.pipeline_cache = VK_NULL_HANDLE;
+    ui_info.subpass = 0;
+    ui_info.check_vk_result_fn = VulkanEngine::imgui_check_vk_result;
+
+    ui::init(window->window, ui_info);
+}
+
 void begin_frame() {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -69,4 +91,9 @@ void shutdown() {
     ImGui::DestroyContext();
 }
 
+
+
+
+
 } // namespace ui
+

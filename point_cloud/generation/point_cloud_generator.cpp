@@ -169,3 +169,59 @@ void PointCloudGenerator::generate(PointCloud& point_cloud, VideoBuffer& normal_
 
     command_buffer.submit_and_wait(compute_queue, fence);
 }
+
+
+void PointCloudGenerator::generate_with_motion(PointCloudFrame* point_cloud_frames, uint32_t num_point_cloud_frames) {
+    float pi = glm::pi<float>();
+
+    const uint32_t forward_frames = 40;
+    const uint32_t turn_frames    = 20;
+    const uint32_t return_frames  = num_point_cloud_frames - forward_frames - turn_frames;
+
+    const float start_x     = 0.0f;
+    const float end_x       = 40.0f;   // "end of road"
+    const float scanner_y   = 0.3f;
+
+    for (uint32_t i = 0; i < num_point_cloud_frames; i++) {
+        glm::vec3 position(0.0f);
+        glm::vec3 rotation(0.0f);
+
+        if (i < forward_frames) {
+            float t = float(i) / float(forward_frames - 1);
+
+            // Move from start_x -> end_x
+            float x = glm::mix(start_x, end_x, t);
+            position = glm::vec3(x, scanner_y, 0.0f);
+
+            // Facing forward
+            rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+        }
+        else if (i < forward_frames + turn_frames) {
+            float t = float(i - forward_frames) / float(turn_frames - 1);
+
+            // Stay at the end of the road
+            position = glm::vec3(end_x, scanner_y, 0.0f);
+
+            // Turn from 0 -> 180 degrees
+            float yaw = glm::mix(0.0f, pi, t);
+            rotation = glm::vec3(0.0f, yaw, 0.0f);
+        }
+        else {
+            float t = float(i - forward_frames - turn_frames) / float(return_frames - 1);
+
+            // Move from end_x -> start_x
+            float x = glm::mix(end_x, start_x, t);
+            position = glm::vec3(x, scanner_y, 0.0f);
+
+            // Facing backward
+            rotation = glm::vec3(0.0f, pi, 0.0f);
+        }
+
+        uint32_t num_points = 3600 * 16;
+
+        point_cloud_frames[i].point_cloud.create(*engine, num_points);
+        point_cloud_frames[i].normal_buffer.create(*engine, num_points * sizeof(glm::vec4));
+
+        generate(point_cloud_frames[i].point_cloud, point_cloud_frames[i].normal_buffer, position, rotation);
+    }
+}
