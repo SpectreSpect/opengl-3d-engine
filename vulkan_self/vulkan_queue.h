@@ -24,6 +24,7 @@ public:
     VkQueue handle() const noexcept;
     QueueLocation location() const noexcept;
     VulkanQueueType type() const noexcept;
+    QueueFamilyInfo family_info() const noexcept;
 
 private:
     VkQueue m_queue = VK_NULL_HANDLE;

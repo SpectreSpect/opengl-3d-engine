@@ -36,3 +36,10 @@ QueueLocation VulkanQueue::location() const noexcept {
 VulkanQueueType VulkanQueue::type() const noexcept {
     return m_type;
 }
+
+QueueFamilyInfo VulkanQueue::family_info() const noexcept {
+    return QueueFamilyInfo{
+        .queue_family_index = m_location.family_index,
+        .queue_family_type = m_type
+    };
+}

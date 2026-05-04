@@ -20,6 +20,14 @@ VulkanEngine::VulkanEngine(
                 m_render_pass, 
                 m_swapchain.extent()
             )
+        ),
+        m_command_pool(m_device, m_device.graphics_queue()),
+        m_command_buffers(
+            VulkanCommandBuffer::create_command_buffers(
+                m_device, 
+                m_command_pool, 
+                static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)
+            )
         ) {}
 
 VulkanEngine::~VulkanEngine() {
@@ -54,13 +62,10 @@ void VulkanEngine::destroy() {
         m_image_available_semaphores.clear();
         m_in_flight_fences.clear();
 
-        if (m_commandPool != VK_NULL_HANDLE) {
-            vkDestroyCommandPool(m_device.handle(), m_commandPool, nullptr);
-            m_commandPool = VK_NULL_HANDLE;
-        }
-
         m_swapchain_framebuffers.clear();
         m_swapchain_image_views.clear();
+
+        m_command_buffers.clear();
     }
 }
 
@@ -73,8 +78,6 @@ void VulkanEngine::init() {
 void VulkanEngine::init_vulkan() {
     LOG_METHOD();
 
-    create_command_pool();
-    create_command_buffers();
     create_sync_objects();
 }
 
@@ -87,44 +90,6 @@ void VulkanEngine::run() {
     }
 
     m_device.wait_idle();
-}
-
-void VulkanEngine::create_command_pool() {
-    LOG_METHOD();
-
-    VkCommandPoolCreateInfo pool_info{};
-    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    pool_info.queueFamilyIndex = m_device.graphics_queue().location().family_index;
-
-    VkResult result = vkCreateCommandPool(
-        m_device.handle(),
-        &pool_info,
-        nullptr,
-        &m_commandPool
-    );
-
-    logger.check(result == VK_SUCCESS, "Failed to create command pool");
-}
-
-void VulkanEngine::create_command_buffers() {
-    LOG_METHOD();
-
-    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = m_commandPool;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size());
-
-    VkResult result = vkAllocateCommandBuffers(
-        m_device.handle(),
-        &alloc_info,
-        m_commandBuffers.data()
-    );
-
-    logger.check(result == VK_SUCCESS, "Failed to allocate command buffers");
 }
 
 void VulkanEngine::create_sync_objects() {
@@ -214,15 +179,8 @@ void VulkanEngine::draw_frame() {
         &m_in_flight_fences[m_current_frame]
     );
 
-    vkResetCommandBuffer(
-        m_commandBuffers[m_current_frame],
-        0
-    );
-
-    record_command_buffer(
-        m_commandBuffers[m_current_frame],
-        image_index
-    );
+    m_command_buffers[m_current_frame].reset();
+    record_command_buffer(m_command_buffers[m_current_frame], image_index);
 
     VkSemaphore wait_semaphores[] = {
         m_image_available_semaphores[m_current_frame]
@@ -246,7 +204,7 @@ void VulkanEngine::draw_frame() {
     submit_info.pWaitDstStageMask = wait_stages;
 
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &m_commandBuffers[m_current_frame];
+    submit_info.pCommandBuffers = &m_command_buffers[m_current_frame].handle();
 
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = signal_semaphores;
@@ -258,10 +216,7 @@ void VulkanEngine::draw_frame() {
         m_in_flight_fences[m_current_frame]
     );
 
-    logger.check(
-        submit_result == VK_SUCCESS,
-        "Failed to submit draw command buffer"
-    );
+    logger.check(submit_result == VK_SUCCESS, "Failed to submit draw command buffer");
 
     VkSwapchainKHR swapchains[] = {
         m_swapchain.handle()
@@ -282,48 +237,40 @@ void VulkanEngine::draw_frame() {
         &present_info
     );
 
-    logger.check(
-        present_result == VK_SUCCESS,
-        "Failed to present swapchain image"
-    );
+    logger.check(present_result == VK_SUCCESS, "Failed to present swapchain image");
 
     m_current_frame = (m_current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanEngine::record_command_buffer(
-    VkCommandBuffer command_buffer,
-    uint32_t image_index) 
-{
+void VulkanEngine::record_command_buffer(VulkanCommandBuffer& command_buffer, uint32_t image_index) {
     LOG_METHOD();
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-    VkResult begin_result = vkBeginCommandBuffer(command_buffer, &begin_info);
-    logger.check(begin_result == VK_SUCCESS, "Failed to begin recording command buffer");
+    {
+        auto render_pass_commands = command_buffer.begin_scope();
 
-    VkRenderPassBeginInfo render_pass_info{};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_info.renderPass = m_render_pass.handle();
-    render_pass_info.framebuffer = m_swapchain_framebuffers[image_index].handle();
+        VkRenderPassBeginInfo render_pass_info{};
+        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        render_pass_info.renderPass = m_render_pass.handle();
+        render_pass_info.framebuffer = m_swapchain_framebuffers[image_index].handle();
 
-    render_pass_info.renderArea.offset = {0, 0};
-    render_pass_info.renderArea.extent = m_swapchain.extent();
+        render_pass_info.renderArea.offset = {0, 0};
+        render_pass_info.renderArea.extent = m_swapchain.extent();
 
-    VkClearValue clear_color{};
-    clear_color.color = {{0.05f, 0.08f, 0.12f, 1.0f}};
+        VkClearValue clear_color{};
+        clear_color.color = {{0.05f, 0.08f, 0.12f, 1.0f}};
 
-    render_pass_info.clearValueCount = 1;
-    render_pass_info.pClearValues = &clear_color;
+        render_pass_info.clearValueCount = 1;
+        render_pass_info.pClearValues = &clear_color;
 
-    vkCmdBeginRenderPass(
-        command_buffer,
-        &render_pass_info,
-        VK_SUBPASS_CONTENTS_INLINE
-    );
+        vkCmdBeginRenderPass(
+            command_buffer.handle(),
+            &render_pass_info,
+            VK_SUBPASS_CONTENTS_INLINE
+        );
 
-    vkCmdEndRenderPass(command_buffer);
-
-    VkResult end_result = vkEndCommandBuffer(command_buffer);
-    logger.check(end_result == VK_SUCCESS, "Failed to record command buffer");
+        vkCmdEndRenderPass(command_buffer.handle());
+    }
 }

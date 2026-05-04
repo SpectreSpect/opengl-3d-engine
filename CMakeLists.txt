@@ -38,6 +38,8 @@ add_executable(app
   vulkan_self/vulkan_image_view.cpp
   vulkan_self/vulkan_render_pass.cpp
   vulkan_self/vulkan_framebuffer.cpp
+  vulkan_self/vulkan_command_pool.cpp
+  vulkan_self/vulkan_command_buffer.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------

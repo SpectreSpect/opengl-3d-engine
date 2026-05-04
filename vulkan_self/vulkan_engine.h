@@ -26,6 +26,8 @@
 #include "vulkan_image_view.h"
 #include "vulkan_render_pass.h"
 #include "vulkan_framebuffer.h"
+#include "vulkan_command_pool.h"
+#include "vulkan_command_buffer.h"
 
 class VulkanEngine {
 public:
@@ -62,10 +64,8 @@ private:
     std::vector<VulkanImageView> m_swapchain_image_views;
     VulkanRenderPass m_render_pass;
     std::vector<VulkanFramebuffer> m_swapchain_framebuffers;
-
-private:
-    VkCommandPool m_commandPool = VK_NULL_HANDLE;
-    std::vector<VkCommandBuffer> m_commandBuffers;
+    VulkanCommandPool m_command_pool;
+    std::vector<VulkanCommandBuffer> m_command_buffers;
 
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     size_t m_current_frame = 0;
@@ -75,10 +75,8 @@ private:
     std::vector<VkFence> m_in_flight_fences;
 
 private:
-    void create_command_pool();
-    void create_command_buffers();
     void create_sync_objects();
 
-    void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
+    void record_command_buffer(VulkanCommandBuffer& command_buffer, uint32_t image_index);
     void draw_frame();
 };

@@ -30,3 +30,9 @@ struct QueueAllocation {
     std::vector<QueueLocation> compute;
     std::vector<QueueLocation> transfer;
 };
+
+struct QueueFamilyInfo {
+    uint32_t queue_family_index = 0;
+    VulkanQueueType queue_family_type = VulkanQueueType::Graphics;
+};
+
