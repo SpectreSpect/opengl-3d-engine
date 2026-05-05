@@ -40,6 +40,7 @@ add_executable(app
   vulkan_self/vulkan_framebuffer.cpp
   vulkan_self/vulkan_command_pool.cpp
   vulkan_self/vulkan_command_buffer.cpp
+  vulkan_self/vulkan_fence.cpp
 )
 
 # ---------------- ImGui (FetchContent, no submodule) ----------------

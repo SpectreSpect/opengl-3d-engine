@@ -28,7 +28,8 @@ VulkanEngine::VulkanEngine(
                 m_command_pool, 
                 static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)
             )
-        ) {}
+        ),
+        m_in_flight_fences(VulkanFence::create_fences(m_device, static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT))) {}
 
 VulkanEngine::~VulkanEngine() {
     destroy();
@@ -49,12 +50,6 @@ void VulkanEngine::destroy() {
         for (VkSemaphore semaphore : m_image_available_semaphores) {
             if (semaphore != VK_NULL_HANDLE) {
                 vkDestroySemaphore(m_device.handle(), semaphore, nullptr);
-            }
-        }
-
-        for (VkFence fence : m_in_flight_fences) {
-            if (fence != VK_NULL_HANDLE) {
-                vkDestroyFence(m_device.handle(), fence, nullptr);
             }
         }
 
@@ -96,7 +91,6 @@ void VulkanEngine::create_sync_objects() {
     LOG_METHOD();
 
     m_image_available_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_in_flight_fences.resize(MAX_FRAMES_IN_FLIGHT);
 
     // Важно: эти semaphores ждёт vkQueuePresentKHR,
     // поэтому они должны быть по количеству swapchain images.
@@ -104,10 +98,6 @@ void VulkanEngine::create_sync_objects() {
 
     VkSemaphoreCreateInfo semaphore_info{};
     semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         VkResult image_semaphore_result = vkCreateSemaphore(
@@ -117,16 +107,8 @@ void VulkanEngine::create_sync_objects() {
             &m_image_available_semaphores[i]
         );
 
-        VkResult fence_result = vkCreateFence(
-            m_device.handle(),
-            &fence_info,
-            nullptr,
-            &m_in_flight_fences[i]
-        );
-
         logger.check(
-            image_semaphore_result == VK_SUCCESS &&
-            fence_result == VK_SUCCESS,
+            image_semaphore_result == VK_SUCCESS,
             "Failed to create per-frame synchronization objects"
         );
     }
@@ -149,13 +131,7 @@ void VulkanEngine::create_sync_objects() {
 void VulkanEngine::draw_frame() {
     LOG_METHOD();
 
-    vkWaitForFences(
-        m_device.handle(),
-        1,
-        &m_in_flight_fences[m_current_frame],
-        VK_TRUE,
-        UINT64_MAX
-    );
+    m_in_flight_fences[m_current_frame].wait();
 
     uint32_t image_index = 0;
 
@@ -173,11 +149,7 @@ void VulkanEngine::draw_frame() {
         "Failed to acquire swapchain image"
     );
 
-    vkResetFences(
-        m_device.handle(),
-        1,
-        &m_in_flight_fences[m_current_frame]
-    );
+    m_in_flight_fences[m_current_frame].reset();
 
     m_command_buffers[m_current_frame].reset();
     record_command_buffer(m_command_buffers[m_current_frame], image_index);
@@ -213,7 +185,7 @@ void VulkanEngine::draw_frame() {
         m_device.graphics_queue().handle(),
         1,
         &submit_info,
-        m_in_flight_fences[m_current_frame]
+        m_in_flight_fences[m_current_frame].handle()
     );
 
     logger.check(submit_result == VK_SUCCESS, "Failed to submit draw command buffer");

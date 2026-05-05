@@ -28,6 +28,7 @@
 #include "vulkan_framebuffer.h"
 #include "vulkan_command_pool.h"
 #include "vulkan_command_buffer.h"
+#include "vulkan_fence.h"
 
 class VulkanEngine {
 public:
@@ -66,13 +67,14 @@ private:
     std::vector<VulkanFramebuffer> m_swapchain_framebuffers;
     VulkanCommandPool m_command_pool;
     std::vector<VulkanCommandBuffer> m_command_buffers;
+    std::vector<VulkanFence> m_in_flight_fences;
 
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     size_t m_current_frame = 0;
 
     std::vector<VkSemaphore> m_image_available_semaphores;
     std::vector<VkSemaphore> m_render_finished_semaphores;
-    std::vector<VkFence> m_in_flight_fences;
+    
 
 private:
     void create_sync_objects();
